@@ -1,0 +1,62 @@
+name: Tests
+
+# Runs on every push and pull request. Three things are checked, and each one
+# guards a failure that would otherwise be silent:
+#
+#  * the JS unit suite — the domain rules (spaced repetition, the bank/review
+#    split, the plant's health model) and the arithmetic behind the Analyze
+#    view's explanations;
+#  * featurizer conformance — scripts/featurize.py and js/featurize.js must
+#    agree exactly, or the browser scores a model that was never trained on the
+#    features it is producing;
+#  * a coverage floor, so the suite can't quietly stop covering what it claims.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  javascript:
+    name: JS unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Run tests with coverage
+        run: npm run test:coverage
+
+  conformance:
+    name: Python/JS featurizer conformance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compare both featurizers over shared fixtures
+        run: python scripts/test_conformance.py
+
+  syntax:
+    name: Module resolution
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Every module imports cleanly
+        # --check only parses. Importing catches the failure that actually
+        # ships: a missing export resolves at load time, and in a browser that
+        # is a blank page rather than an error anyone sees in CI.
+        run: npm run check

@@ -13,6 +13,17 @@
 
 import { featurize } from "./featurize.js";
 
+/** A model that could not be loaded or evaluated. Typed so the Analyze view can
+ * explain the failure instead of surfacing a raw stack trace. */
+export class PatternModelError extends Error {
+  constructor(message, { status = null, cause = null } = {}) {
+    super(message);
+    this.name = "PatternModelError";
+    this.status = status;
+    this.cause = cause;
+  }
+}
+
 const MODEL_URL = "./model/pattern-model.json";
 
 // How many evidence items the UI asks for by default. Kept here so the view
@@ -22,18 +33,27 @@ const COUNTERFACTUAL_MAX = 6;
 
 let modelPromise = null;
 
-/** Fetch and index the artifact once per session. */
-export function loadPatternModel() {
+/**
+ * Fetch and index the artifact, memoized for the session.
+ *
+ * `refresh` discards the memo and refetches — the model is retrained by a
+ * scheduled workflow, so a session left open can otherwise keep scoring
+ * against a superseded artifact with no way to pick up the new one.
+ */
+export function loadPatternModel({ refresh = false } = {}) {
+  if (refresh) modelPromise = null;
   if (!modelPromise) {
     modelPromise = fetch(MODEL_URL)
       .then((res) => {
-        if (!res.ok) throw new Error(`pattern model unavailable (HTTP ${res.status})`);
+        if (!res.ok) throw new PatternModelError("The pattern model couldn't be loaded.", { status: res.status });
         return res.json();
       })
       .then(index)
       .catch((err) => {
         modelPromise = null; // let a later attempt retry rather than caching the failure
-        throw err;
+        throw err instanceof PatternModelError
+          ? err
+          : new PatternModelError("The pattern model couldn't be loaded.", { cause: err });
       });
   }
   return modelPromise;

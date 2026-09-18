@@ -17,7 +17,7 @@
 
 import { esc, toast, startSession, showTopic } from "./views.js";
 import { analyze, explain, readableFeature, BOUND_IMPLICATIONS } from "./pattern-model.js";
-import { problemsForPattern, problemFromCatalog } from "./catalog.js";
+import { problemsForPattern, problemFromCatalog, savedSlugs } from "./catalog.js";
 import { patternIcon } from "./icons.js";
 import { uid, todayISO, STATUS_ACTIVE } from "./logic.js";
 
@@ -43,18 +43,19 @@ function resetAnalyze() {
 }
 
 export function renderAnalyze(root, store, actions) {
+  setPatternNames(store.state.patterns);
   root.innerHTML = `
     <div class="card">
       <h2>What pattern is this?</h2>
       <p class="muted">Paste a problem you don't recognize — statement, examples and constraints.
       You'll get the patterns it resembles, and the exact words and bounds that led there.
       Nothing is uploaded; this runs entirely in your browser.</p>
-      <textarea class="textarea" id="analyze-input" rows="10"
+      <textarea class="textarea" id="analyze-input" data-testid="analyze-input" rows="10"
         placeholder="Paste the full problem here, including the Constraints section — the input bounds are often the strongest clue.">${esc(state.raw)}</textarea>
       <div class="row gap-sm" style="margin-top:0.75rem">
-        <button class="btn btn-primary" id="analyze-run" ${state.status === "working" ? "disabled" : ""}>
+        <button class="btn btn-primary" id="analyze-run" data-testid="analyze-run" ${state.status === "working" ? "disabled" : ""}>
           ${state.status === "working" ? "Analyzing…" : "Analyze"}</button>
-        <button class="btn btn-ghost" id="analyze-clear">Clear</button>
+        <button class="btn btn-ghost" id="analyze-clear" data-testid="analyze-clear">Clear</button>
       </div>
       ${state.error ? `<p class="banner banner-bad" style="margin-top:0.75rem">${esc(state.error)}</p>` : ""}
     </div>
@@ -97,15 +98,11 @@ async function runAnalysis(root, store, actions) {
 async function suggestionsFor(patternId, store) {
   if (!patternId) return [];
   try {
-    const owned = new Set(store.state.problems.map((p) => slugFor(p.name)));
+    const owned = savedSlugs(store.state.problems);
     return await problemsForPattern(patternId, { limit: CATALOG_SUGGESTIONS, exclude: owned });
   } catch (_) {
     return []; // the catalog is a bonus; a missing one shouldn't break the analysis
   }
-}
-
-function slugFor(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
 // ---------- results ----------
@@ -189,7 +186,7 @@ function predictionRowHtml(p) {
   const weak = !p.reliability.precision || p.reliability.precision < 0.65;
   return `
     <li>
-      <button type="button" class="pred-row ${selected ? "selected" : ""}" data-pick="${esc(p.pattern)}">
+      <button type="button" class="pred-row ${selected ? "selected" : ""}" data-pick="${esc(p.pattern)}" data-testid="analyze-prediction">
         <span class="pattern-icon">${patternIcon(p.pattern, { size: 15 })}</span>
         <span class="pred-name">${esc(patternLabel(p.pattern))}</span>
         <span class="pred-bar"><span class="pred-fill ${p.confident ? "confident" : ""}"
@@ -350,7 +347,7 @@ function practiceHtml(store) {
       exercise ${esc(label)} — add one to your review queue and it enters the normal spaced-repetition
       rotation.</p>
       <div class="row gap-sm" style="margin-bottom:0.75rem">
-        <button class="btn btn-ghost btn-sm" id="open-topic">Read the ${esc(label)} page</button>
+        <button class="btn btn-ghost btn-sm" id="open-topic" data-testid="analyze-open-topic">Read the ${esc(label)} page</button>
       </div>
       ${state.suggestions.length === 0
         ? `<p class="empty">No catalog problems found for this pattern.</p>`
@@ -366,7 +363,7 @@ function practiceHtml(store) {
                 </div>
                 <div class="row gap-sm">
                   <a class="btn btn-ghost btn-sm" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">Open</a>
-                  <button class="btn btn-ghost btn-sm" data-add="${esc(p.slug)}">Add to queue</button>
+                  <button class="btn btn-ghost btn-sm" data-add="${esc(p.slug)}" data-testid="analyze-add-problem">Add to queue</button>
                 </div>
               </li>`).join("")}
           </ul>`}
@@ -419,22 +416,18 @@ function addToQueue(store, problem, patternId) {
   }, `Ledger: add ${problem.title} from catalog`);
 }
 
+/** Display name for a pattern id.
+ *
+ * Read from the loaded state rather than a local table: the names live in
+ * seed.js, and a second hardcoded copy here would silently drift from it the
+ * first time a pattern was renamed. setPatternNames() is called on every
+ * render so this stays a lookup rather than threading the store through every
+ * html helper. */
+let patternNames = {};
+function setPatternNames(patterns) {
+  patternNames = Object.fromEntries(patterns.map((p) => [p.id, p.name]));
+}
 function patternLabel(id) {
-  return PATTERN_LABELS[id] || id;
+  return patternNames[id] || id;
 }
 
-// Display names, kept here so the view doesn't need the whole store just to
-// render a prediction list. Mirrors the names in js/seed.js.
-const PATTERN_LABELS = {
-  "two-pointers": "Two Pointers", "sliding-window": "Sliding Window",
-  "arrays-hashing": "Arrays & Hashing", "strings": "Strings",
-  "binary-search": "Binary Search", "recursion-dp": "Recursion / DP",
-  "bit-manipulation": "Bit Manipulation", "2d-matrix": "2D Matrix",
-  "knapsack": "Knapsack", "monotonic_stack": "Monotonic Stack",
-  "mst": "Minimum Spanning Tree", "quick_sort": "Partitioning / Quicksort",
-  "topological_sort": "Topological Sort", "trie": "Trie",
-  "union-find": "Union-Find", "linked-list": "Linked List",
-  "trees": "Trees", "graphs-bfs-dfs": "Graph Traversal",
-  "backtracking": "Backtracking", "heap": "Heap / Priority Queue",
-  "intervals": "Intervals", "prefix-sum": "Prefix Sum", "greedy": "Greedy",
-};

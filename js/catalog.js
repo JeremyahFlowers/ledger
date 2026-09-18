@@ -13,22 +13,69 @@
 
 const CATALOG_URL = "./data/catalog.json";
 
+/**
+ * A fetch that failed in a way the UI should explain rather than swallow.
+ *
+ * Typed so callers can tell "the server said no" apart from a programming
+ * error, and so a message shown to the user is never a bare stack trace.
+ */
+export class CatalogError extends Error {
+  constructor(message, { status = null, cause = null } = {}) {
+    super(message);
+    this.name = "CatalogError";
+    this.status = status;
+    this.cause = cause;
+  }
+}
+
+/**
+ * A problem title reduced to the slug LeetCode would use.
+ *
+ * Shared because both the bank and the Analyze view need to recognize a
+ * catalog problem the user already tracks, and they were deriving it
+ * independently — two copies of one rule is one rule that can drift.
+ */
+export function slugify(name) {
+  return String(name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+/** Slugs for everything the user already has, however it was added. */
+export function savedSlugs(problems) {
+  const out = new Set();
+  for (const p of problems) {
+    if (p.catalogSlug) out.add(p.catalogSlug);
+    out.add(slugify(p.name));
+  }
+  return out;
+}
+
 // Match taxonomy.POSITIVE_THRESHOLD in scripts/taxonomy.py: below this a tag is
 // a hint, not a claim, and shouldn't be presented as "this is that pattern".
 export const PATTERN_CONFIDENCE = 0.5;
 
 let catalogPromise = null;
 
-export function loadCatalog() {
+/**
+ * Load the catalog, memoized for the session.
+ *
+ * `refresh` discards the memo and refetches. A cache with no way to invalidate
+ * it is a design gap rather than merely an inconvenience: the catalog is
+ * rebuilt by a workflow, so a long-lived tab can otherwise hold a stale copy
+ * indefinitely, and nothing could ever re-read it without a full page reload.
+ */
+export function loadCatalog({ refresh = false } = {}) {
+  if (refresh) catalogPromise = null;
   if (!catalogPromise) {
     catalogPromise = fetch(CATALOG_URL)
       .then((res) => {
-        if (!res.ok) throw new Error(`catalog unavailable (HTTP ${res.status})`);
+        if (!res.ok) throw new CatalogError("The problem catalog couldn't be loaded.", { status: res.status });
         return res.json();
       })
       .catch((err) => {
-        catalogPromise = null;
-        throw err;
+        catalogPromise = null; // let a later attempt retry rather than caching the failure
+        throw err instanceof CatalogError
+          ? err
+          : new CatalogError("The problem catalog couldn't be loaded.", { cause: err });
       });
   }
   return catalogPromise;

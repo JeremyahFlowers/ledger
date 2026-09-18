@@ -13,7 +13,7 @@
 // actually work it. See STATUS_BACKLOG in logic.js.
 
 import { esc, toast, startSession } from "./views.js";
-import { loadCatalog, PATTERN_CONFIDENCE, MAX_BANK_SIZE, problemFromCatalog, problemUrl } from "./catalog.js";
+import { loadCatalog, PATTERN_CONFIDENCE, MAX_BANK_SIZE, problemFromCatalog, problemUrl, slugify, savedSlugs } from "./catalog.js";
 import { patternIcon } from "./icons.js";
 import { uid, backlogProblems, STATUS_BACKLOG } from "./logic.js";
 
@@ -54,7 +54,7 @@ export async function renderBank(root, store, actions) {
     return;
   }
 
-  const saved = savedSlugs(store.state);
+  const saved = savedSlugs(store.state.problems);
   const bank = backlogProblems(store.state);
   const bankCount = bank.length;
 
@@ -80,25 +80,25 @@ export async function renderBank(root, store, actions) {
       a single file, and an unbounded bank would eventually outgrow what GitHub will serve.</p>` : ""}
       <div class="bank-filters">
         <label class="field"><span class="label">Pattern</span>
-          <select class="select" id="bank-pattern">
+          <select class="select" id="bank-pattern" data-testid="bank-filter-pattern">
             <option value="">All patterns</option>
             ${store.state.patterns.map((p) => `<option value="${esc(p.id)}" ${state.pattern === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}
           </select></label>
         <label class="field"><span class="label">Difficulty</span>
-          <select class="select" id="bank-difficulty">
+          <select class="select" id="bank-difficulty" data-testid="bank-filter-difficulty">
             <option value="">Any</option>
             ${DIFFICULTIES.map((d) => `<option value="${d}" ${state.difficulty === d ? "selected" : ""}>${d}</option>`).join("")}
           </select></label>
         <label class="field"><span class="label">Search</span>
-          <input class="input" id="bank-search" type="search" placeholder="title or number" value="${esc(state.search)}" /></label>
+          <input class="input" id="bank-search" data-testid="bank-filter-search" type="search" placeholder="title or number" value="${esc(state.search)}" /></label>
       </div>
       <label class="field checkbox-field">
-        <input type="checkbox" id="bank-hide-saved" ${state.hideSaved ? "checked" : ""} /> Hide problems I've already saved
+        <input type="checkbox" id="bank-hide-saved" data-testid="bank-filter-hide-saved" ${state.hideSaved ? "checked" : ""} /> Hide problems I've already saved
       </label>
       <div class="row space-between" style="margin-top:0.75rem;flex-wrap:wrap;gap:0.5rem">
         <span class="muted small">${matches.length.toLocaleString()} match${matches.length === 1 ? "" : "es"} ·
           ${bankCount} of ${MAX_BANK_SIZE} bank slots used${roomLeft <= 0 ? " — bank full" : ""}</span>
-        ${matches.length && roomLeft > 0 ? `<button class="btn btn-ghost btn-sm" id="bank-bulk">Save first ${Math.min(BULK_LIMIT, matches.length, roomLeft)} to bank</button>` : ""}
+        ${matches.length && roomLeft > 0 ? `<button class="btn btn-ghost btn-sm" id="bank-bulk" data-testid="bank-bulk-save">Save first ${Math.min(BULK_LIMIT, matches.length, roomLeft)} to bank</button>` : ""}
       </div>
     </div>
 
@@ -108,7 +108,7 @@ export async function renderBank(root, store, actions) {
           ${page.map((p) => rowHtml(p, saved)).join("")}
         </ul>
         ${state.shown < matches.length ? `
-          <button class="btn btn-ghost" id="bank-more" style="margin-top:0.75rem">
+          <button class="btn btn-ghost" id="bank-more" data-testid="bank-show-more" style="margin-top:0.75rem">
             Show ${Math.min(PAGE_SIZE, matches.length - state.shown)} more (${(matches.length - state.shown).toLocaleString()} left)
           </button>` : ""}
       </div>`}`;
@@ -120,8 +120,8 @@ function modeTabsHtml(bankCount) {
   return `
     <div class="card index-intro">
       <div class="row gap-sm">
-        <button class="btn btn-sm ${state.mode === "browse" ? "btn-primary" : "btn-ghost"}" data-mode="browse">Browse catalog</button>
-        <button class="btn btn-sm ${state.mode === "mine" ? "btn-primary" : "btn-ghost"}" data-mode="mine">My bank (${bankCount})</button>
+        <button class="btn btn-sm ${state.mode === "browse" ? "btn-primary" : "btn-ghost"}" data-mode="browse" data-testid="bank-mode-browse">Browse catalog</button>
+        <button class="btn btn-sm ${state.mode === "mine" ? "btn-primary" : "btn-ghost"}" data-mode="mine" data-testid="bank-mode-mine">My bank (${bankCount})</button>
       </div>
     </div>`;
 }
@@ -164,8 +164,8 @@ function renderMine(root, store, actions, bank) {
                 </div>
                 <div class="row gap-sm">
                   ${problemUrl(p) ? `<a class="btn btn-ghost btn-sm" href="${esc(problemUrl(p))}" target="_blank" rel="noopener noreferrer">Open</a>` : ""}
-                  <button class="btn btn-primary btn-sm" data-start="${esc(p.id)}">Start</button>
-                  <button class="btn btn-ghost btn-sm" data-remove="${esc(p.id)}" title="Remove from bank">Remove</button>
+                  <button class="btn btn-primary btn-sm" data-start="${esc(p.id)}" data-testid="bank-start">Start</button>
+                  <button class="btn btn-ghost btn-sm" data-remove="${esc(p.id)}" data-testid="bank-remove" title="Remove from bank">Remove</button>
                 </div>
               </li>`).join("")}
           </ul>
@@ -214,22 +214,9 @@ function rowHtml(problem, saved) {
         <a class="btn btn-ghost btn-sm" href="${esc(problem.url)}" target="_blank" rel="noopener noreferrer">Open</a>
         ${isSaved
           ? `<span class="pill pill-good">saved</span>`
-          : `<button class="btn btn-ghost btn-sm" data-save="${esc(problem.slug)}">Save</button>`}
+          : `<button class="btn btn-ghost btn-sm" data-save="${esc(problem.slug)}" data-testid="bank-save">Save</button>`}
       </div>
     </li>`;
-}
-
-function savedSlugs(appState) {
-  const out = new Set();
-  for (const p of appState.problems) {
-    if (p.catalogSlug) out.add(p.catalogSlug);
-    out.add(slugify(p.name));
-  }
-  return out;
-}
-
-function slugify(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
 function filtered(appState, saved) {

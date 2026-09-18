@@ -1,0 +1,17 @@
+{
+  "name": "ledger",
+  "version": "1.0.0",
+  "description": "A standalone interview-prep system: spaced repetition, pattern recognition, and a well-being model that treats burnout as a first-class failure.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test 'test/*.test.js'",
+    "test:coverage": "node --test --experimental-test-coverage 'test/*.test.js'",
+    "test:watch": "node --test --watch 'test/*.test.js'",
+    "check": "node scripts/check-modules.mjs",
+    "verify": "npm run check && npm test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
