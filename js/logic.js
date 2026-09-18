@@ -150,3 +150,54 @@ export function systemDesignUnlock(state) {
 export function uid() {
   return (crypto.randomUUID && crypto.randomUUID()) || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
+
+/** Counts practice "events" per calendar date across attempts, mocks, and
+ * system design sessions — the data a GitHub-style activity heatmap needs. */
+export function activityByDate(state) {
+  const counts = {};
+  const bump = (date) => {
+    if (date) counts[date] = (counts[date] || 0) + 1;
+  };
+  allAttempts(state).forEach((a) => bump(a.date));
+  state.mocks.forEach((m) => bump(m.date));
+  state.systemDesign.sessions.forEach((s) => bump(s.date));
+  return counts;
+}
+
+/** Rolling solved-clean rate over a pattern's last N attempts, oldest to
+ * newest — what a trend sparkline draws, so a pattern that's recently
+ * improving doesn't get buried by a bad all-time average. */
+export function patternTrend(state, patternId, window = 10) {
+  const attempts = allAttempts(state, patternId).slice(-window);
+  let solved = 0;
+  return attempts.map((a, i) => {
+    if (a.outcome === "solved-clean") solved += 1;
+    return solved / (i + 1);
+  });
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+/** Picks a random already-attempted problem for the pattern-recognition
+ * quiz, avoiding the last few asked where possible so it doesn't repeat the
+ * same one twice in a row. */
+export function pickQuizProblem(state, excludeIds = []) {
+  const candidates = state.problems.filter((p) => p.attempts.length > 0);
+  if (candidates.length === 0) return null;
+  const fresh = candidates.filter((p) => !excludeIds.includes(p.id));
+  const pool = fresh.length ? fresh : candidates;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+/** Builds a shuffled multiple-choice option list for the quiz: the correct
+ * pattern plus up to count-1 random distractors from the other patterns. */
+export function quizOptions(state, correctPatternId, count = 4) {
+  const others = shuffle(state.patterns.filter((p) => p.id !== correctPatternId).map((p) => p.id));
+  return shuffle([correctPatternId, ...others.slice(0, count - 1)]);
+}

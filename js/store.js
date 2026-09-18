@@ -2,7 +2,7 @@
 // store.mutate() to change data and store.onChange() to know when to re-render;
 // nothing else touches persistence directly.
 import { GitHubStore } from "./github-client.js";
-import { buildSeedState } from "./seed.js";
+import { buildSeedState, migrateState } from "./seed.js";
 
 const CONFIG_KEY = "ledger.config";
 const CACHE_KEY = "ledger.cache.state";
@@ -33,6 +33,7 @@ class Store {
     this.saveTimer = null;
     this.dirty = false;
     this.gh = null;
+    this.leetcode = null; // { status: 'idle'|'loading'|'ready'|'error', data, error }
   }
 
   onChange(fn) {
@@ -76,7 +77,7 @@ class Store {
     try {
       const { exists, state } = await this.gh.fetchState();
       if (exists) {
-        this.state = state;
+        this.state = migrateState(state);
       } else {
         this.state = buildSeedState();
         await this.gh.saveState(this.state, "Ledger: initialize prep-data/state.json");
@@ -87,7 +88,7 @@ class Store {
     } catch (err) {
       const cached = this._readCache();
       if (cached) {
-        this.state = cached;
+        this.state = migrateState(cached);
         this.status = "offline";
       } else {
         this.status = "error";
@@ -95,6 +96,7 @@ class Store {
       this.error = err.message || String(err);
     }
     this._emit();
+    this.loadLeetCodeStats(); // independent of whether the main state load succeeded
   }
 
   _cacheLocally() {
@@ -156,7 +158,7 @@ class Store {
   async resolveConflictTakeTheirs() {
     try {
       const { state } = await this.gh.fetchState();
-      this.state = state;
+      this.state = migrateState(state);
       this.dirty = false;
       this._cacheLocally();
       this.status = "synced";
@@ -166,6 +168,34 @@ class Store {
       this.error = err.message || String(err);
     }
     this._emit();
+  }
+
+  /** Best-effort load of the read-only prep-data/leetcode-stats.json a
+   * GitHub Action writes daily. Never blocks the main state load and never
+   * throws — a missing or stale file just means the LeetCode tab shows its
+   * empty state instead of breaking the rest of the app. */
+  async loadLeetCodeStats() {
+    if (!this.gh) return;
+    this.leetcode = { status: "loading", data: null, error: null };
+    this._emit();
+    try {
+      const data = await this.gh.fetchPublicFile("prep-data/leetcode-stats.json");
+      this.leetcode = data
+        ? { status: "ready", data, error: null }
+        : { status: "empty", data: null, error: null };
+    } catch (err) {
+      this.leetcode = { status: "error", data: null, error: err.message || String(err) };
+    }
+    this._emit();
+  }
+
+  /** Saves a PNG (as a data URL) as a brand-new file in the repo — used by
+   * the whiteboard. Binary assets are stored outside state.json so the main
+   * sync document stays small; only a path reference lives in state. */
+  async saveWhiteboardImage(path, dataUrl, message) {
+    if (!this.gh) throw new Error("Not connected.");
+    const base64 = dataUrl.split(",")[1];
+    await this.gh.createBinaryFile(path, base64, message);
   }
 }
 

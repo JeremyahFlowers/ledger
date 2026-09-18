@@ -35,7 +35,11 @@ export class GitHubStore {
   }
 
   _contentsUrl() {
-    return `${API}/repos/${this.owner}/${this.repo}/contents/${this.path}`;
+    return this._urlFor(this.path);
+  }
+
+  _urlFor(path) {
+    return `${API}/repos/${this.owner}/${this.repo}/contents/${path}`;
   }
 
   async fetchState() {
@@ -70,6 +74,50 @@ export class GitHubStore {
     const json = await res.json();
     this.sha = json.content.sha;
     return json;
+  }
+
+  /** Reads and JSON-parses any other file in the repo, read-only — used for
+   * files this app never writes itself (like the LeetCode sync output a
+   * GitHub Action produces). Returns null for a missing file instead of
+   * throwing, since "not synced yet" is an expected, normal state. */
+  async fetchPublicFile(path) {
+    const res = await fetch(`${this._urlFor(path)}?ref=${encodeURIComponent(this.branch)}`, {
+      headers: this._headers(),
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) throw await this._errorFrom(res);
+    const json = await res.json();
+    return JSON.parse(base64ToUtf8(json.content));
+  }
+
+  /** Reads a binary file and returns its raw base64 content (no decoding) —
+   * used to display a saved whiteboard PNG as a data: URL on demand. */
+  async fetchBinaryFile(path) {
+    const res = await fetch(`${this._urlFor(path)}?ref=${encodeURIComponent(this.branch)}`, {
+      headers: this._headers(),
+    });
+    if (!res.ok) throw await this._errorFrom(res);
+    const json = await res.json();
+    return json.content.replace(/\n/g, "");
+  }
+
+  /** Creates a brand-new binary file (base64 content, no leading data-URL
+   * prefix) — used for whiteboard PNGs, which are stored as their own files
+   * rather than embedded in state.json so the sync document stays small.
+   * Assumes the path doesn't already exist (callers use unique ids), so it
+   * never needs a sha. */
+  async createBinaryFile(path, base64Content, message) {
+    const res = await fetch(this._urlFor(path), {
+      method: "PUT",
+      headers: { ...this._headers(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: message || `Ledger: add ${path}`,
+        content: base64Content,
+        branch: this.branch,
+      }),
+    });
+    if (!res.ok) throw await this._errorFrom(res);
+    return res.json();
   }
 
   async _errorFrom(res) {

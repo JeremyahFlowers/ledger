@@ -220,7 +220,7 @@ main {
 .btn-sm { padding: 0.4rem 0.7rem; font-size: 0.78rem; min-height: 34px; }
 .file-btn { position: relative; }
 
-.setup-card ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1rem; }
+ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1rem; }
 
 .banner { border-left: 4px solid var(--border); }
 .banner-warn { border-left-color: var(--warn); }
@@ -241,6 +241,84 @@ main {
   opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s;
 }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---------- Heatmap & sparkline ---------- */
+.heatmap { display: block; }
+.sparkline { display: block; }
+.sparkline polyline { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- Topics ---------- */
+.topic-card summary {
+  cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between;
+  gap: 0.5rem; font-weight: 650; font-size: 1.05rem;
+}
+.topic-card summary::-webkit-details-marker { display: none; }
+.topic-card summary::before { content: "▸"; color: var(--text-muted); margin-right: 0.5rem; font-size: 0.8em; }
+.topic-card[open] summary::before { content: "▾"; }
+.topic-card[open] summary { margin-bottom: 0.75rem; }
+.topic-title { flex: 1; }
+.tight-list { margin: 0 0 0.6rem; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.25rem; }
+.resource-list { list-style: none; padding: 0; margin: 0 0 0.6rem; display: flex; flex-direction: column; gap: 0.3rem; }
+.resource-list li { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.resource-form { flex-direction: row; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem; }
+.resource-form .input { flex: 1; min-width: 10rem; width: auto; }
+.btn-icon {
+  background: transparent; border: none; color: var(--text-muted); cursor: pointer;
+  font-size: 1.1rem; line-height: 1; padding: 0.1rem 0.4rem; border-radius: 4px;
+}
+.btn-icon:hover { color: var(--bad); background: var(--bad-bg); }
+
+/* ---------- Code editor ---------- */
+.code-editor-host { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.code-editor-host .CodeMirror { height: 220px; font-family: var(--font-mono); font-size: 0.85rem; }
+.code-view .CodeMirror { height: auto; max-height: 320px; }
+.code-view { margin-top: 0.5rem; }
+/* CodeMirror injects its own stylesheet at runtime, after this one, so an
+   equal-specificity override here would lose the cascade — !important is
+   deliberate: this is retinting a third-party default, not app styling. */
+.CodeMirror { background: var(--surface) !important; color: var(--text) !important; }
+.CodeMirror-gutters { background: var(--surface-alt) !important; border-right: 1px solid var(--border) !important; }
+.CodeMirror-linenumber { color: var(--text-muted) !important; }
+.CodeMirror-cursor { border-left-color: var(--text) !important; }
+.CodeMirror-selected { background: color-mix(in srgb, var(--accent) 25%, transparent) !important; }
+.cm-s-default .cm-keyword { color: var(--accent) !important; }
+.cm-s-default .cm-string, .cm-s-default .cm-string-2 { color: var(--good) !important; }
+.cm-s-default .cm-comment { color: var(--text-muted) !important; font-style: italic; }
+.cm-s-default .cm-number { color: var(--warn) !important; }
+.cm-s-default .cm-def, .cm-s-default .cm-variable-2 { color: var(--accent-strong) !important; }
+.cm-s-default .cm-atom { color: var(--warn) !important; }
+
+/* ---------- Quiz ---------- */
+.quiz-prompt {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+  padding: 1rem; border: 1px solid var(--border); border-radius: 8px; margin: 0.75rem 0;
+  background: var(--surface-alt);
+}
+.quiz-options { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 0.75rem; }
+@media (max-width: 480px) { .quiz-options { grid-template-columns: 1fr; } }
+.quiz-option {
+  font: inherit; padding: 0.7rem; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); cursor: pointer; text-align: left;
+}
+.quiz-option:hover:not(:disabled) { border-color: var(--accent); }
+.quiz-option:disabled { cursor: default; }
+.quiz-option.correct { border-color: var(--good); background: var(--good-bg); color: var(--good); }
+.quiz-option.incorrect { border-color: var(--bad); background: var(--bad-bg); color: var(--bad); }
+.quiz-feedback { margin-top: 0.25rem; }
+
+/* ---------- Whiteboard ---------- */
+.whiteboard-toolbar { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
+.wb-colors { display: flex; gap: 0.4rem; }
+.wb-color {
+  width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0;
+}
+.wb-color.active { border-color: var(--text); }
+.wb-width-label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--text-muted); }
+.whiteboard-canvas {
+  width: 100%; height: 360px; display: block; border: 1px solid var(--border); border-radius: 8px;
+  touch-action: none; cursor: crosshair;
+}
+.whiteboard-thumb-host img { max-width: 100%; border-radius: 6px; margin-top: 0.5rem; border: 1px solid var(--border); }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }

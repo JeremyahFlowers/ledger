@@ -54,7 +54,7 @@ const PROBLEMS = [
 
 export function buildSeedState() {
   return {
-    meta: { schemaVersion: 1, createdAt: new Date().toISOString() },
+    meta: { schemaVersion: 2, createdAt: new Date().toISOString() },
     settings: {
       dailyBudgetMin: 75,
       boxIntervalsDays: [0, 1, 3, 7, 16, 35],
@@ -67,5 +67,19 @@ export function buildSeedState() {
     journal: [],
     systemDesign: { manualUnlock: false, sessions: [] },
     streak: { current: 0, longest: 0, lastActiveDate: null },
+    resources: {}, // { [patternId]: [{ id, title, url, addedAt }] } — user-curated video/article links
+    whiteboards: [], // [{ id, date, problemId, path, caption }] — index of saved drawings (images live as separate repo files)
+    quiz: { totalAsked: 0, totalCorrect: 0, recent: [] }, // recent: last 20 {correct: bool} for a trend
   };
+}
+
+/** Backfills fields added after a state.json was first created, without
+ * touching anything that already exists. Safe to call on every load. */
+export function migrateState(state) {
+  if (!state.resources) state.resources = {};
+  if (!state.whiteboards) state.whiteboards = [];
+  if (!state.quiz) state.quiz = { totalAsked: 0, totalCorrect: 0, recent: [] };
+  if (!state.meta) state.meta = { schemaVersion: 2, createdAt: new Date().toISOString() };
+  state.meta.schemaVersion = Math.max(state.meta.schemaVersion || 1, 2);
+  return state;
 }
