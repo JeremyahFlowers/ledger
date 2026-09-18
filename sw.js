@@ -1,16 +1,23 @@
-// Caches the app shell only — never the GitHub API. Data always goes over the
-// network so you're never looking at stale sync state without knowing it.
+// Offline support for the app itself. GitHub API calls are never touched, so
+// you are never looking at stale sync state without knowing it.
 //
-// Two strategies, deliberately:
+// Network-first for everything same-origin, with the cache as an offline
+// fallback rather than a speed layer.
 //
-// * Shell (HTML/CSS/JS/icons): stale-while-revalidate. Instant loads, and a new
-//   version lands on the next visit.
-// * Generated data (the pattern model and problem catalog): network-first,
-//   falling back to cache when offline. These are rebuilt by a workflow, and
-//   under stale-while-revalidate a retrain took two reloads to appear — the
-//   first load kept serving the old model, so predictions and the catalog
-//   silently disagreed with what had just been published.
-const CACHE = "ledger-shell-v3";
+// It used to be stale-while-revalidate for the app shell, which is the usual
+// advice — but it is wrong for an app built from ES modules that import each
+// other. After a deploy the outgoing service worker kept serving some modules
+// from cache while newly-fetched ones arrived alongside them, so a new module
+// would import an old one and throw on a missing export. That isn't a slightly
+// stale UI, it's a white screen, and it happened on a real deploy of this app:
+// a fresh bank-view.js loaded against a cached catalog.js and died on
+// "problemFromCatalog is not a function".
+//
+// The shell must therefore update atomically, and the simplest way to
+// guarantee that is to prefer the network whenever there is one. The app
+// already needs the network to sync, so this costs little; the cache still
+// makes it fully usable offline.
+const CACHE = "ledger-shell-v4";
 const SHELL = [
   "./",
   "./index.html",
@@ -37,12 +44,6 @@ const SHELL = [
   "./js/bank-view.js",
 ];
 
-/** Generated artifacts, rebuilt by the training workflow rather than shipped
- * with the shell. Kept fresh over the network whenever one is reachable. */
-function isGeneratedData(pathname) {
-  return pathname.includes("/data/") || pathname.includes("/model/");
-}
-
 self.addEventListener("install", (event) => {
   // One missing file must not abort the whole precache, so each is added
   // individually and failures are tolerated.
@@ -67,29 +68,27 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return; // let GitHub API calls pass straight through
 
-  if (isGeneratedData(url.pathname)) {
-    event.respondWith(
-      fetch(event.request)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(event.request, copy));
-          return res;
-        })
-        .catch(() => caches.match(event.request))
-    );
-    return;
-  }
-
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const network = fetch(event.request)
-        .then((res) => {
+    fetch(event.request)
+      .then((res) => {
+        // Only a genuinely good response is worth keeping: caching an error
+        // page would serve it back the next time the network is gone.
+        if (res.ok) {
           const copy = res.clone();
           caches.open(CACHE).then((c) => c.put(event.request, copy));
-          return res;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
+        }
+        return res;
+      })
+      .catch(async () => {
+        const cached = await caches.match(event.request);
+        if (cached) return cached;
+        // A navigation with nothing cached for that exact URL still has to
+        // render something, so fall back to the app shell.
+        if (event.request.mode === "navigate") {
+          const shell = await caches.match("./index.html");
+          if (shell) return shell;
+        }
+        return Response.error();
+      })
   );
 });
