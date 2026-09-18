@@ -97,6 +97,12 @@ export function migrateState(state) {
   for (const p of PATTERNS) {
     if (!known.has(p.id)) state.patterns.push({ ...p });
   }
-  state.meta.schemaVersion = Math.max(state.meta.schemaVersion || 1, 3);
+  // Problems saved before the bank existed were all deliberately chosen, so
+  // they stay in the review rotation. Only problems added from the bank after
+  // this point start as backlog. See STATUS_ACTIVE/STATUS_BACKLOG in logic.js.
+  for (const p of state.problems || []) {
+    if (!p.status) p.status = "active";
+  }
+  state.meta.schemaVersion = Math.max(state.meta.schemaVersion || 1, 4);
   return state;
 }

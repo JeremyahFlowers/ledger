@@ -1,0 +1,343 @@
+// The problem bank: browse ~2,500 pattern-labelled problems and stock up on
+// practice material.
+//
+// Where this fits: its own page under Practice. The catalog was previously
+// reachable only as a handoff at the end of an Analyze run, which made it
+// invisible unless you happened to paste something.
+//
+// The important design rule here is that saving is cheap and scheduling is
+// not. Everything saved from this page lands in the *bank* (backlog), never in
+// the review queue: it is not due, not overdue, and not counted against you.
+// Saving 300 problems is meant to feel like stocking a shelf, not like falling
+// 300 reviews behind — a problem only enters spaced repetition once you
+// actually work it. See STATUS_BACKLOG in logic.js.
+
+import { esc, toast, startSession } from "./views.js";
+import { loadCatalog, PATTERN_CONFIDENCE, MAX_BANK_SIZE, problemFromCatalog, problemUrl } from "./catalog.js";
+import { patternIcon } from "./icons.js";
+import { uid, backlogProblems, STATUS_BACKLOG } from "./logic.js";
+
+const PAGE_SIZE = 40;
+const DIFFICULTIES = ["Easy", "Medium", "Hard"];
+// A cap on one bulk action. Large enough to be worth the button, small enough
+// that a stray click is easy to undo by hand.
+const BULK_LIMIT = 50;
+
+const state = {
+  status: "idle",     // idle | loading | ready | error
+  error: "",
+  catalog: null,
+  mode: "browse",     // browse the catalog | mine: what's already saved
+  pattern: "",
+  difficulty: "",
+  search: "",
+  hideSaved: true,
+  shown: PAGE_SIZE,
+};
+
+export async function renderBank(root, store, actions) {
+  if (state.status === "idle") {
+    state.status = "loading";
+    loadCatalog()
+      .then((c) => { state.catalog = c; state.status = "ready"; })
+      .catch((err) => { state.status = "error"; state.error = err.message; })
+      .finally(() => actions.rerender());
+  }
+
+  if (state.status === "loading") {
+    root.innerHTML = `<div class="card"><p class="muted">Loading the problem bank…</p></div>`;
+    return;
+  }
+  if (state.status === "error") {
+    root.innerHTML = `<div class="card banner banner-bad"><p>Couldn't load the problem bank.</p>
+      <p class="muted small">${esc(state.error)}</p></div>`;
+    return;
+  }
+
+  const saved = savedSlugs(store.state);
+  const bank = backlogProblems(store.state);
+  const bankCount = bank.length;
+
+  if (state.mode === "mine") {
+    renderMine(root, store, actions, bank);
+    return;
+  }
+
+  const matches = filtered(store.state, saved);
+  const page = matches.slice(0, state.shown);
+  const roomLeft = MAX_BANK_SIZE - bankCount;
+
+  root.innerHTML = `
+    ${modeTabsHtml(bankCount)}
+    <div class="card">
+      <h2>Problem bank</h2>
+      <p class="muted">${state.catalog.count.toLocaleString()} problems, each labelled with the patterns it
+      exercises. Save as many as you like — saved problems wait in your bank and never show up as
+      overdue. One enters the review schedule the first time you actually work it.</p>
+      ${roomLeft <= 0 ? `<p class="banner banner-warn small">Your bank is full at ${MAX_BANK_SIZE}. That is
+      already far more than a realistic backlog — work through some, or remove a few from
+      <strong>My bank</strong>, before adding more. The cap exists because your whole prep log syncs as
+      a single file, and an unbounded bank would eventually outgrow what GitHub will serve.</p>` : ""}
+      <div class="bank-filters">
+        <label class="field"><span class="label">Pattern</span>
+          <select class="select" id="bank-pattern">
+            <option value="">All patterns</option>
+            ${store.state.patterns.map((p) => `<option value="${esc(p.id)}" ${state.pattern === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}
+          </select></label>
+        <label class="field"><span class="label">Difficulty</span>
+          <select class="select" id="bank-difficulty">
+            <option value="">Any</option>
+            ${DIFFICULTIES.map((d) => `<option value="${d}" ${state.difficulty === d ? "selected" : ""}>${d}</option>`).join("")}
+          </select></label>
+        <label class="field"><span class="label">Search</span>
+          <input class="input" id="bank-search" type="search" placeholder="title or number" value="${esc(state.search)}" /></label>
+      </div>
+      <label class="field checkbox-field">
+        <input type="checkbox" id="bank-hide-saved" ${state.hideSaved ? "checked" : ""} /> Hide problems I've already saved
+      </label>
+      <div class="row space-between" style="margin-top:0.75rem;flex-wrap:wrap;gap:0.5rem">
+        <span class="muted small">${matches.length.toLocaleString()} match${matches.length === 1 ? "" : "es"} ·
+          ${bankCount} of ${MAX_BANK_SIZE} bank slots used${roomLeft <= 0 ? " — bank full" : ""}</span>
+        ${matches.length && roomLeft > 0 ? `<button class="btn btn-ghost btn-sm" id="bank-bulk">Save first ${Math.min(BULK_LIMIT, matches.length, roomLeft)} to bank</button>` : ""}
+      </div>
+    </div>
+
+    ${matches.length === 0 ? `<div class="card"><p class="empty">Nothing matches those filters.</p></div>` : `
+      <div class="card">
+        <ul class="queue-list" id="bank-list">
+          ${page.map((p) => rowHtml(p, saved)).join("")}
+        </ul>
+        ${state.shown < matches.length ? `
+          <button class="btn btn-ghost" id="bank-more" style="margin-top:0.75rem">
+            Show ${Math.min(PAGE_SIZE, matches.length - state.shown)} more (${(matches.length - state.shown).toLocaleString()} left)
+          </button>` : ""}
+      </div>`}`;
+
+  wire(root, store, actions, matches, saved);
+}
+
+function modeTabsHtml(bankCount) {
+  return `
+    <div class="card index-intro">
+      <div class="row gap-sm">
+        <button class="btn btn-sm ${state.mode === "browse" ? "btn-primary" : "btn-ghost"}" data-mode="browse">Browse catalog</button>
+        <button class="btn btn-sm ${state.mode === "mine" ? "btn-primary" : "btn-ghost"}" data-mode="mine">My bank (${bankCount})</button>
+      </div>
+    </div>`;
+}
+
+/** What's actually saved and waiting — the half that makes the bank useful
+ * rather than just browsable. Grouped by pattern so picking work for a weak
+ * area is one glance rather than a scroll. */
+function renderMine(root, store, actions, bank) {
+  const byPattern = new Map();
+  for (const p of bank) {
+    if (!byPattern.has(p.patternId)) byPattern.set(p.patternId, []);
+    byPattern.get(p.patternId).push(p);
+  }
+  const patternName = (id) => store.state.patterns.find((x) => x.id === id)?.name || id;
+  const groups = [...byPattern.entries()].sort((a, b) => b[1].length - a[1].length);
+
+  root.innerHTML = `
+    ${modeTabsHtml(bank.length)}
+    ${bank.length === 0 ? `
+      <div class="card"><p class="empty">Your bank is empty. Browse the catalog and save whatever
+      looks worth practicing — nothing you save becomes due until you start it.</p></div>` : `
+      <div class="card">
+        <h2>Waiting in your bank</h2>
+        <p class="muted small">${bank.length} problem${bank.length === 1 ? "" : "s"} saved and unscheduled.
+        Starting one logs it like any other session and puts it into the review rotation.</p>
+      </div>
+      ${groups.map(([patternId, problems]) => `
+        <div class="card">
+          <div class="row gap-sm" style="align-items:center">
+            <span class="pattern-icon">${patternIcon(patternId, { size: 15 })}</span>
+            <h3 style="margin:0">${esc(patternName(patternId))}</h3>
+            <span class="pill pill-muted">${problems.length}</span>
+          </div>
+          <ul class="queue-list">
+            ${problems.slice(0, 25).map((p) => `
+              <li class="queue-item">
+                <div>
+                  <div class="row gap-sm"><span class="pill pill-muted">${esc(p.difficulty)}</span></div>
+                  <div class="queue-name">${p.number ? `<span class="muted">#${p.number}</span> ` : ""}${esc(p.name)}</div>
+                </div>
+                <div class="row gap-sm">
+                  ${problemUrl(p) ? `<a class="btn btn-ghost btn-sm" href="${esc(problemUrl(p))}" target="_blank" rel="noopener noreferrer">Open</a>` : ""}
+                  <button class="btn btn-primary btn-sm" data-start="${esc(p.id)}">Start</button>
+                  <button class="btn btn-ghost btn-sm" data-remove="${esc(p.id)}" title="Remove from bank">Remove</button>
+                </div>
+              </li>`).join("")}
+          </ul>
+          ${problems.length > 25 ? `<p class="muted small">…and ${problems.length - 25} more in this pattern.</p>` : ""}
+        </div>`).join("")}`}`;
+
+  root.querySelectorAll("[data-mode]").forEach((btn) => {
+    btn.addEventListener("click", () => { state.mode = btn.dataset.mode; actions.rerender(); });
+  });
+  root.querySelectorAll("[data-start]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const problem = store.state.problems.find((p) => p.id === btn.dataset.start);
+      if (!problem) return;
+      startSession(problem);
+      actions.switchTab("workspace");
+    });
+  });
+  root.querySelectorAll("[data-remove]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.remove;
+      const problem = store.state.problems.find((p) => p.id === id);
+      // Only ever removes an untouched bank entry, so there's no attempt
+      // history to lose and nothing to confirm.
+      if (!problem || problem.attempts.length) return;
+      store.mutate((s) => { s.problems = s.problems.filter((p) => p.id !== id); }, "Ledger: remove problem from bank");
+      toast(`Removed ${problem.name} from your bank.`);
+    });
+  });
+}
+
+function rowHtml(problem, saved) {
+  const isSaved = saved.has(problem.slug);
+  const patterns = Object.entries(problem.patterns)
+    .filter(([, w]) => w >= PATTERN_CONFIDENCE)
+    .slice(0, 3);
+  return `
+    <li class="queue-item">
+      <div>
+        <div class="row gap-sm" style="flex-wrap:wrap">
+          <span class="pill pill-muted">${esc(problem.difficulty || "—")}</span>
+          ${patterns.map(([id]) => `<span class="pill pill-muted"><span class="pill-icon">${patternIcon(id, { size: 13 })}</span>${esc(id.replace(/[-_]/g, " "))}</span>`).join("")}
+        </div>
+        <div class="queue-name">${problem.number ? `<span class="muted">#${problem.number}</span> ` : ""}${esc(problem.title)}</div>
+      </div>
+      <div class="row gap-sm">
+        <a class="btn btn-ghost btn-sm" href="${esc(problem.url)}" target="_blank" rel="noopener noreferrer">Open</a>
+        ${isSaved
+          ? `<span class="pill pill-good">saved</span>`
+          : `<button class="btn btn-ghost btn-sm" data-save="${esc(problem.slug)}">Save</button>`}
+      </div>
+    </li>`;
+}
+
+function savedSlugs(appState) {
+  const out = new Set();
+  for (const p of appState.problems) {
+    if (p.catalogSlug) out.add(p.catalogSlug);
+    out.add(slugify(p.name));
+  }
+  return out;
+}
+
+function slugify(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function filtered(appState, saved) {
+  const q = state.search.trim().toLowerCase();
+  return state.catalog.problems.filter((p) => {
+    if (state.pattern && (p.patterns[state.pattern] || 0) < PATTERN_CONFIDENCE) return false;
+    if (state.difficulty && p.difficulty !== state.difficulty) return false;
+    if (state.hideSaved && saved.has(p.slug)) return false;
+    if (!q) return true;
+    return p.title.toLowerCase().includes(q) || String(p.number ?? "").includes(q);
+  });
+}
+
+function wire(root, store, actions, matches, saved) {
+  root.querySelectorAll("[data-mode]").forEach((btn) => {
+    btn.addEventListener("click", () => { state.mode = btn.dataset.mode; actions.rerender(); });
+  });
+
+  const onFilterChange = (key) => (e) => {
+    state[key] = e.target.type === "checkbox" ? e.target.checked : e.target.value;
+    state.shown = PAGE_SIZE;
+    actions.rerender();
+  };
+  root.querySelector("#bank-pattern").addEventListener("change", onFilterChange("pattern"));
+  root.querySelector("#bank-difficulty").addEventListener("change", onFilterChange("difficulty"));
+  root.querySelector("#bank-hide-saved").addEventListener("change", onFilterChange("hideSaved"));
+
+  // Typing shouldn't re-render the whole list on every keystroke, and it must
+  // not steal focus back to the top of the page.
+  const search = root.querySelector("#bank-search");
+  let timer = null;
+  search.addEventListener("input", (e) => {
+    clearTimeout(timer);
+    const value = e.target.value;
+    timer = setTimeout(() => {
+      state.search = value;
+      state.shown = PAGE_SIZE;
+      actions.rerender();
+      const box = document.querySelector("#bank-search");
+      if (box) {
+        box.focus();
+        box.setSelectionRange(box.value.length, box.value.length);
+      }
+    }, 250);
+  });
+
+  const more = root.querySelector("#bank-more");
+  if (more) {
+    more.addEventListener("click", () => {
+      state.shown += PAGE_SIZE;
+      actions.rerender();
+    });
+  }
+
+  root.querySelectorAll("[data-save]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const problem = state.catalog.problems.find((p) => p.slug === btn.dataset.save);
+      if (!problem) return;
+      saveToBank(store, [problem]);
+      btn.replaceWith(pill("saved"));
+    });
+  });
+
+  const bulk = root.querySelector("#bank-bulk");
+  if (bulk) {
+    bulk.addEventListener("click", () => {
+      const room = MAX_BANK_SIZE - backlogProblems(store.state).length;
+      const batch = matches.filter((p) => !saved.has(p.slug)).slice(0, Math.min(BULK_LIMIT, room));
+      if (!batch.length) {
+        toast("Everything matching is already saved.");
+        return;
+      }
+      saveToBank(store, batch);
+      toast(`Saved ${batch.length} problems to your bank. They're not due — start one whenever you want.`);
+      actions.rerender();
+    });
+  }
+}
+
+function pill(text) {
+  const el = document.createElement("span");
+  el.className = "pill pill-good";
+  el.textContent = text;
+  return el;
+}
+
+/**
+ * Save catalog problems into the user's own list, as backlog.
+ *
+ * One mutate() for the whole batch rather than one per problem: each call
+ * re-renders and schedules a debounced push to GitHub, so saving 50 problems
+ * individually would mean 50 renders and a burst of writes.
+ */
+function saveToBank(store, problems) {
+  store.mutate((s) => {
+    const existing = new Set(s.problems.map((p) => p.catalogSlug || slugify(p.name)));
+    let room = MAX_BANK_SIZE - s.problems.filter((p) => p.status === STATUS_BACKLOG).length;
+    for (const problem of problems) {
+      if (room <= 0) break;
+      if (existing.has(problem.slug)) continue;
+      existing.add(problem.slug);
+      room--;
+      s.problems.push(problemFromCatalog(problem, {
+        id: uid(),
+        status: STATUS_BACKLOG,
+        nextReviewDate: null, // unscheduled until it's actually worked
+      }));
+    }
+  }, `Ledger: save ${problems.length} problem${problems.length === 1 ? "" : "s"} to bank`);
+}
+

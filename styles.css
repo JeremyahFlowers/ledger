@@ -489,9 +489,6 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 }
 .whiteboard-thumb-host img { max-width: 100%; border-radius: 6px; margin-top: 0.5rem; border: 1px solid var(--border); }
 
-@media (prefers-reduced-motion: reduce) {
-  * { transition: none !important; animation: none !important; }
-}
 
 /* ---------- Analyze: pattern prediction and its explanation ---------- */
 
@@ -553,4 +550,14 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 @media (max-width: 640px) {
   .pred-row { grid-template-columns: auto 1fr 3rem; row-gap: 0.3rem; }
   .pred-bar { grid-column: 1 / -1; }
+}
+
+/* ---------- Problem bank ---------- */
+
+.bank-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem; margin-top: 0.75rem; }
+@media (max-width: 560px) { .bank-filters { grid-template-columns: 1fr; } }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
 }

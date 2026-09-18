@@ -53,6 +53,45 @@ export async function problemsForPattern(patternId, {
     .slice(0, limit);
 }
 
+// The whole state document is pushed to GitHub on every save, and the Contents
+// API stops serving files over 1 MB — past that, sync breaks outright. A bank
+// entry is therefore kept to the minimum that describes an unstarted problem:
+// no url (it is derivable from the slug), and none of the empty strings and
+// arrays a worked problem accumulates. At ~495 bytes per entry the full catalog
+// would have produced a ~1.2 MB state file; the slim shape plus MAX_BANK_SIZE
+// keeps it around 200 KB.
+export const MAX_BANK_SIZE = 500;
+
+export function problemUrl(problem) {
+  return problem.url || (problem.catalogSlug
+    ? `https://leetcode.com/problems/${problem.catalogSlug}/`
+    : null);
+}
+
+/**
+ * Convert a catalog entry into a problem record for the user's own list.
+ *
+ * Shared by the bank and the Analyze view so the stored shape is defined once.
+ * Fields absent here are genuinely absent, not empty: esc() renders null as ""
+ * and the seeded problems carry no per-problem resources or whiteboards either,
+ * so nothing downstream needs them to exist.
+ */
+export function problemFromCatalog(entry, { id, status, patternId = null, nextReviewDate = null }) {
+  const ranked = Object.entries(entry.patterns).sort((a, b) => b[1] - a[1]);
+  return {
+    id,
+    name: entry.title,
+    number: entry.number,
+    difficulty: entry.difficulty || "Unrated",
+    patternId: patternId || (ranked.length ? ranked[0][0] : "arrays-hashing"),
+    catalogSlug: entry.slug,
+    status,
+    box: 0,
+    nextReviewDate,
+    attempts: [],
+  };
+}
+
 /** How many catalog problems exist per pattern — used to tell the user up front
  * whether a pattern has practice volume available. */
 export async function countsByPattern() {

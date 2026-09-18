@@ -10,7 +10,7 @@
 //   under stale-while-revalidate a retrain took two reloads to appear — the
 //   first load kept serving the old model, so predictions and the catalog
 //   silently disagreed with what had just been published.
-const CACHE = "ledger-shell-v2";
+const CACHE = "ledger-shell-v3";
 const SHELL = [
   "./",
   "./index.html",
@@ -34,6 +34,7 @@ const SHELL = [
   "./js/pattern-model.js",
   "./js/catalog.js",
   "./js/analyze-view.js",
+  "./js/bank-view.js",
 ];
 
 /** Generated artifacts, rebuilt by the training workflow rather than shipped

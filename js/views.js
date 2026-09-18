@@ -1,5 +1,5 @@
 import {
-  todayISO, applyOutcome, dueProblems, planToday, allAttempts, patternStats,
+  todayISO, applyOutcome, activateProblem, dueProblems, planToday, allAttempts, patternStats,
   updateStreak, systemDesignUnlock, uid, MISTAKE_TAGS, MOCK_CHECKLIST, daysBetween,
   activityByDate, patternTrend, pickQuizProblem, quizOptions, addDaysISO, recommendSession,
   computePlantState,
@@ -585,6 +585,7 @@ export function renderLog(root, store, actions) {
         codeLang: code ? codeLang : "",
       };
       problem.attempts.push(attempt);
+      activateProblem(problem); // working it is what moves it out of the bank
       applyOutcome(problem, outcome, s.settings);
       updateStreak(s);
       if (attempt.isMock) {
@@ -961,6 +962,7 @@ export function renderReflect(root, store, actions) {
           codeLang: capturedCode ? capturedCodeLang : "",
         };
         problem.attempts.push(attempt);
+        activateProblem(problem); // working it is what moves it out of the bank
         applyOutcome(problem, outcome, s.settings);
         updateStreak(s);
         if (isMock) {

@@ -57,11 +57,47 @@ export function applyOutcome(problem, outcome, settings) {
   problem.nextReviewDate = addDaysISO(todayISO(), intervals[box]);
 }
 
+// A saved problem is in one of two states, and the difference is the whole
+// reason a large problem bank doesn't wreck the review schedule:
+//
+//   active   in the spaced-repetition rotation — it can be due, and it can go
+//            overdue, which is a signal that means something.
+//   backlog  collected but not started. Never due, never overdue, never
+//            counted against you.
+//
+// Without this split, saving 300 problems from the bank would show 300 due
+// today, and a week later the plant would read 300 overdue reviews and wilt —
+// turning a healthy act (stocking up on practice material) into the exact
+// burnout signal the plant exists to warn about. A problem becomes active the
+// first time you actually work it.
+export const STATUS_ACTIVE = "active";
+export const STATUS_BACKLOG = "backlog";
+
+/** States written before this field existed hold active problems only. */
+export function isBacklog(problem) {
+  return problem.status === STATUS_BACKLOG;
+}
+
 export function dueProblems(state) {
   const today = todayISO();
   return state.problems
+    .filter((p) => !isBacklog(p))
     .filter((p) => !p.nextReviewDate || p.nextReviewDate <= today)
     .sort((a, b) => a.box - b.box || (a.nextReviewDate || "").localeCompare(b.nextReviewDate || ""));
+}
+
+export function backlogProblems(state, patternId = null) {
+  return state.problems
+    .filter(isBacklog)
+    .filter((p) => !patternId || p.patternId === patternId);
+}
+
+/** Moves a bank problem into the rotation. Called when a session is saved
+ * against it, so working a problem is what schedules it. */
+export function activateProblem(problem) {
+  if (!isBacklog(problem)) return;
+  problem.status = STATUS_ACTIVE;
+  if (!problem.nextReviewDate) problem.nextReviewDate = todayISO();
 }
 
 /** Greedily fills today's review budget with the weakest/most-overdue
@@ -188,7 +224,11 @@ export function computePlantState(state) {
   const recentQuiz = state.quiz.recent.slice(-10);
   const recallRate = recentQuiz.length >= 3 ? recentQuiz.filter((q) => q.correct).length / recentQuiz.length : null;
 
-  const overdueCount = state.problems.filter((p) => p.nextReviewDate && daysBetween(p.nextReviewDate, today) > 7).length;
+  // Backlog problems are excluded deliberately: an unstarted problem sitting
+  // in the bank is not a neglected review, and counting it as one would punish
+  // the user for collecting practice material.
+  const overdueCount = state.problems.filter(
+    (p) => !isBacklog(p) && p.nextReviewDate && daysBetween(p.nextReviewDate, today) > 7).length;
 
   const todaysAttempts = allAttempts(state).filter((a) => a.date === today);
   const todaysMin = todaysAttempts.reduce((sum, a) => sum + (a.timeToSolveMin || 0), 0);
@@ -290,6 +330,40 @@ const WEAK_MIN_ATTEMPTS = 2;
  *      technically due yet -> a gentle nudge, spaced-repetition style.
  *   4. Otherwise, whatever's next in the queue.
  *   5. Nothing left -> say so; stopping is a fine answer. */
+/**
+ * Pull an unstarted problem from the bank, preferring the weakest pattern the
+ * bank can serve.
+ *
+ * This is what makes a large problem bank useful rather than just large: when
+ * the review schedule is genuinely clear, the answer shouldn't be "free day"
+ * if there are hundreds of unstarted problems sitting there — it should be a
+ * specific next problem, chosen for the pattern that needs the work.
+ */
+function freshFromBank(state) {
+  const bank = backlogProblems(state);
+  if (!bank.length) return null;
+
+  const bankPatterns = new Set(bank.map((p) => p.patternId));
+  const weakest = patternStats(state)
+    .filter((s) => bankPatterns.has(s.pattern.id))
+    .sort((a, b) => {
+      // Never-attempted patterns first, then worst clean-solve rate.
+      const aRate = a.attempts ? a.solvedCleanRate ?? 1 : -1;
+      const bRate = b.attempts ? b.solvedCleanRate ?? 1 : -1;
+      return aRate - bRate;
+    })[0];
+
+  const patternId = weakest ? weakest.pattern.id : bank[0].patternId;
+  const problem = bank.find((p) => p.patternId === patternId) || bank[0];
+  const reason = weakest && weakest.attempts
+    ? `${weakest.pattern.name} is your weakest at ${Math.round((weakest.solvedCleanRate ?? 0) * 100)}% clean-solve`
+    : `you haven't attempted ${weakest ? weakest.pattern.name : "this pattern"} yet`;
+  return {
+    type: "fresh-volume", problem, patternId,
+    message: `Nothing's due — good time for something new. ${problem.name} is in your bank, and ${reason}.`,
+  };
+}
+
 export function recommendSession(state) {
   const today = todayISO();
   const todaysAttempts = allAttempts(state).filter((a) => a.date === today);
@@ -315,6 +389,8 @@ export function recommendSession(state) {
       const problem = state.problems.find((p) => p.patternId === stale.pattern.id);
       return { type: "stale-nudge", problem, patternId: stale.pattern.id, message: `Nothing's due, but ${stale.pattern.name} hasn't come up in ${stale.daysSince} days — worth a refresher before it fades.` };
     }
+    const fresh = freshFromBank(state);
+    if (fresh) return fresh;
     return { type: "none", problem: null, patternId: null, message: "Nothing due, nothing gone stale. Free day — browse Topics, or take it." };
   }
 

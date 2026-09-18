@@ -1,9 +1,10 @@
 import { store } from "./store.js";
 import * as views from "./views.js";
-import { computePlantState, dueProblems, allAttempts, patternStats, systemDesignUnlock } from "./logic.js";
+import { computePlantState, dueProblems, allAttempts, patternStats, systemDesignUnlock, backlogProblems } from "./logic.js";
 import { plantSvg } from "./plant.js";
 import { navIcon } from "./icons.js";
 import { renderAnalyze } from "./analyze-view.js";
+import { renderBank } from "./bank-view.js";
 
 // The nav reads like a table of contents, not a junk drawer: Home is the
 // cover page; everything else lives in one of a few named chapters, each
@@ -22,6 +23,7 @@ const SECTIONS = {
     blurb: "Ways to get reps in outside the guided Dashboard flow.",
     pages: [
       { id: "queue", label: "Review Queue", icon: "queue", render: views.renderQueue, blurb: "Everything due, not just what fits today's time budget.", stat: (state) => { const n = dueProblems(state).length; return n ? `${n} due now` : "All caught up"; } },
+      { id: "bank", label: "Problem Bank", icon: "bank", render: renderBank, blurb: "Browse ~2,500 pattern-labelled problems and stock up. Saved problems wait in your bank — they never show up as overdue.", stat: (state) => { const n = backlogProblems(state).length; return n ? `${n} waiting in your bank` : "Nothing saved yet"; } },
       { id: "whiteboard", label: "Whiteboard", icon: "whiteboard", render: views.renderWhiteboard, blurb: "A freeform scratchpad for sketching outside an active session.", stat: (state) => `${state.whiteboards.length} board${state.whiteboards.length === 1 ? "" : "s"} saved` },
       { id: "log", label: "Log Manually", icon: "log", render: views.renderLog, blurb: "Record something you already solved elsewhere — LeetCode, paper, a real interview.", stat: (state) => `${state.problems.length} problems logged` },
     ],

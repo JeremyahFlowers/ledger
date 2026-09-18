@@ -23,6 +23,8 @@ const NAV_ICONS = {
   topics: `<path d="M4 4.5h9a2 2 0 0 1 2 2V16H6a2 2 0 0 1-2-2z" ${S}/><path d="M4 4.5v9.5" ${S}/><path d="M7 8h5M7 10.5h5" ${S}/>`,
   patterns: `<path d="M3.5 16V5.5" ${S}/><rect x="5.5" y="10" width="2.6" height="6" rx="0.4" ${S}/><rect x="9" y="6.5" width="2.6" height="9.5" rx="0.4" ${S}/><rect x="12.5" y="12.5" width="2.6" height="3.5" rx="0.4" ${S}/>`,
   quiz: `<circle cx="10" cy="10" r="7" ${S}/><path d="M7.8 8a2.2 2.2 0 1 1 3.3 1.9c-.9.5-1.1.9-1.1 1.8" ${S}/><circle cx="10" cy="14" r="0.15" fill="currentColor" stroke="currentColor" stroke-width="1.4"/>`,
+  // Stacked cards in a tray: a shelf of problems waiting to be picked up.
+  bank: `<rect x="3" y="7.5" width="14" height="8.5" rx="1.2" ${S}/><path d="M5.2 7.5V5.6a1 1 0 0 1 1-1h7.6a1 1 0 0 1 1 1v1.9" ${S}/><path d="M7.4 4.6V3.4a1 1 0 0 1 1-1h3.2a1 1 0 0 1 1 1v1.2" ${S}/><path d="M3 11.2h4.1a1 1 0 0 1 1 1 1 1 0 0 0 1 1h1.8a1 1 0 0 0 1-1 1 1 0 0 1 1-1H17" ${S}/>`,
   // A magnifier over lines of text: reading a problem closely, not solving it.
   analyze: `<path d="M3.6 4.8h7.2M3.6 7.6h5.2M3.6 10.4h3.2" ${S}/><circle cx="12.3" cy="11.5" r="3.4" ${S}/><path d="M14.8 13.9 17 16.2" ${S}/>`,
   journal: `<path d="M5 3.8h8.5a1 1 0 0 1 1 1V16l-2.4-1.6L9.7 16l-2.4-1.6L5 16z" ${S}/><path d="M7.3 7h4.4M7.3 9.4h4.4" ${S}/>`,

@@ -17,9 +17,9 @@
 
 import { esc, toast, startSession, showTopic } from "./views.js";
 import { analyze, explain, readableFeature, BOUND_IMPLICATIONS } from "./pattern-model.js";
-import { problemsForPattern } from "./catalog.js";
+import { problemsForPattern, problemFromCatalog } from "./catalog.js";
 import { patternIcon } from "./icons.js";
-import { uid, todayISO } from "./logic.js";
+import { uid, todayISO, STATUS_ACTIVE } from "./logic.js";
 
 const HIGHLIGHT_LEVELS = 4;        // intensity buckets for supporting evidence
 const TOP_PREDICTIONS_SHOWN = 8;
@@ -38,7 +38,7 @@ const state = {
 };
 
 /** Reset between visits so a stale analysis never shows under a fresh mount. */
-export function resetAnalyze() {
+function resetAnalyze() {
   Object.assign(state, { raw: "", result: null, selected: null, status: "idle", error: "", suggestions: [] });
 }
 
@@ -406,22 +406,16 @@ function wireResults(root, store, actions) {
  * it shows up in the next session plan like anything else they've logged. */
 function addToQueue(store, problem, patternId) {
   store.mutate((s) => {
-    if (s.problems.some((p) => p.name === problem.title)) return;
-    s.problems.push({
+    if (s.problems.some((p) => p.catalogSlug === problem.slug || p.name === problem.title)) return;
+    // Added straight into the rotation, not the bank: you just analyzed this
+    // problem, so it's something you want in front of you now. The bank is for
+    // material you're stockpiling for later.
+    s.problems.push(problemFromCatalog(problem, {
       id: uid(),
-      name: problem.title,
-      number: problem.number,
-      difficulty: problem.difficulty || "Unrated",
+      status: STATUS_ACTIVE,
       patternId,
-      approach: "",
-      filePath: "",
-      notes: `Added from Analyze — ${problem.url}`,
-      box: 0,
       nextReviewDate: todayISO(),
-      attempts: [],
-      resources: [],
-      whiteboards: [],
-    });
+    }));
   }, `Ledger: add ${problem.title} from catalog`);
 }
 
