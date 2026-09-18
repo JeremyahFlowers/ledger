@@ -492,3 +492,65 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* ---------- Analyze: pattern prediction and its explanation ---------- */
+
+.pred-list { list-style: none; margin: 0.5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.pred-row {
+  display: grid; grid-template-columns: auto 1fr 8rem 3rem auto auto; gap: 0.6rem;
+  align-items: center; width: 100%; padding: 0.45rem 0.55rem; border-radius: 8px;
+  background: none; border: 1px solid transparent; color: var(--text);
+  font: inherit; text-align: left; cursor: pointer;
+}
+.pred-row:hover { background: var(--surface-alt); }
+.pred-row.selected { border-color: var(--accent); background: var(--surface-alt); }
+.pred-name { font-weight: 600; }
+.pred-bar { height: 7px; border-radius: 4px; background: var(--border); overflow: hidden; }
+.pred-fill { display: block; height: 100%; background: var(--text-muted); border-radius: 4px; }
+.pred-fill.confident { background: var(--accent); }
+.pred-pct { font-variant-numeric: tabular-nums; text-align: right; color: var(--text-muted); }
+
+.small-heading { font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-muted); margin: 1rem 0 0.4rem; }
+
+.region-bars, .evidence-list, .implication-list { list-style: none; margin: 0; padding: 0; }
+.region-bars li { display: grid; grid-template-columns: 6.5rem 1fr 3.5rem; gap: 0.6rem;
+  align-items: center; margin-bottom: 0.3rem; }
+.region-name { text-transform: capitalize; color: var(--text-muted); font-size: 0.85rem; }
+.region-bar { height: 9px; border-radius: 4px; background: var(--border); overflow: hidden; }
+.region-fill { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.region-fill.against { background: var(--bad); }
+.region-val { font-variant-numeric: tabular-nums; font-size: 0.85rem; text-align: right; color: var(--text-muted); }
+
+.implication-list li { font-size: 0.9rem; margin-bottom: 0.25rem; padding-left: 0.9rem; position: relative; }
+.implication-list li::before { content: "→"; position: absolute; left: 0; color: var(--accent); }
+
+.evidence-list li { display: flex; align-items: baseline; gap: 0.5rem; margin-bottom: 0.25rem; }
+.evidence-term { font-family: var(--font-mono); font-size: 0.85rem;
+  padding: 0.05rem 0.35rem; border-radius: 4px; background: var(--surface-alt); }
+.evidence-term.for { box-shadow: inset 2px 0 0 var(--accent); }
+.evidence-term.against { box-shadow: inset 2px 0 0 var(--bad); }
+.evidence-weight { font-variant-numeric: tabular-nums; font-size: 0.8rem; color: var(--text-muted); }
+
+.counterfactual { margin-top: 1rem; padding: 0.7rem 0.85rem; border-radius: 8px;
+  background: var(--surface-alt); border-left: 3px solid var(--warn); }
+.counterfactual code { font-size: 0.85rem; }
+
+/* The pasted problem, shaded by how much each phrase drove the prediction.
+   pre-wrap keeps the original line breaks, which carry the Input/Output/
+   Constraints structure the explanation refers to. */
+.analyze-text { white-space: pre-wrap; line-height: 1.6; font-size: 0.92rem;
+  max-height: 32rem; overflow-y: auto; padding: 0.85rem; border-radius: 8px;
+  background: var(--surface-alt); border: 1px solid var(--border); }
+.hl { border-radius: 3px; background: none; color: inherit; padding: 0.02em 0; }
+.hl-1 { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.hl-2 { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+.hl-3 { background: color-mix(in srgb, var(--accent) 44%, transparent); }
+.hl-4 { background: color-mix(in srgb, var(--accent) 62%, transparent); font-weight: 600; }
+.hl-legend { display: flex; align-items: center; gap: 0.3rem; margin-bottom: 0.6rem; }
+.hl-legend .hl { padding: 0.1rem 0.5rem; border-radius: 3px; }
+
+@media (max-width: 640px) {
+  .pred-row { grid-template-columns: auto 1fr 3rem; row-gap: 0.3rem; }
+  .pred-bar { grid-column: 1 / -1; }
+}

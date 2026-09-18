@@ -23,6 +23,8 @@ const NAV_ICONS = {
   topics: `<path d="M4 4.5h9a2 2 0 0 1 2 2V16H6a2 2 0 0 1-2-2z" ${S}/><path d="M4 4.5v9.5" ${S}/><path d="M7 8h5M7 10.5h5" ${S}/>`,
   patterns: `<path d="M3.5 16V5.5" ${S}/><rect x="5.5" y="10" width="2.6" height="6" rx="0.4" ${S}/><rect x="9" y="6.5" width="2.6" height="9.5" rx="0.4" ${S}/><rect x="12.5" y="12.5" width="2.6" height="3.5" rx="0.4" ${S}/>`,
   quiz: `<circle cx="10" cy="10" r="7" ${S}/><path d="M7.8 8a2.2 2.2 0 1 1 3.3 1.9c-.9.5-1.1.9-1.1 1.8" ${S}/><circle cx="10" cy="14" r="0.15" fill="currentColor" stroke="currentColor" stroke-width="1.4"/>`,
+  // A magnifier over lines of text: reading a problem closely, not solving it.
+  analyze: `<path d="M3.6 4.8h7.2M3.6 7.6h5.2M3.6 10.4h3.2" ${S}/><circle cx="12.3" cy="11.5" r="3.4" ${S}/><path d="M14.8 13.9 17 16.2" ${S}/>`,
   journal: `<path d="M5 3.8h8.5a1 1 0 0 1 1 1V16l-2.4-1.6L9.7 16l-2.4-1.6L5 16z" ${S}/><path d="M7.3 7h4.4M7.3 9.4h4.4" ${S}/>`,
   leetcode: `<path d="M8.6 4 4.3 8.4a1.3 1.3 0 0 0 0 1.8l4.6 4.7" ${S}/><path d="M6.6 10h9.1" ${S}/><path d="M12.4 6.4 16 10l-3.6 3.6" ${S}/>`,
   systemDesign: `<rect x="3.2" y="3.5" width="4.4" height="4.4" rx="0.8" ${S}/><rect x="12.4" y="3.5" width="4.4" height="4.4" rx="0.8" ${S}/><rect x="7.8" y="12" width="4.4" height="4.4" rx="0.8" ${S}/><path d="M5.4 7.9v2.4c0 1 .6 1.7 1.6 2.1l2.6 1M14.6 7.9v2.4c0 1-.6 1.7-1.6 2.1l-2.6 1" ${S}/>`,

@@ -1,0 +1,75 @@
+name: Train pattern model
+
+# Rebuilds the problem catalog and retrains the pattern classifier.
+#
+# Runs monthly rather than nightly: the upstream datasets are static releases
+# and the taxonomy changes rarely, so there is nothing to gain from churning the
+# artifact — and every run rewrites a ~550 KB file in git history.
+#
+# The training corpus (data/corpus.jsonl) contains full problem statements and
+# is gitignored. Only derived artifacts are committed: the n-gram weights and
+# the metadata-plus-labels catalog.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 5 1 * *" # 05:00 UTC on the 1st of each month
+
+permissions:
+  contents: write
+
+concurrency:
+  group: train-pattern-model
+  cancel-in-progress: false
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: pip install --quiet numpy scipy scikit-learn pyarrow fsspec aiohttp
+
+      - name: Verify Python and JS featurizers agree
+        # Guards against train/serve skew: the model is trained on features from
+        # scripts/featurize.py but scored in the browser by js/featurize.js. If
+        # those drift, predictions silently degrade and the explanations point at
+        # the wrong spans, with nothing else to catch it.
+        run: python scripts/test_conformance.py
+
+      - name: Build corpus and catalog
+        run: python scripts/build_corpus.py all
+
+      - name: Train and evaluate
+        run: python scripts/train_model.py | tee training-report.txt
+
+      - name: Summarize
+        run: |
+          {
+            echo '### Pattern model retrained'
+            echo ''
+            echo '```'
+            cat training-report.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit artifacts if they changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add model/pattern-model.json data/catalog.json
+          if git diff --cached --quiet; then
+            echo "no change to the model or catalog"
+          else
+            git commit -m "Retrain pattern model and rebuild problem catalog"
+            git push
+          fi

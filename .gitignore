@@ -1,0 +1,12 @@
+# Training text — never committed.
+#
+# corpus.jsonl holds full problem statements pulled from upstream datasets while
+# the model is being fitted. Ledger trains on them and publishes only the
+# resulting n-gram weights; redistributing the statements themselves is exactly
+# what we don't do. The catalog (metadata + labels, no prose) and the model
+# artifact ARE committed.
+data/corpus.jsonl
+
+__pycache__/
+*.pyc
+.DS_Store

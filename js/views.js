@@ -44,10 +44,10 @@ function plantCardHtml(plant) {
 // and clears it. A single module-level slot is enough for a single-user app.
 export const nav = { prefillProblemId: null };
 
-function esc(s) {
+export function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
-function pct(x) {
+export function pct(x) {
   return x == null ? "—" : `${Math.round(x * 100)}%`;
 }
 function mins(x) {

@@ -3,6 +3,7 @@ import * as views from "./views.js";
 import { computePlantState, dueProblems, allAttempts, patternStats, systemDesignUnlock } from "./logic.js";
 import { plantSvg } from "./plant.js";
 import { navIcon } from "./icons.js";
+import { renderAnalyze } from "./analyze-view.js";
 
 // The nav reads like a table of contents, not a junk drawer: Home is the
 // cover page; everything else lives in one of a few named chapters, each
@@ -33,6 +34,7 @@ const SECTIONS = {
       { id: "topics", label: "Topics", icon: "topics", render: views.renderTopics, blurb: "One dedicated page per pattern — plain-language hook, concept, invariant, pitfalls, animated worked examples.", stat: (state) => `${state.patterns.length} patterns to explore` },
       { id: "patterns", label: "Patterns", icon: "patterns", render: views.renderPatterns, blurb: "Your mastery table, weakest first — what the next two weeks should focus on.", stat: (state) => { const ranked = patternStats(state).filter((s) => s.attempts > 0).sort((a, b) => (a.solvedCleanRate ?? 1) - (b.solvedCleanRate ?? 1)); return ranked.length ? `Weakest: ${ranked[0].pattern.name}` : "No attempts logged yet"; } },
       { id: "quiz", label: "Quiz", icon: "quiz", render: views.renderQuiz, blurb: "Open-ended pattern-recall drilling, the same mechanic used in every Reflect step.", stat: (state) => state.quiz.totalAsked ? `${Math.round((state.quiz.totalCorrect / state.quiz.totalAsked) * 100)}% lifetime accuracy` : "No questions answered yet" },
+      { id: "analyze", label: "Analyze", icon: "analyze", render: renderAnalyze, blurb: "Paste a problem you don't recognize and see which patterns it resembles — and exactly which words and bounds say so.", stat: () => "Runs in your browser" },
     ],
   },
   track: {

@@ -1,0 +1,446 @@
+// The Analyze view: paste an unfamiliar problem, see which patterns it looks
+// like and — more importantly — why.
+//
+// Where this fits: its own page under Learn. It closes the loop between not
+// recognizing a problem and practicing the pattern it belongs to, by handing
+// off straight into the topic page or a logged session.
+//
+// It lives outside views.js because that file is already the largest in the
+// project and this is a self-contained feature with its own state machine.
+// Shared chrome helpers are imported rather than re-declared.
+//
+// A deliberate presentation decision: the ranked probability list leads, not a
+// single verdict. The model's ordering is reliable (mean AUC 0.89) well past
+// the point where a clean yes/no cut is, so the UI shows the ranking always and
+// treats "confident" as a badge a pattern earns, with its measured precision
+// shown next to it. Where nothing stands out, it says so.
+
+import { esc, toast, startSession, showTopic } from "./views.js";
+import { analyze, explain, readableFeature, BOUND_IMPLICATIONS } from "./pattern-model.js";
+import { problemsForPattern } from "./catalog.js";
+import { patternIcon } from "./icons.js";
+import { uid, todayISO } from "./logic.js";
+
+const HIGHLIGHT_LEVELS = 4;        // intensity buckets for supporting evidence
+const TOP_PREDICTIONS_SHOWN = 8;
+const CATALOG_SUGGESTIONS = 8;
+// Below this the strongest pattern isn't worth leading with; the view says
+// nothing stands out rather than implying a match.
+const WEAK_TOP_PROBABILITY = 0.35;
+
+const state = {
+  raw: "",
+  result: null,
+  selected: null,   // which pattern's explanation is on screen
+  status: "idle",   // idle | working | done | error
+  error: "",
+  suggestions: [],
+};
+
+/** Reset between visits so a stale analysis never shows under a fresh mount. */
+export function resetAnalyze() {
+  Object.assign(state, { raw: "", result: null, selected: null, status: "idle", error: "", suggestions: [] });
+}
+
+export function renderAnalyze(root, store, actions) {
+  root.innerHTML = `
+    <div class="card">
+      <h2>What pattern is this?</h2>
+      <p class="muted">Paste a problem you don't recognize — statement, examples and constraints.
+      You'll get the patterns it resembles, and the exact words and bounds that led there.
+      Nothing is uploaded; this runs entirely in your browser.</p>
+      <textarea class="textarea" id="analyze-input" rows="10"
+        placeholder="Paste the full problem here, including the Constraints section — the input bounds are often the strongest clue.">${esc(state.raw)}</textarea>
+      <div class="row gap-sm" style="margin-top:0.75rem">
+        <button class="btn btn-primary" id="analyze-run" ${state.status === "working" ? "disabled" : ""}>
+          ${state.status === "working" ? "Analyzing…" : "Analyze"}</button>
+        <button class="btn btn-ghost" id="analyze-clear">Clear</button>
+      </div>
+      ${state.error ? `<p class="banner banner-bad" style="margin-top:0.75rem">${esc(state.error)}</p>` : ""}
+    </div>
+    <div id="analyze-results">${state.result ? resultsHtml(store) : ""}</div>`;
+
+  const input = root.querySelector("#analyze-input");
+  root.querySelector("#analyze-run").addEventListener("click", async () => {
+    state.raw = input.value.trim();
+    if (!state.raw) {
+      toast("Paste a problem statement first.");
+      return;
+    }
+    await runAnalysis(root, store, actions);
+  });
+  root.querySelector("#analyze-clear").addEventListener("click", () => {
+    resetAnalyze();
+    actions.rerender();
+  });
+
+  if (state.result) wireResults(root, store, actions);
+}
+
+async function runAnalysis(root, store, actions) {
+  state.status = "working";
+  state.error = "";
+  actions.rerender();
+  try {
+    state.result = await analyze(state.raw);
+    state.selected = state.result.predictions[0]?.pattern || null;
+    state.suggestions = await suggestionsFor(state.selected, store);
+    state.status = "done";
+  } catch (err) {
+    state.status = "error";
+    state.result = null;
+    state.error = `Couldn't run the pattern model: ${err.message}`;
+  }
+  actions.rerender();
+}
+
+async function suggestionsFor(patternId, store) {
+  if (!patternId) return [];
+  try {
+    const owned = new Set(store.state.problems.map((p) => slugFor(p.name)));
+    return await problemsForPattern(patternId, { limit: CATALOG_SUGGESTIONS, exclude: owned });
+  } catch (_) {
+    return []; // the catalog is a bonus; a missing one shouldn't break the analysis
+  }
+}
+
+function slugFor(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+// ---------- results ----------
+
+function resultsHtml(store) {
+  const r = state.result;
+  const top = r.predictions[0];
+  const weak = !top || top.probability < WEAK_TOP_PROBABILITY;
+  const ex = state.selected ? explain(r, state.selected) : null;
+
+  return `
+    ${weak || r.noneApply ? verdictHtml(r, weak) : ""}
+    ${constraintsHtml(r, ex)}
+    <div class="card">
+      <h2>Pattern match</h2>
+      <p class="muted small">Ranked by probability. Click one to see the evidence behind it.</p>
+      <ul class="pred-list">
+        ${r.predictions.slice(0, TOP_PREDICTIONS_SHOWN).map((p) => predictionRowHtml(p)).join("")}
+      </ul>
+      ${unavailableHtml(r)}
+    </div>
+    ${ex ? evidenceHtml(r, ex) : ""}
+    ${ex ? highlightHtml(r, ex) : ""}
+    ${ex ? practiceHtml(store) : ""}`;
+}
+
+function verdictHtml(r, weak) {
+  return `
+    <div class="card banner banner-warn">
+      <h3 style="margin-top:0">No pattern really stands out</h3>
+      <p class="small">The strongest match is only ${Math.round((r.predictions[0]?.probability || 0) * 100)}%.
+      That's a real answer, not a failure — the model was trained with problems that belong to none of
+      these patterns, so it can tell you when something is outside them. It may be a maths, geometry,
+      simulation or ad-hoc problem, or a pattern this model can't predict yet.</p>
+    </div>`;
+}
+
+/**
+ * What the stated input bounds allow, shown on its own rather than inside one
+ * pattern's explanation.
+ *
+ * The bounds are a fact about the problem and what they permit is general
+ * algorithmic reasoning — "n is at most 14, so exponential work is affordable"
+ * is true no matter which pattern you clicked. It was previously rendered from
+ * the selected pattern's weights, so it vanished whenever that pattern happened
+ * not to use the feature: an assignment problem capped at n <= 14 showed no
+ * reading at all, even though the cap was the entire tell.
+ */
+function constraintsHtml(r, ex) {
+  const parsed = [...r.features.keys()].filter((f) => f.startsWith("c:size:") || f.startsWith("c:value:"));
+  if (!parsed.length) {
+    return `
+      <div class="card">
+        <h2>Stated limits</h2>
+        <p class="muted small">No input bounds were found. Constraints are often the strongest clue
+        about which approach is intended — if the original problem has a Constraints section, paste
+        it too.</p>
+      </div>`;
+  }
+  const contributionFor = (feature) => (ex?.constraints || []).find((c) => c.feature === feature);
+  return `
+    <div class="card">
+      <h2>What the limits imply</h2>
+      <p class="muted small">Read straight off the constraints you pasted, independent of any
+      prediction — this is the sizing argument an interviewer expects you to make out loud.</p>
+      <ul class="implication-list">
+        ${parsed.map((f) => {
+          const bucket = f.split(":")[2];
+          const implication = f.startsWith("c:size:") ? BOUND_IMPLICATIONS[bucket] : null;
+          const c = contributionFor(f);
+          return `<li><strong>${esc(readableFeature(f))}</strong>${implication ? ` — ${esc(implication)}` : ""}
+            ${c && ex ? `<span class="muted small">(${c.contribution >= 0 ? "+" : ""}${c.contribution.toFixed(3)} toward ${esc(patternLabel(ex.pattern))})</span>` : ""}</li>`;
+        }).join("")}
+      </ul>
+    </div>`;
+}
+
+function predictionRowHtml(p) {
+  const pctValue = Math.round(p.probability * 100);
+  const selected = p.pattern === state.selected;
+  const weak = !p.reliability.precision || p.reliability.precision < 0.65;
+  return `
+    <li>
+      <button type="button" class="pred-row ${selected ? "selected" : ""}" data-pick="${esc(p.pattern)}">
+        <span class="pattern-icon">${patternIcon(p.pattern, { size: 15 })}</span>
+        <span class="pred-name">${esc(patternLabel(p.pattern))}</span>
+        <span class="pred-bar"><span class="pred-fill ${p.confident ? "confident" : ""}"
+          style="width:${pctValue}%"></span></span>
+        <span class="pred-pct">${pctValue}%</span>
+        ${p.confident ? `<span class="pill pill-good" title="Above this pattern's tuned decision threshold">confident</span>` : ""}
+        ${weak ? `<span class="pill pill-muted" title="This pattern's precision on held-out problems is below 65% — treat it as a hint">weak signal</span>` : ""}
+      </button>
+    </li>`;
+}
+
+function unavailableHtml(r) {
+  const ids = Object.keys(r.unavailable || {});
+  if (!ids.length) return "";
+  return `
+    <p class="muted small" style="margin-top:0.75rem">
+      ${r.coverage.predictable} of ${r.coverage.total} patterns can be predicted.
+      Not enough labelled training examples exist yet for
+      ${ids.map((id) => esc(patternLabel(id))).join(", ")} — those still have problems in the
+      catalog and a Topics page, they just can't be spotted in unseen text.</p>`;
+}
+
+// ---------- evidence ----------
+
+function evidenceHtml(r, ex) {
+  const label = patternLabel(ex.pattern);
+  const regions = ["statement", "example", "constraints"];
+  const magnitudes = regions.map((k) => Math.abs(ex.byRegion[k] || 0));
+  const scale = Math.max(...magnitudes, 0.0001);
+
+
+  return `
+    <div class="card">
+      <h2>Why ${esc(label)}</h2>
+      <p class="muted small">Every number here is exact. This model scores a problem by adding up
+      one weight per phrase, so a phrase's contribution <em>is</em> its weight — not an estimate of it.</p>
+
+      <h3 class="small-heading">Where the evidence came from</h3>
+      <ul class="region-bars">
+        ${regions.map((k) => {
+          const v = ex.byRegion[k] || 0;
+          const width = Math.round((Math.abs(v) / scale) * 100);
+          return `<li>
+            <span class="region-name">${k}</span>
+            <span class="region-bar"><span class="region-fill ${v < 0 ? "against" : ""}" style="width:${width}%"></span></span>
+            <span class="region-val">${v >= 0 ? "+" : ""}${v.toFixed(2)}</span>
+          </li>`;
+        }).join("")}
+      </ul>
+
+      <div class="two-col" style="margin-top:1rem">
+        <div>
+          <h3 class="small-heading">Points toward ${esc(label)}</h3>
+          ${evidenceListHtml(ex.supporting, "for")}
+        </div>
+        <div>
+          <h3 class="small-heading">Points away</h3>
+          ${ex.opposing.length ? evidenceListHtml(ex.opposing, "against") : `<p class="muted small">Nothing in this problem argues against it.</p>`}
+        </div>
+      </div>
+
+      ${counterfactualHtml(ex)}
+
+      <p class="muted small" style="margin-top:1rem">
+        Reliability on held-out problems: ${Math.round(ex.reliability.precision * 100)}% precision,
+        ${Math.round(ex.reliability.recall * 100)}% recall, AUC ${ex.reliability.auc},
+        trained on ${ex.reliability.trainedOn} examples.</p>
+    </div>`;
+}
+
+function evidenceListHtml(items, direction) {
+  return `<ul class="evidence-list">
+    ${items.map((c) => `
+      <li>
+        <span class="evidence-term ${direction}">${esc(c.label)}</span>
+        <span class="evidence-weight">${c.contribution >= 0 ? "+" : ""}${c.contribution.toFixed(3)}</span>
+        ${c.occurrences > 1 ? `<span class="muted small">x${c.occurrences}</span>` : ""}
+      </li>`).join("")}
+  </ul>`;
+}
+
+function counterfactualHtml(ex) {
+  const cf = ex.counterfactual;
+  if (!cf.flipped) {
+    return `<p class="muted small" style="margin-top:1rem">Removing even the strongest
+      ${cf.removed.length} phrases doesn't change the call — the evidence is spread across the
+      whole problem rather than resting on one giveaway.</p>`;
+  }
+  return `
+    <div class="counterfactual">
+      <h3 class="small-heading">What would change its mind</h3>
+      <p class="small">Take away ${cf.removed.map((t) => `<code>${esc(t)}</code>`).join(", ")}
+      and this stops looking like ${esc(patternLabel(ex.pattern))}${cf.becomes
+        ? ` — it becomes <strong>${esc(patternLabel(cf.becomes.pattern))}</strong>
+           (${Math.round(cf.becomes.probability * 100)}%)` : ""}.</p>
+    </div>`;
+}
+
+// ---------- highlighted text ----------
+
+function highlightHtml(r, ex) {
+  return `
+    <div class="card">
+      <h2>In the problem itself</h2>
+      <p class="muted small">Shaded by how much each phrase pushed toward
+        <strong>${esc(patternLabel(ex.pattern))}</strong>. Darker means it mattered more.</p>
+      <div class="hl-legend">
+        <span class="muted small">weaker</span>
+        ${[1, 2, 3, 4].map((l) => `<span class="hl hl-${l}">&nbsp;&nbsp;</span>`).join("")}
+        <span class="muted small">stronger</span>
+      </div>
+      <div class="analyze-text">${markedUp(r.text, ex.spanWeights)}</div>
+    </div>`;
+}
+
+/** Accumulate each supporting span's contribution across the characters it
+ * covers, then emit runs of equal intensity. Overlapping n-grams stack, so the
+ * core of a strong phrase reads darker than its edges — which is honest: those
+ * characters really are carrying more of the score. */
+function markedUp(text, spanWeights) {
+  if (!text) return "";
+  const weight = new Float64Array(text.length);
+  for (const s of spanWeights) {
+    if (s.contribution <= 0 || s.end <= s.start) continue;
+    for (let i = s.start; i < s.end && i < weight.length; i++) weight[i] += s.contribution;
+  }
+  let max = 0;
+  for (const w of weight) if (w > max) max = w;
+
+  const level = (i) => (max <= 0 || weight[i] <= 0)
+    ? 0
+    : Math.min(HIGHLIGHT_LEVELS, Math.ceil((weight[i] / max) * HIGHLIGHT_LEVELS));
+
+  const out = [];
+  let runStart = 0;
+  let runLevel = level(0);
+  for (let i = 1; i <= text.length; i++) {
+    const current = i < text.length ? level(i) : -1;
+    if (current !== runLevel) {
+      const chunk = esc(text.slice(runStart, i));
+      out.push(runLevel > 0 ? `<mark class="hl hl-${runLevel}">${chunk}</mark>` : chunk);
+      runStart = i;
+      runLevel = current;
+    }
+  }
+  return out.join("");
+}
+
+// ---------- practice handoff ----------
+
+function practiceHtml(store) {
+  const pattern = state.selected;
+  const label = patternLabel(pattern);
+  return `
+    <div class="card">
+      <h2>Practice this shape</h2>
+      <p class="muted small">Recognizing the pattern is step one. These are catalog problems that
+      exercise ${esc(label)} — add one to your review queue and it enters the normal spaced-repetition
+      rotation.</p>
+      <div class="row gap-sm" style="margin-bottom:0.75rem">
+        <button class="btn btn-ghost btn-sm" id="open-topic">Read the ${esc(label)} page</button>
+      </div>
+      ${state.suggestions.length === 0
+        ? `<p class="empty">No catalog problems found for this pattern.</p>`
+        : `<ul class="queue-list">
+            ${state.suggestions.map((p) => `
+              <li class="queue-item">
+                <div>
+                  <div class="row gap-sm">
+                    <span class="pill pill-muted">${esc(p.difficulty || "—")}</span>
+                    ${p.number ? `<span class="pill pill-muted">#${p.number}</span>` : ""}
+                  </div>
+                  <div class="queue-name">${esc(p.title)}</div>
+                </div>
+                <div class="row gap-sm">
+                  <a class="btn btn-ghost btn-sm" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">Open</a>
+                  <button class="btn btn-ghost btn-sm" data-add="${esc(p.slug)}">Add to queue</button>
+                </div>
+              </li>`).join("")}
+          </ul>`}
+    </div>`;
+}
+
+function wireResults(root, store, actions) {
+  root.querySelectorAll("[data-pick]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      state.selected = btn.dataset.pick;
+      state.suggestions = await suggestionsFor(state.selected, store);
+      actions.rerender();
+    });
+  });
+
+  const topicBtn = root.querySelector("#open-topic");
+  if (topicBtn) {
+    topicBtn.addEventListener("click", () => {
+      showTopic(state.selected);
+      actions.switchTab("topicDetail");
+    });
+  }
+
+  root.querySelectorAll("[data-add]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const problem = state.suggestions.find((p) => p.slug === btn.dataset.add);
+      if (!problem) return;
+      addToQueue(store, problem, state.selected);
+      btn.disabled = true;
+      btn.textContent = "Added";
+      toast(`${problem.title} added to your review queue.`);
+    });
+  });
+}
+
+/** Adds a catalog problem to the user's own tracked list, due immediately, so
+ * it shows up in the next session plan like anything else they've logged. */
+function addToQueue(store, problem, patternId) {
+  store.mutate((s) => {
+    if (s.problems.some((p) => p.name === problem.title)) return;
+    s.problems.push({
+      id: uid(),
+      name: problem.title,
+      number: problem.number,
+      difficulty: problem.difficulty || "Unrated",
+      patternId,
+      approach: "",
+      filePath: "",
+      notes: `Added from Analyze — ${problem.url}`,
+      box: 0,
+      nextReviewDate: todayISO(),
+      attempts: [],
+      resources: [],
+      whiteboards: [],
+    });
+  }, `Ledger: add ${problem.title} from catalog`);
+}
+
+function patternLabel(id) {
+  return PATTERN_LABELS[id] || id;
+}
+
+// Display names, kept here so the view doesn't need the whole store just to
+// render a prediction list. Mirrors the names in js/seed.js.
+const PATTERN_LABELS = {
+  "two-pointers": "Two Pointers", "sliding-window": "Sliding Window",
+  "arrays-hashing": "Arrays & Hashing", "strings": "Strings",
+  "binary-search": "Binary Search", "recursion-dp": "Recursion / DP",
+  "bit-manipulation": "Bit Manipulation", "2d-matrix": "2D Matrix",
+  "knapsack": "Knapsack", "monotonic_stack": "Monotonic Stack",
+  "mst": "Minimum Spanning Tree", "quick_sort": "Partitioning / Quicksort",
+  "topological_sort": "Topological Sort", "trie": "Trie",
+  "union-find": "Union-Find", "linked-list": "Linked List",
+  "trees": "Trees", "graphs-bfs-dfs": "Graph Traversal",
+  "backtracking": "Backtracking", "heap": "Heap / Priority Queue",
+  "intervals": "Intervals", "prefix-sum": "Prefix Sum", "greedy": "Greedy",
+};
