@@ -1,11 +1,39 @@
 import {
   todayISO, applyOutcome, dueProblems, planToday, allAttempts, patternStats,
   updateStreak, systemDesignUnlock, uid, MISTAKE_TAGS, MOCK_CHECKLIST, daysBetween,
-  activityByDate, patternTrend, pickQuizProblem, quizOptions, addDaysISO,
+  activityByDate, patternTrend, pickQuizProblem, quizOptions, addDaysISO, recommendSession,
+  computePlantState,
 } from "./logic.js";
 import { TOPICS } from "./topics-content.js";
 import { loadCodeMirror, CODE_MODES } from "./codemirror-loader.js";
 import { createWhiteboard } from "./whiteboard.js";
+import { plantSvg } from "./plant.js";
+
+const VITALITY_LABEL = { thriving: "Thriving", steady: "Steady", stressed: "Stressed", wilting: "Wilting" };
+
+function plantCardHtml(plant) {
+  const { signals } = plant;
+  const issues = [];
+  if (signals.overdueCount > 0) issues.push(`${signals.overdueCount} problem${signals.overdueCount === 1 ? "" : "s"} overdue 7+ days — reviews are slipping`);
+  if (signals.overloaded) issues.push(`Today's volume is past a healthy single sitting`);
+  if (signals.daysSinceActive >= 3) issues.push(`${signals.daysSinceActive} days since last practice`);
+  return `
+    <div class="card plant-card">
+      ${plantSvg(plant.stage, plant.vitality, { size: 130 })}
+      <div class="plant-info">
+        <div class="plant-stage-row">
+          <span class="plant-stage-name">${esc(plant.stageLabel)}</span>
+          <span class="plant-vitality-label ${plant.vitality}">${VITALITY_LABEL[plant.vitality]}</span>
+        </div>
+        <p class="muted small">${plant.nextStageLabel ? `${plant.daysToNextStage} more practice day${plant.daysToNextStage === 1 ? "" : "s"} to ${esc(plant.nextStageLabel)}` : "Fully grown"} · ${plant.totalDaysPracticed} days practiced, ever</p>
+        <ul class="plant-signals">
+          <li>${signals.activeDaysInWindow}/${signals.windowDays} days active in the last two weeks</li>
+          <li>${signals.recallRate != null ? `${pct(signals.recallRate)} pattern-recall accuracy recently` : "Answer a few pattern-recall questions to start tracking this"}</li>
+          ${issues.map((i) => `<li>${esc(i)}</li>`).join("")}
+        </ul>
+      </div>
+    </div>`;
+}
 
 // Cross-tab handoff: "Log a rep" buttons elsewhere set this, renderLog reads
 // and clears it. A single module-level slot is enough for a single-user app.
@@ -88,7 +116,7 @@ function sparklineSvg(points, { width = 80, height = 22 } = {}) {
   return `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" class="sparkline"><polyline points="${coords}" /></svg>`;
 }
 
-function toast(msg) {
+export function toast(msg) {
   const el = document.getElementById("toast");
   if (!el) return;
   el.textContent = msg;
@@ -171,12 +199,30 @@ export function renderConflict(root, store, rerender) {
 
 export function renderDashboard(root, store, actions) {
   const state = store.state;
+  const rec = recommendSession(state);
+  const plant = computePlantState(state);
   const { plan, overflow, usedMin, budgetMin } = planToday(state);
   const stats = patternStats(state).filter((s) => s.attempts > 0).sort((a, b) => a.solvedCleanRate - b.solvedCleanRate);
   const weakest = stats.slice(0, 2);
   const sd = systemDesignUnlock(state);
+  const REC_LABEL = { "first-rep": "Recommended", "deep-dive": "Recommended — repeated weak spot", "stale-nudge": "Recommended — review", due: "Up next", none: "" };
 
   root.innerHTML = `
+    ${plantCardHtml(plant)}
+    <div class="card session-cta-card">
+      <div class="row space-between session-cta-row">
+        <div>
+          <h2>${REC_LABEL[rec.type] || "Today's session"}</h2>
+          <p class="muted">${esc(rec.message)}</p>
+        </div>
+        <div class="row gap-sm">
+          <button class="btn btn-ghost" id="cta-warmup">5-min warmup</button>
+          ${rec.type === "deep-dive" || rec.type === "stale-nudge" ? `<button class="btn btn-ghost" data-tab="topics">Review pattern</button>` : ""}
+          ${rec.problem ? `<button class="btn btn-primary" id="cta-start">${rec.type === "deep-dive" ? "Drill it" : "Start session"}</button>` : ""}
+        </div>
+      </div>
+    </div>
+
     <div class="grid dashboard-grid">
       <div class="card streak-card">
         <div class="stat-row">
@@ -188,7 +234,7 @@ export function renderDashboard(root, store, actions) {
 
       <div class="card">
         <h2>Today's plan</h2>
-        ${plan.length === 0 ? `<p class="empty">Nothing due. Log a new problem to seed the queue, or get ahead on a weak pattern.</p>` : `
+        ${plan.length === 0 ? `<p class="empty">Nothing due right now.</p>` : `
         <ul class="queue-list">
           ${plan.map((p) => queueItemHtml(state, p)).join("")}
         </ul>`}
@@ -205,7 +251,10 @@ export function renderDashboard(root, store, actions) {
               <div class="bar"><div class="bar-fill" style="width:${Math.round((s.solvedCleanRate || 0) * 100)}%"></div></div>
             </li>`).join("")}
         </ul>`}
-        <button class="btn btn-ghost" data-tab="patterns">See all patterns</button>
+        <div class="row gap-sm">
+          <button class="btn btn-ghost" data-tab="patterns">See all patterns</button>
+          <button class="btn btn-ghost" data-tab="topics">Browse topics</button>
+        </div>
       </div>
 
       <div class="card">
@@ -222,7 +271,19 @@ export function renderDashboard(root, store, actions) {
     </div>`;
 
   wireTabButtons(root, actions);
-  wireLogButtons(root, actions);
+  wireStartButtons(root, store, actions);
+
+  const startBtn = root.querySelector("#cta-start");
+  if (startBtn) {
+    startBtn.addEventListener("click", () => {
+      startSession(rec.problem);
+      actions.switchTab("workspace");
+    });
+  }
+  root.querySelector("#cta-warmup").addEventListener("click", () => {
+    resetWarmup();
+    actions.switchTab("warmup");
+  });
 }
 
 function queueItemHtml(state, p) {
@@ -236,7 +297,7 @@ function queueItemHtml(state, p) {
         </div>
         <div class="queue-name">${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a>` : esc(p.name)}${p.number ? ` <span class="muted">#${p.number}</span>` : ""}</div>
       </div>
-      <button class="btn btn-primary btn-sm" data-log-problem="${esc(p.id)}">Log a rep</button>
+      <button class="btn btn-primary btn-sm" data-start-problem="${esc(p.id)}">Start</button>
     </li>`;
 }
 
@@ -245,11 +306,16 @@ function wireTabButtons(root, actions) {
     btn.addEventListener("click", () => actions.switchTab(btn.dataset.tab));
   });
 }
-function wireLogButtons(root, actions) {
-  root.querySelectorAll("[data-log-problem]").forEach((btn) => {
+/** Wires every "Start" button rendered by queueItemHtml — the single entry
+ * point into a guided session, used from Dashboard, Review Queue, and the
+ * Topics practice ladder alike. */
+function wireStartButtons(root, store, actions) {
+  root.querySelectorAll("[data-start-problem]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      nav.prefillProblemId = btn.dataset.logProblem;
-      actions.switchTab("log");
+      const problem = store.state.problems.find((p) => p.id === btn.dataset.startProblem);
+      if (!problem) return;
+      startSession(problem);
+      actions.switchTab("workspace");
     });
   });
 }
@@ -266,7 +332,7 @@ export function renderQueue(root, store, actions) {
       ${due.length === 0 ? `<p class="empty">Queue's clear.</p>` : `
       <ul class="queue-list">${due.map((p) => queueItemHtml(state, p)).join("")}</ul>`}
     </div>`;
-  wireLogButtons(root, actions);
+  wireStartButtons(root, store, actions);
 }
 
 // ---------- Log Session ----------
@@ -285,7 +351,10 @@ export function renderLog(root, store, actions) {
 
   root.innerHTML = `
     <div class="card">
-      <h2>Log a session</h2>
+      <h2>Log a past rep</h2>
+      <p class="muted">For something you already solved elsewhere — a LeetCode submission, a whiteboard
+      interview, working through it on paper. For a live guided session with a timer, whiteboard, and
+      code editor built in, start from the Dashboard instead.</p>
       <form id="log-form" class="form">
         <div class="field">
           <span class="label">Problem</span>
@@ -485,146 +554,407 @@ export function renderPatterns(root, store) {
     </div>`;
 }
 
-// ---------- Mock Interview ----------
+// ---------- Session: Workspace + Reflect ----------
+//
+// The single guided path: Dashboard -> Workspace (statement + timer +
+// whiteboard + code editor, all in one place) -> Submit -> Reflect (outcome,
+// pattern recall, mistakes, soul statement) -> one save -> back to Dashboard.
+// `session` carries state across that whole arc; `reflectState` is Reflect's
+// own small slice (the pattern-recall answer), reset each time Workspace
+// hands off to it.
+//
+// Rule for anyone editing this: once the code editor or whiteboard is
+// mounted, never call actions.rerender() or reset root.innerHTML — either
+// destroys the live widget and loses whatever was typed/drawn. Every
+// in-session interaction (mark insight, toggle whiteboard, check a checklist
+// item) mutates specific DOM nodes directly instead.
 
-let mockTimer = { running: false, endsAt: null, plannedMin: 45, intervalId: null };
+let session = null;
+let reflectState = null;
 
-export function renderMock(root, store, actions) {
+export function startSession(problem, { isMock = false } = {}) {
+  session = {
+    problem, isMock,
+    startedAt: null, insightAt: null, endedAt: null,
+    intervalId: null, whiteboardCtl: null, whiteboardShown: false,
+    cm: null, codeLang: "cpp", checklist: {},
+    capturedCode: "", capturedWhiteboardDataUrl: null,
+  };
+}
+
+/** Called when the user exits Workspace or Reflect without saving. */
+export function abandonSession() {
+  if (session?.intervalId) clearInterval(session.intervalId);
+  if (session?.whiteboardCtl) session.whiteboardCtl.destroy();
+  session = null;
+  reflectState = null;
+}
+
+export function hasActiveSession() {
+  return session != null;
+}
+
+function fmtClock(ms) {
+  const total = Math.max(0, Math.round(ms / 1000));
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+export function renderWorkspace(root, store, actions) {
+  if (!session) {
+    actions.switchTab("dashboard");
+    return;
+  }
   const state = store.state;
-  const past = [...state.mocks].reverse();
+  const p = session.problem;
+  const header = `
+    <div class="row gap-sm">
+      <span class="pill">${esc(patternName(state, p.patternId))}</span>
+      <span class="pill pill-muted">${esc(p.difficulty)}</span>
+      ${p.number ? `<span class="pill pill-muted">#${p.number}</span>` : ""}
+      ${session.isMock ? `<span class="pill pill-warn">Mock</span>` : ""}
+    </div>
+    <h2 class="session-problem-title">${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a>` : esc(p.name)}</h2>`;
+
+  if (!session.startedAt) {
+    root.innerHTML = `
+      <div class="card session-card">
+        ${header}
+        <p class="muted">Open the problem (use the link above if you have one), read it through, then
+        start the clock when you actually begin working it — that's what "time to insight" measures from.</p>
+        <label class="field checkbox-field">
+          <input type="checkbox" id="ws-mock-toggle" ${session.isMock ? "checked" : ""} />
+          Verbalized mock — talk through your approach out loud, strict timer
+        </label>
+        <button class="btn btn-primary" id="ws-start">Start timer</button>
+      </div>`;
+    root.querySelector("#ws-mock-toggle").addEventListener("change", (e) => {
+      session.isMock = e.target.checked;
+    });
+    root.querySelector("#ws-start").addEventListener("click", () => {
+      session.startedAt = Date.now();
+      actions.rerender(); // safe: nothing is mounted yet
+    });
+    return;
+  }
+
+  root.innerHTML = `
+    <div class="card session-card">
+      <div class="row space-between session-cta-row">
+        <div>${header}</div>
+        <div class="session-clock" id="ws-clock">00:00</div>
+      </div>
+      <div class="row gap-sm" style="margin: 0.5rem 0">
+        <button type="button" class="btn btn-ghost btn-sm" id="ws-mark-insight" ${session.insightAt ? "disabled" : ""}>
+          ${session.insightAt ? `Insight at ${Math.round((session.insightAt - session.startedAt) / 60000)} min` : "I've got my approach"}
+        </button>
+        <button type="button" class="btn btn-ghost btn-sm" id="ws-toggle-board">${session.whiteboardShown ? "Hide whiteboard" : "Show whiteboard"}</button>
+      </div>
+      <div id="ws-board-host" ${session.whiteboardShown ? "" : "hidden"}></div>
+      <div class="field" style="margin-top:0.6rem">
+        <div class="row space-between">
+          <span class="label">Your code</span>
+          <select class="select" id="ws-code-lang" style="max-width:9rem">
+            ${Object.entries(CODE_MODES).map(([k, v]) => `<option value="${k}" ${k === session.codeLang ? "selected" : ""}>${v.label}</option>`).join("")}
+          </select>
+        </div>
+        <div id="ws-code-editor" class="code-editor-host code-editor-tall"></div>
+      </div>
+      ${session.isMock ? `
+      <p class="label" style="margin-top:0.6rem">Verbalization checklist</p>
+      <ul class="checklist">
+        ${MOCK_CHECKLIST.map((item, i) => `<li><label><input type="checkbox" data-ws-check="${i}" ${session.checklist[i] ? "checked" : ""} /> ${esc(item)}</label></li>`).join("")}
+      </ul>` : ""}
+      <div class="row gap" style="margin-top:0.75rem">
+        <button class="btn btn-primary" id="ws-submit">Submit solution</button>
+        <button class="btn btn-ghost" id="ws-exit">Exit without saving</button>
+      </div>
+    </div>`;
+
+  clearInterval(session.intervalId);
+  session.intervalId = setInterval(() => {
+    const clock = document.getElementById("ws-clock");
+    if (!clock) {
+      clearInterval(session.intervalId);
+      return;
+    }
+    clock.textContent = fmtClock(Date.now() - session.startedAt);
+  }, 250);
+
+  const boardHost = root.querySelector("#ws-board-host");
+  if (session.whiteboardShown && !session.whiteboardCtl) {
+    session.whiteboardCtl = createWhiteboard(boardHost);
+  }
+  root.querySelector("#ws-toggle-board").addEventListener("click", (e) => {
+    session.whiteboardShown = !session.whiteboardShown;
+    boardHost.hidden = !session.whiteboardShown;
+    e.target.textContent = session.whiteboardShown ? "Hide whiteboard" : "Show whiteboard";
+    if (session.whiteboardShown && !session.whiteboardCtl) {
+      session.whiteboardCtl = createWhiteboard(boardHost);
+    }
+  });
+
+  const codeHost = root.querySelector("#ws-code-editor");
+  const langSelect = root.querySelector("#ws-code-lang");
+  loadCodeMirror().then((CodeMirror) => {
+    if (!codeHost.isConnected || session?.cm) return; // tab left, or already mounted
+    session.cm = CodeMirror(codeHost, {
+      value: session.capturedCode,
+      mode: CODE_MODES[session.codeLang].mode,
+      lineNumbers: true,
+      viewportMargin: Infinity,
+    });
+  });
+  langSelect.addEventListener("change", () => {
+    session.codeLang = langSelect.value;
+    if (session.cm) session.cm.setOption("mode", CODE_MODES[session.codeLang].mode);
+  });
+
+  root.querySelector("#ws-mark-insight").addEventListener("click", (e) => {
+    if (session.insightAt) return;
+    session.insightAt = Date.now();
+    e.target.textContent = `Insight at ${Math.round((session.insightAt - session.startedAt) / 60000)} min`;
+    e.target.disabled = true;
+  });
+
+  root.querySelectorAll("[data-ws-check]").forEach((cb) => {
+    cb.addEventListener("change", () => {
+      session.checklist[cb.dataset.wsCheck] = cb.checked;
+    });
+  });
+
+  root.querySelector("#ws-submit").addEventListener("click", () => {
+    session.endedAt = Date.now();
+    clearInterval(session.intervalId);
+    if (session.cm) session.capturedCode = session.cm.getValue().trim();
+    if (session.whiteboardCtl && !session.whiteboardCtl.isEmpty()) {
+      session.capturedWhiteboardDataUrl = session.whiteboardCtl.toDataUrl();
+    }
+    reflectState = { patternAnswered: null, options: quizOptions(store.state, p.patternId) };
+    actions.switchTab("reflect");
+  });
+
+  root.querySelector("#ws-exit").addEventListener("click", () => {
+    if (!confirm("Discard this session? Nothing will be saved.")) return;
+    abandonSession();
+    actions.switchTab("dashboard");
+  });
+}
+
+function patternRevealHtml(state, problem, correctPatternId) {
+  const t = TOPICS[correctPatternId];
+  const siblings = state.problems.filter((x) => x.patternId === correctPatternId && x.id !== problem.id).slice(0, 3);
+  return `
+    ${t ? `<p><strong>Why:</strong> ${esc(t.concept)}</p><p><strong>Invariant:</strong> ${esc(t.invariant)}</p>` : ""}
+    ${siblings.length ? `<p class="muted small">Related in this pattern: ${siblings.map((s) => esc(s.name)).join(", ")}</p>` : ""}`;
+}
+
+export function renderReflect(root, store, actions) {
+  if (!session || !reflectState) {
+    actions.switchTab("dashboard");
+    return;
+  }
+  const state = store.state;
+  const p = session.problem;
+  const insightMin = session.insightAt ? Math.round((session.insightAt - session.startedAt) / 60000) : null;
+  const solveMin = session.endedAt ? Math.round((session.endedAt - session.startedAt) / 60000) : null;
 
   root.innerHTML = `
     <div class="card">
-      <h2>Mock interview</h2>
-      ${mockTimer.running ? mockRunningHtml() : mockStartHtml()}
-    </div>
-    <div class="card">
-      <h2>Past mocks</h2>
-      ${past.length === 0 ? `<p class="empty">None logged yet.</p>` : `
-      <ul class="queue-list">
-        ${past.map((m) => `
-          <li class="queue-item">
-            <div>
-              <div class="row gap-sm">
-                <span class="pill ${m.outcome === "solved-clean" ? "pill-good" : "pill-muted"}">${esc(m.outcome)}</span>
-                <span class="pill pill-muted">${fmtDate(m.date)}</span>
-              </div>
-              <div class="queue-name">${esc(state.problems.find((p) => p.id === m.problemId)?.name || "Untitled")}${m.communicationRating ? ` · comms ${m.communicationRating}/5` : ""}</div>
-            </div>
-          </li>`).join("")}
-      </ul>`}
+      <h2>${esc(p.name)} — reflect</h2>
+      <p class="muted small">${insightMin != null ? `${insightMin} min to insight, ` : ""}${solveMin != null ? `${solveMin} min total` : ""}</p>
+
+      <form id="reflect-form" class="form">
+        <label class="field"><span class="label">Outcome</span>
+          <select class="select" name="outcome">
+            <option value="solved-clean">Solved clean</option>
+            <option value="solved-struggled">Solved, struggled</option>
+            <option value="failed">Didn't solve</option>
+          </select></label>
+
+        <div class="field">
+          <span class="label">What was the core pattern here?</span>
+          <div class="quiz-options">
+            ${reflectState.options.map((optId) => {
+              const pat = state.patterns.find((x) => x.id === optId);
+              return `<button type="button" class="quiz-option" data-pattern-answer="${esc(optId)}">${esc(pat.name)}</button>`;
+            }).join("")}
+          </div>
+          <div id="pattern-reveal" class="pattern-reveal" hidden></div>
+        </div>
+
+        <div class="field">
+          <span class="label">Mistake tags</span>
+          <div class="chip-group">
+            ${MISTAKE_TAGS.map((t) => `<label class="chip"><input type="checkbox" name="mistakeTags" value="${t}" />${t.replace(/-/g, " ")}</label>`).join("")}
+          </div>
+        </div>
+
+        <label class="field"><span class="label">Soul statement</span>
+          <textarea class="textarea" name="soulStatement" rows="4" placeholder="What was your confusion, and what clicked?"></textarea></label>
+
+        ${session.isMock ? `
+        <label class="field"><span class="label">Communication rating (1-5)</span>
+          <input class="input" type="number" min="1" max="5" name="communicationRating" /></label>` : ""}
+
+        <div class="row gap">
+          <button class="btn btn-primary" type="submit" id="reflect-save" disabled>Pick a pattern above first</button>
+          <button class="btn btn-ghost" type="button" id="reflect-discard">Discard this session</button>
+        </div>
+      </form>
     </div>`;
 
-  if (mockTimer.running) {
-    wireMockRunning(root, store, actions);
-  } else {
-    root.querySelector("#start-mock").addEventListener("click", () => {
-      const durationInput = root.querySelector("#mock-duration");
-      mockTimer.plannedMin = Number(durationInput.value) || 45;
-      mockTimer.running = true;
-      mockTimer.endsAt = Date.now() + mockTimer.plannedMin * 60000;
-      actions.rerender();
-      startTicking(actions);
+  const form = root.querySelector("#reflect-form");
+  const saveBtn = root.querySelector("#reflect-save");
+  const revealHost = root.querySelector("#pattern-reveal");
+
+  root.querySelectorAll("[data-pattern-answer]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (reflectState.patternAnswered) return;
+      const chosen = btn.dataset.patternAnswer;
+      reflectState.patternAnswered = chosen;
+      const correct = chosen === p.patternId;
+      root.querySelectorAll("[data-pattern-answer]").forEach((b) => {
+        b.disabled = true;
+        if (b.dataset.patternAnswer === p.patternId) b.classList.add("correct");
+        else if (b === btn) b.classList.add("incorrect");
+      });
+      revealHost.innerHTML = `<p class="quiz-feedback">${correct ? "Correct — that's the core pattern." : `The core pattern is <strong>${esc(patternName(state, p.patternId))}</strong>.`}</p>${patternRevealHtml(state, p, p.patternId)}`;
+      revealHost.hidden = false;
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Save & finish";
+      // Feeds the same recall-accuracy stat the Quiz/Warmup tabs use, and
+      // that the plant's health reads — every real session is itself a
+      // pattern-recall rep, not just the dedicated drills.
+      store.mutate((s) => {
+        s.quiz.totalAsked += 1;
+        if (correct) s.quiz.totalCorrect += 1;
+        s.quiz.recent.push({ correct });
+        if (s.quiz.recent.length > 20) s.quiz.recent.shift();
+      }, "Ledger: session pattern-recall answer");
+    });
+  });
+
+  root.querySelector("#reflect-discard").addEventListener("click", () => {
+    if (!confirm("Discard this session? Nothing will be saved.")) return;
+    abandonSession();
+    actions.switchTab("dashboard");
+  });
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!reflectState.patternAnswered) return;
+    const f = new FormData(form);
+    const outcome = f.get("outcome");
+    const patternCorrect = reflectState.patternAnswered === p.patternId;
+    const isMock = session.isMock;
+    const capturedCode = session.capturedCode;
+    const capturedCodeLang = session.codeLang;
+    const whiteboardDataUrl = session.capturedWhiteboardDataUrl;
+    const checklist = { ...session.checklist };
+    const date = todayISO();
+
+    const finish = () => {
+      store.mutate((s) => {
+        const problem = s.problems.find((x) => x.id === p.id);
+        if (!problem) return;
+        const attempt = {
+          id: uid(),
+          date,
+          outcome,
+          patternGuess: patternCorrect ? "correct" : "incorrect",
+          timeToInsightMin: insightMin,
+          timeToSolveMin: solveMin,
+          mistakeTags: f.getAll("mistakeTags"),
+          soulStatement: f.get("soulStatement") || "",
+          isMock,
+          code: capturedCode,
+          codeLang: capturedCode ? capturedCodeLang : "",
+        };
+        problem.attempts.push(attempt);
+        applyOutcome(problem, outcome, s.settings);
+        updateStreak(s);
+        if (isMock) {
+          s.mocks.push({
+            id: uid(), date, problemId: problem.id, outcome,
+            communicationRating: f.get("communicationRating") ? Number(f.get("communicationRating")) : null,
+            durationActualMin: solveMin, notes: "", checklist,
+          });
+        }
+      }, `Ledger: session — ${p.name}`);
+      abandonSession();
+      toast("Saved.");
+      actions.switchTab("sessionSummary");
+    };
+
+    if (whiteboardDataUrl) {
+      const wbId = uid();
+      const path = `prep-data/whiteboards/${wbId}.png`;
+      saveBtn.disabled = true;
+      saveBtn.textContent = "Saving…";
+      store.saveWhiteboardImage(path, whiteboardDataUrl, "Ledger: save session whiteboard")
+        .then(() => {
+          store.mutate((s) => {
+            s.whiteboards.push({ id: wbId, date, problemId: p.id, path, caption: `${p.name} — session` });
+          }, "Ledger: index session whiteboard");
+          finish();
+        })
+        .catch(() => {
+          toast("Whiteboard save failed — saving the rest anyway.");
+          finish();
+        });
+    } else {
+      finish();
+    }
+  });
+}
+
+/** The checkpoint after every save — deliberately not a silent bounce back
+ * to Dashboard. Ending a session is framed as a real, supported choice
+ * ("I'm done for today"), not something that only happens when a timer or
+ * the queue runs out — the whole point is undercutting the grind-until-
+ * burnout default. */
+const PLANT_REACTION = {
+  thriving: "Your plant's thriving — this rhythm is exactly what sticks long-term.",
+  steady: "Your plant's steady. Keep this pace and it'll keep climbing.",
+  stressed: "Your plant's looking a little stressed — check the signals above before piling on more today.",
+  wilting: "Your plant's wilting. A lighter day, or an actual day off, would help it more than another rep right now.",
+};
+
+export function renderSessionSummary(root, store, actions) {
+  const state = store.state;
+  const today = todayISO();
+  const todaysAttempts = allAttempts(state).filter((a) => a.date === today);
+  const totalMin = todaysAttempts.reduce((sum, a) => sum + (a.timeToSolveMin || 0), 0);
+  const rec = recommendSession(state);
+  const plant = computePlantState(state);
+  const budgetMin = state.settings.dailyBudgetMin;
+  const overBudget = totalMin >= budgetMin;
+  const manyReps = todaysAttempts.length >= 3;
+
+  root.innerHTML = `
+    <div class="card session-card">
+      <h2>Nice work</h2>
+      <p class="muted">${todaysAttempts.length} rep${todaysAttempts.length === 1 ? "" : "s"} today${totalMin ? `, ${totalMin} min total` : ""}${budgetMin ? ` (budget: ${budgetMin} min)` : ""}.</p>
+      <div class="plant-toast-row" style="margin: 0.75rem 0">
+        ${plantSvg(plant.stage, plant.vitality, { size: 56, decorative: true })}
+        <p class="muted small">${PLANT_REACTION[plant.vitality]}</p>
+      </div>
+      ${overBudget ? `<p class="banner banner-warn" style="padding:0.6rem 0.75rem;border-radius:8px">You've hit today's planned budget — a genuinely good place to stop. More isn't automatically better; consistency tomorrow beats a long session today.</p>` : ""}
+      ${!overBudget && manyReps ? `<p class="muted small">That's a solid handful of reps — diminishing returns start to kick in past this point in one sitting.</p>` : ""}
+      <div class="row gap" style="margin-top:0.75rem">
+        ${rec.problem ? `<button class="btn ${overBudget ? "btn-ghost" : "btn-primary"}" id="ss-another">Do another — ${esc(rec.problem.name)}</button>` : ""}
+        <button class="btn ${overBudget ? "btn-primary" : "btn-ghost"}" id="ss-done">I'm done for today</button>
+      </div>
+    </div>`;
+
+  const anotherBtn = root.querySelector("#ss-another");
+  if (anotherBtn) {
+    anotherBtn.addEventListener("click", () => {
+      startSession(rec.problem);
+      actions.switchTab("workspace");
     });
   }
-}
-
-function mockStartHtml() {
-  return `
-    <p class="muted">45 minutes, verbalized, no pausing to think quietly. Pick a due problem from the
-    queue first, then start the clock.</p>
-    <label class="field inline"><span class="label">Duration (min)</span>
-      <input class="input" id="mock-duration" type="number" value="45" style="max-width:6rem" /></label>
-    <button class="btn btn-primary" id="start-mock">Start mock</button>`;
-}
-
-function mockRunningHtml() {
-  return `
-    <div class="mock-timer" id="mock-clock">--:--</div>
-    <ul class="checklist">
-      ${MOCK_CHECKLIST.map((item, i) => `<li><label><input type="checkbox" data-check="${i}" /> ${esc(item)}</label></li>`).join("")}
-    </ul>
-    <button class="btn btn-primary" id="finish-mock">Finish mock</button>`;
-}
-
-function startTicking(actions) {
-  clearInterval(mockTimer.intervalId);
-  mockTimer.intervalId = setInterval(() => {
-    const clock = document.getElementById("mock-clock");
-    if (!clock) {
-      clearInterval(mockTimer.intervalId);
-      return;
-    }
-    const remainMs = mockTimer.endsAt - Date.now();
-    const sign = remainMs < 0 ? "-" : "";
-    const total = Math.abs(Math.round(remainMs / 1000));
-    const m = String(Math.floor(total / 60)).padStart(2, "0");
-    const s = String(total % 60).padStart(2, "0");
-    clock.textContent = `${sign}${m}:${s}`;
-    clock.classList.toggle("overtime", remainMs < 0);
-  }, 250);
-}
-
-function wireMockRunning(root, store, actions) {
-  root.querySelectorAll("[data-check]").forEach((cb) => {
-    cb.addEventListener("change", () => {
-      mockTimer.checklist = mockTimer.checklist || {};
-      mockTimer.checklist[cb.dataset.check] = cb.checked;
-    });
-  });
-  root.querySelector("#finish-mock").addEventListener("click", () => {
-    clearInterval(mockTimer.intervalId);
-    const actualMin = Math.max(0, Math.round((mockTimer.plannedMin * 60000 - (mockTimer.endsAt - Date.now())) / 60000));
-    renderMockComplete(root, store, actions, actualMin, mockTimer.checklist || {});
-    mockTimer = { running: false, endsAt: null, plannedMin: 45, intervalId: null };
-  });
-}
-
-function renderMockComplete(root, store, actions, actualMin, checklist) {
-  const state = store.state;
-  const due = dueProblems(state);
-  root.querySelector(".card").innerHTML = `
-    <h2>Mock complete — ${actualMin} min</h2>
-    <form id="mock-complete-form" class="form">
-      <label class="field"><span class="label">Problem</span>
-        <select class="select" name="problemId">
-          <option value="">— unspecified —</option>
-          ${state.problems.map((p) => `<option value="${esc(p.id)}" ${due.some((d) => d.id === p.id) ? "" : ""}>${esc(p.name)}</option>`).join("")}
-        </select></label>
-      <label class="field"><span class="label">Outcome</span>
-        <select class="select" name="outcome">
-          <option value="solved-clean">Solved clean</option>
-          <option value="solved-struggled">Solved, struggled</option>
-          <option value="failed">Didn't solve</option>
-        </select></label>
-      <label class="field"><span class="label">Communication rating (1-5)</span>
-        <input class="input" type="number" min="1" max="5" name="communicationRating" /></label>
-      <label class="field"><span class="label">Notes</span>
-        <textarea class="textarea" name="notes" rows="3"></textarea></label>
-      <button class="btn btn-primary" type="submit">Save mock</button>
-    </form>`;
-  root.querySelector("#mock-complete-form").addEventListener("submit", (e) => {
-    e.preventDefault();
-    const f = new FormData(e.target);
-    store.mutate((s) => {
-      const outcome = f.get("outcome");
-      s.mocks.push({
-        id: uid(),
-        date: todayISO(),
-        problemId: f.get("problemId") || null,
-        outcome,
-        communicationRating: f.get("communicationRating") ? Number(f.get("communicationRating")) : null,
-        durationActualMin: actualMin,
-        notes: f.get("notes") || "",
-        checklist,
-      });
-      const problem = s.problems.find((p) => p.id === f.get("problemId"));
-      if (problem) applyOutcome(problem, outcome, s.settings);
-      updateStreak(s);
-    }, "Ledger: log mock interview");
-    toast("Mock saved.");
-    actions.switchTab("mock");
-  });
+  root.querySelector("#ss-done").addEventListener("click", () => actions.switchTab("dashboard"));
 }
 
 // ---------- Journal ----------
@@ -633,6 +963,7 @@ export function renderJournal(root, store) {
   const state = store.state;
   const entries = allAttempts(state).filter((a) => a.soulStatement).reverse();
   const notes = [...state.journal].reverse();
+  const mocks = [...state.mocks].reverse();
 
   root.innerHTML = `
     <div class="card">
@@ -652,6 +983,22 @@ export function renderJournal(root, store) {
       ${notes.length === 0 ? `<p class="empty">No freeform notes yet.</p>` : `
       <ul class="journal-list">
         ${notes.map((n) => `<li><div class="row space-between"><strong>${esc(n.type.replace(/-/g, " "))}</strong><span class="muted">${fmtDate(n.date)}</span></div><p>${esc(n.text)}</p></li>`).join("")}
+      </ul>`}
+    </div>
+    <div class="card">
+      <h2>Mock interviews</h2>
+      ${mocks.length === 0 ? `<p class="empty">None yet — toggle "Verbalized mock" when starting a session.</p>` : `
+      <ul class="queue-list">
+        ${mocks.map((m) => `
+          <li class="queue-item">
+            <div>
+              <div class="row gap-sm">
+                <span class="pill ${m.outcome === "solved-clean" ? "pill-good" : "pill-muted"}">${esc(m.outcome)}</span>
+                <span class="pill pill-muted">${fmtDate(m.date)}</span>
+              </div>
+              <div class="queue-name">${esc(state.problems.find((p) => p.id === m.problemId)?.name || "Untitled")}${m.communicationRating ? ` · comms ${m.communicationRating}/5` : ""}${m.durationActualMin != null ? ` · ${m.durationActualMin} min` : ""}</div>
+            </div>
+          </li>`).join("")}
       </ul>`}
     </div>
     <div class="card">
@@ -817,7 +1164,7 @@ export function renderTopics(root, store, actions) {
       </details>`;
     }).join("")}`;
 
-  wireLogButtons(root, actions);
+  wireStartButtons(root, store, actions);
   root.querySelectorAll("[data-add-resource]").forEach((form) => {
     form.addEventListener("submit", (e) => {
       e.preventDefault();
@@ -925,6 +1272,113 @@ function nextQuizQuestion(state) {
   quizState.recentIds = [p.id, ...quizState.recentIds].slice(0, 5);
 }
 
+// ---------- Warmup ----------
+// A bounded (3-question) version of the same drill, framed as the on-ramp
+// into a session rather than open-ended practice — "encourage 5 minutes of
+// pattern review before you start."
+
+const WARMUP_LENGTH = 3;
+let warmupState = { count: 0, current: null, options: [], answered: null, recentIds: [] };
+
+export function resetWarmup() {
+  warmupState = { count: 0, current: null, options: [], answered: null, recentIds: [] };
+}
+
+export function renderWarmup(root, store, actions) {
+  const state = store.state;
+  if (warmupState.count === 0 && !warmupState.current) nextWarmupQuestion(state);
+
+  if (warmupState.count >= WARMUP_LENGTH || (!warmupState.current && warmupState.count > 0)) {
+    const rec = recommendSession(state);
+    root.innerHTML = `
+      <div class="card">
+        <h2>Warmed up</h2>
+        <p class="muted">${rec.problem ? esc(rec.message) : "Patterns are loaded, and there's nothing due right now — good day to stop here."}</p>
+        <div class="row gap">
+          ${rec.problem ? `<button class="btn btn-primary" id="warmup-start">Start — ${esc(rec.problem.name)}</button>` : ""}
+          <button class="btn btn-ghost" data-tab="dashboard">Back to dashboard</button>
+        </div>
+      </div>`;
+    wireTabButtons(root, actions);
+    const startBtn = root.querySelector("#warmup-start");
+    if (startBtn) {
+      startBtn.addEventListener("click", () => {
+        startSession(rec.problem);
+        resetWarmup();
+        actions.switchTab("workspace");
+      });
+    }
+    return;
+  }
+
+  if (!warmupState.current) {
+    root.innerHTML = `
+      <div class="card">
+        <p class="empty">Log a few problems first — warmup draws its questions from ones you've attempted.</p>
+        <button class="btn btn-ghost" data-tab="dashboard">Back to dashboard</button>
+      </div>`;
+    wireTabButtons(root, actions);
+    return;
+  }
+
+  const p = warmupState.current;
+  root.innerHTML = `
+    <div class="card">
+      <div class="row space-between"><h2>Pattern warmup</h2><span class="muted small">${warmupState.count + 1} of ${WARMUP_LENGTH}</span></div>
+      <p class="muted">If this popped up cold, what pattern would you reach for?</p>
+      <div class="quiz-prompt">
+        <div class="queue-name">${esc(p.name)}${p.number ? ` <span class="muted">#${p.number}</span>` : ""}</div>
+        <span class="pill pill-muted">${esc(p.difficulty)}</span>
+      </div>
+      <div class="quiz-options">
+        ${warmupState.options.map((optId) => {
+          const pat = state.patterns.find((x) => x.id === optId);
+          let cls = "quiz-option";
+          if (warmupState.answered) {
+            if (optId === p.patternId) cls += " correct";
+            else if (optId === warmupState.answered && optId !== p.patternId) cls += " incorrect";
+          }
+          return `<button type="button" class="${cls}" data-answer="${esc(optId)}" ${warmupState.answered ? "disabled" : ""}>${esc(pat.name)}</button>`;
+        }).join("")}
+      </div>
+      ${warmupState.answered ? `
+        <p class="quiz-feedback">${warmupState.answered === p.patternId ? "Correct." : `It's <strong>${esc(patternName(state, p.patternId))}</strong>.`}</p>
+        <button class="btn btn-primary" id="warmup-next">${warmupState.count + 1 >= WARMUP_LENGTH ? "Finish warmup" : "Next"}</button>
+      ` : ""}
+    </div>`;
+
+  root.querySelectorAll("[data-answer]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      warmupState.answered = btn.dataset.answer;
+      const isCorrect = warmupState.answered === p.patternId;
+      store.mutate((s) => {
+        s.quiz.totalAsked += 1;
+        if (isCorrect) s.quiz.totalCorrect += 1;
+        s.quiz.recent.push({ correct: isCorrect });
+        if (s.quiz.recent.length > 20) s.quiz.recent.shift();
+      }, "Ledger: warmup answer");
+      actions.rerender();
+    });
+  });
+  const nextBtn = root.querySelector("#warmup-next");
+  if (nextBtn) {
+    nextBtn.addEventListener("click", () => {
+      warmupState.count += 1;
+      nextWarmupQuestion(state);
+      actions.rerender();
+    });
+  }
+}
+
+function nextWarmupQuestion(state) {
+  const p = pickQuizProblem(state, warmupState.recentIds);
+  warmupState.current = p;
+  warmupState.answered = null;
+  if (!p) return;
+  warmupState.options = quizOptions(state, p.patternId);
+  warmupState.recentIds = [p.id, ...warmupState.recentIds].slice(0, 5);
+}
+
 // ---------- Whiteboard ----------
 
 let activeWhiteboard = null;
@@ -936,8 +1390,9 @@ export function renderWhiteboard(root, store, actions) {
   root.innerHTML = `
     <div class="card">
       <h2>Whiteboard</h2>
-      <p class="muted">Draw out the problem — arrays, pointers, a call stack, whatever helps you think.
-      Works with mouse, touch, or a stylus. Saves as its own image file in your repo.</p>
+      <p class="muted">A freeform scratchpad — for sketching outside an active session (system design,
+      general note-taking). During a live session, a whiteboard panel is built into the workspace
+      already and saves automatically when you submit. Works with mouse, touch, or a stylus.</p>
       <div id="wb-root"></div>
       <form id="wb-save-form" class="form" style="margin-top:0.75rem">
         <div class="two-col">

@@ -147,6 +147,81 @@ export function systemDesignUnlock(state) {
   };
 }
 
+export const PLANT_STAGES = [
+  { min: 0, key: "seed", label: "Seed" },
+  { min: 3, key: "sprout", label: "Sprout" },
+  { min: 7, key: "seedling", label: "Seedling" },
+  { min: 14, key: "young", label: "Young Plant" },
+  { min: 30, key: "budding", label: "Budding" },
+  { min: 60, key: "flowering", label: "Flowering" },
+  { min: 120, key: "tree", label: "Mature Tree" },
+];
+
+const HEALTH_WINDOW_DAYS = 14;
+
+/** The plant is two separate axes on purpose, matching how real growth
+ * actually works: `stage` is cumulative and never regresses (total distinct
+ * days you've ever practiced — one bad week doesn't shrink a tree back to a
+ * seed), while `health` is a volatile 0-100 read on the last two weeks of
+ * behavior (can rise and fall) — pure signals, grounded in the learning
+ * principles that were actually asked for: spacing/consistency, active
+ * recall accuracy, not letting reviews go stale, and not cramming past the
+ * point of diminishing returns in one sitting. */
+export function computePlantState(state) {
+  const today = todayISO();
+  const activity = activityByDate(state);
+  const totalDaysPracticed = Object.keys(activity).length;
+
+  let stage = PLANT_STAGES[0];
+  for (const s of PLANT_STAGES) if (totalDaysPracticed >= s.min) stage = s;
+  const nextStage = PLANT_STAGES[PLANT_STAGES.indexOf(stage) + 1] || null;
+
+  let activeDaysInWindow = 0;
+  for (let i = 0; i < HEALTH_WINDOW_DAYS; i++) {
+    if (activity[addDaysISO(today, -i)]) activeDaysInWindow++;
+  }
+
+  const dates = Object.keys(activity).sort();
+  const lastActive = dates[dates.length - 1] || null;
+  const daysSinceActive = lastActive ? daysBetween(lastActive, today) : 999;
+
+  const recentQuiz = state.quiz.recent.slice(-10);
+  const recallRate = recentQuiz.length >= 3 ? recentQuiz.filter((q) => q.correct).length / recentQuiz.length : null;
+
+  const overdueCount = state.problems.filter((p) => p.nextReviewDate && daysBetween(p.nextReviewDate, today) > 7).length;
+
+  const todaysAttempts = allAttempts(state).filter((a) => a.date === today);
+  const todaysMin = todaysAttempts.reduce((sum, a) => sum + (a.timeToSolveMin || 0), 0);
+  const budget = state.settings.dailyBudgetMin || 75;
+  const overloaded = todaysMin > budget * 1.5 || todaysAttempts.length > 5;
+
+  let health = 50;
+  health += Math.round((activeDaysInWindow / HEALTH_WINDOW_DAYS) * 30) - 15; // consistency: -15..+15
+  health += Math.min(15, state.streak.current * 1.5); // streak: 0..+15
+  if (daysSinceActive >= 7) health -= 25; // gone quiet
+  else if (daysSinceActive >= 3) health -= 10;
+  if (recallRate != null) health += Math.round(recallRate * 20) - 10; // active recall: -10..+10
+  health -= Math.min(20, overdueCount * 3); // stale reviews piling up
+  if (overloaded) health -= 15; // single-day cramming
+  health = Math.max(0, Math.min(100, Math.round(health)));
+
+  let vitality = "thriving";
+  if (health < 30) vitality = "wilting";
+  else if (health < 55) vitality = "stressed";
+  else if (health < 80) vitality = "steady";
+
+  return {
+    stage: stage.key,
+    stageLabel: stage.label,
+    totalDaysPracticed,
+    nextStageLabel: nextStage?.label || null,
+    daysToNextStage: nextStage ? Math.max(0, nextStage.min - totalDaysPracticed) : 0,
+    health,
+    vitality,
+    signals: { activeDaysInWindow, windowDays: HEALTH_WINDOW_DAYS, daysSinceActive, recallRate, overdueCount, overloaded, todaysMin, budget },
+  };
+}
+
 export function uid() {
   return (crypto.randomUUID && crypto.randomUUID()) || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
@@ -200,4 +275,68 @@ export function pickQuizProblem(state, excludeIds = []) {
 export function quizOptions(state, correctPatternId, count = 4) {
   const others = shuffle(state.patterns.filter((p) => p.id !== correctPatternId).map((p) => p.id));
   return shuffle([correctPatternId, ...others.slice(0, count - 1)]);
+}
+
+const STALE_DAYS = 21;
+const WEAK_CLEAN_RATE = 0.6;
+const WEAK_MIN_ATTEMPTS = 2;
+
+/** The single thing to do next, so opening the app never means deciding
+ * where to go — just what today calls for:
+ *   1. Haven't practiced yet today -> do one rep (due first, else a stale pattern).
+ *   2. Already practiced today and a pattern keeps coming up wrong -> dig into
+ *      that pattern specifically rather than grabbing anything new.
+ *   3. A pattern hasn't been touched in a while, even though it's not
+ *      technically due yet -> a gentle nudge, spaced-repetition style.
+ *   4. Otherwise, whatever's next in the queue.
+ *   5. Nothing left -> say so; stopping is a fine answer. */
+export function recommendSession(state) {
+  const today = todayISO();
+  const todaysAttempts = allAttempts(state).filter((a) => a.date === today);
+  const due = dueProblems(state);
+  const duePatternIds = new Set(due.map((p) => p.patternId));
+
+  let stale = null;
+  for (const pat of state.patterns) {
+    if (duePatternIds.has(pat.id)) continue;
+    const atts = allAttempts(state, pat.id);
+    if (!atts.length) continue;
+    const daysSince = daysBetween(atts[atts.length - 1].date, today);
+    if (daysSince >= STALE_DAYS && (!stale || daysSince > stale.daysSince)) {
+      stale = { pattern: pat, daysSince };
+    }
+  }
+
+  if (todaysAttempts.length === 0) {
+    if (due.length) {
+      return { type: "first-rep", problem: due[0], patternId: due[0].patternId, message: `Haven't practiced yet today — let's do one. ${due[0].name} is due.` };
+    }
+    if (stale) {
+      const problem = state.problems.find((p) => p.patternId === stale.pattern.id);
+      return { type: "stale-nudge", problem, patternId: stale.pattern.id, message: `Nothing's due, but ${stale.pattern.name} hasn't come up in ${stale.daysSince} days — worth a refresher before it fades.` };
+    }
+    return { type: "none", problem: null, patternId: null, message: "Nothing due, nothing gone stale. Free day — browse Topics, or take it." };
+  }
+
+  const weak = patternStats(state)
+    .filter((s) => s.attempts >= WEAK_MIN_ATTEMPTS && s.solvedCleanRate != null && s.solvedCleanRate < WEAK_CLEAN_RATE)
+    .sort((a, b) => a.solvedCleanRate - b.solvedCleanRate)[0];
+  if (weak) {
+    const problem = due.find((p) => p.patternId === weak.pattern.id) || state.problems.find((p) => p.patternId === weak.pattern.id);
+    return {
+      type: "deep-dive", problem, patternId: weak.pattern.id,
+      message: `${weak.pattern.name} is at ${Math.round(weak.solvedCleanRate * 100)}% clean-solve across ${weak.attempts} attempts — that's a repeated pattern, not a one-off. Worth reviewing the technique before drilling another rep.`,
+    };
+  }
+
+  if (stale) {
+    const problem = state.problems.find((p) => p.patternId === stale.pattern.id);
+    return { type: "stale-nudge", problem, patternId: stale.pattern.id, message: `It's been ${stale.daysSince} days since ${stale.pattern.name} came up — a quick review would help it stick.` };
+  }
+
+  if (due.length) {
+    return { type: "due", problem: due[0], patternId: due[0].patternId, message: `${due[0].name} is next in the queue.` };
+  }
+
+  return { type: "none", problem: null, patternId: null, message: "You've covered today's queue. That's a real stopping point." };
 }
