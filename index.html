@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Ledger</title>
+  <meta name="description" content="Spaced-repetition tracker, weak-pattern dashboard, and mock-interview trainer for coding interview prep." />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#123B3A" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">{ }</span> Ledger</div>
+    <span id="sync-status" class="status"></span>
+  </header>
+  <nav id="tab-nav" class="tab-nav" hidden></nav>
+  <main id="view-root"></main>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
