@@ -19,7 +19,17 @@ const PATTERNS = [
   ["topological_sort", "Topological Sort", "Ordering a DAG via Kahn's algorithm or DFS."],
   ["trie", "Trie", "Prefix tree for fast string-prefix operations."],
   ["union-find", "Union-Find", "Disjoint-set union for connectivity queries."],
+  ["linked-list", "Linked List", "Pointer rewiring — reversal, fast/slow traversal, merging."],
+  ["trees", "Trees", "Binary tree traversal — DFS pre/in/post-order, BFS level-order, BST properties."],
+  ["graphs-bfs-dfs", "Graph Traversal", "General BFS/DFS over graphs — islands, connected components, shortest unweighted path."],
+  ["backtracking", "Backtracking", "Depth-first search over a decision tree, undoing choices that don't pan out."],
+  ["heap", "Heap / Priority Queue", "Top-K, k-way merge, running median — cheap access to the current min or max."],
+  ["intervals", "Intervals", "Sort by start, then sweep — merge, insert, and scheduling problems."],
+  ["prefix-sum", "Prefix Sum", "Precompute running totals so range queries become a subtraction."],
+  ["greedy", "Greedy", "Locally optimal choices, never revisited — valid only when that's provably safe."],
 ].map(([id, name, description]) => ({ id, name, description }));
+
+export { PATTERNS };
 
 const PROBLEMS = [
   ["3sum", "3Sum", 15, "Medium", "two-pointers", "Sort, then fix one index and two-pointer the rest; skip duplicates.", "two-pointers/3_sum.cpp"],
@@ -80,6 +90,13 @@ export function migrateState(state) {
   if (!state.whiteboards) state.whiteboards = [];
   if (!state.quiz) state.quiz = { totalAsked: 0, totalCorrect: 0, recent: [] };
   if (!state.meta) state.meta = { schemaVersion: 2, createdAt: new Date().toISOString() };
-  state.meta.schemaVersion = Math.max(state.meta.schemaVersion || 1, 2);
+  // Backfill any patterns added after this state.json was first created —
+  // merge by id so nothing already there (and no progress against it) is
+  // touched, just append what's missing.
+  const known = new Set((state.patterns || []).map((p) => p.id));
+  for (const p of PATTERNS) {
+    if (!known.has(p.id)) state.patterns.push({ ...p });
+  }
+  state.meta.schemaVersion = Math.max(state.meta.schemaVersion || 1, 3);
   return state;
 }

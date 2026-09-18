@@ -8,6 +8,11 @@ import { TOPICS } from "./topics-content.js";
 import { loadCodeMirror, CODE_MODES } from "./codemirror-loader.js";
 import { createWhiteboard } from "./whiteboard.js";
 import { plantSvg } from "./plant.js";
+import { arrayDiagram, stackDiagram, gridDiagram, graphDiagram } from "./diagrams.js";
+import { DIAGRAM_SPECS } from "./diagram-data.js";
+import { patternIcon, navIcon } from "./icons.js";
+
+const DIAGRAM_MOUNTERS = { array: arrayDiagram, stack: stackDiagram, grid: gridDiagram, graph: graphDiagram };
 
 const VITALITY_LABEL = { thriving: "Thriving", steady: "Steady", stressed: "Stressed", wilting: "Wilting" };
 
@@ -114,6 +119,55 @@ function sparklineSvg(points, { width = 80, height = 22 } = {}) {
   const step = points.length > 1 ? width / (points.length - 1) : 0;
   const coords = points.map((v, i) => `${(i * step).toFixed(1)},${(height - v * height).toFixed(1)}`).join(" ");
   return `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" class="sparkline"><polyline points="${coords}" /></svg>`;
+}
+
+/** A small circular progress ring — the recurring visual for "how much of
+ * X" (budget used, mastery, unlock progress, accuracy) so those numbers
+ * read as a shape before they read as digits. */
+function ringSvg(fraction, { size = 44, stroke = 5, color = "var(--accent)", label = "" } = {}) {
+  const r = (size - stroke) / 2;
+  const c = size / 2;
+  const circ = 2 * Math.PI * r;
+  const f = Math.max(0, Math.min(1, fraction ?? 0));
+  return `
+    <svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" class="ring">
+      <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="var(--border)" stroke-width="${stroke}"/>
+      <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}"
+        stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${circ * (1 - f)}"
+        transform="rotate(-90 ${c} ${c})"/>
+      ${label ? `<text x="${c}" y="${c + 4}" text-anchor="middle" class="ring-label" style="font-size:${label.length >= 4 ? size / 4.2 : size / 3.4}px">${esc(label)}</text>` : ""}
+    </svg>`;
+}
+
+const OUTCOME_GLYPH = {
+  "solved-clean": { symbol: "✓", cls: "outcome-good", title: "Solved clean" },
+  "solved-struggled": { symbol: "~", cls: "outcome-warn", title: "Solved, struggled" },
+  failed: { symbol: "✕", cls: "outcome-bad", title: "Didn't solve" },
+};
+/** A small colored glyph standing in for an outcome — lets a list of past
+ * attempts be scanned by shape/color before reading a single word. */
+function outcomeIcon(outcome) {
+  const g = OUTCOME_GLYPH[outcome];
+  if (!g) return "";
+  return `<span class="outcome-icon ${g.cls}" title="${esc(g.title)}">${g.symbol}</span>`;
+}
+
+/** A compact 7-day habit strip — today on the right, filled dots for days
+ * with any logged activity. Cheap, glanceable "did I actually show up this
+ * week" that a streak number alone doesn't convey. */
+function weekStripSvg(state) {
+  const activity = activityByDate(state);
+  const today = todayISO();
+  const cell = 12, gap = 4;
+  let rects = "";
+  for (let i = 6; i >= 0; i--) {
+    const d = addDaysISO(today, -i);
+    const on = !!activity[d];
+    const x = (6 - i) * (cell + gap);
+    rects += `<rect x="${x}" y="0" width="${cell}" height="${cell}" rx="3" fill="${on ? "var(--accent)" : "var(--surface-alt)"}"><title>${d}${on ? " — practiced" : ""}</title></rect>`;
+  }
+  const width = 7 * (cell + gap) - gap;
+  return `<svg viewBox="0 0 ${width} ${cell}" width="${width}" height="${cell}" class="week-strip">${rects}</svg>`;
 }
 
 export function toast(msg) {
@@ -225,11 +279,18 @@ export function renderDashboard(root, store, actions) {
 
     <div class="grid dashboard-grid">
       <div class="card streak-card">
-        <div class="stat-row">
-          <div class="stat"><span class="stat-num">${state.streak.current}</span><span class="stat-label">day streak</span></div>
-          <div class="stat"><span class="stat-num">${state.streak.longest}</span><span class="stat-label">longest</span></div>
-          <div class="stat"><span class="stat-num">${usedMin}/${budgetMin}</span><span class="stat-label">min planned</span></div>
+        <div class="row space-between" style="align-items:center; flex-wrap:wrap; gap:1rem">
+          <div class="stat-row">
+            <div class="stat"><span class="stat-num">${state.streak.current}</span><span class="stat-label">day streak</span></div>
+            <div class="stat"><span class="stat-num">${state.streak.longest}</span><span class="stat-label">longest</span></div>
+          </div>
+          <div class="row gap-sm" style="align-items:center">
+            ${ringSvg(budgetMin ? usedMin / budgetMin : 0, { size: 40, stroke: 4 })}
+            <span class="stat-label">${usedMin}/${budgetMin} min<br/>planned today</span>
+          </div>
         </div>
+        <p class="muted small" style="margin:0.6rem 0 0">Last 7 days</p>
+        ${weekStripSvg(state)}
       </div>
 
       <div class="card">
@@ -247,7 +308,7 @@ export function renderDashboard(root, store, actions) {
         <ul class="pattern-mini-list">
           ${weakest.map((s) => `
             <li>
-              <div class="row space-between"><strong>${esc(s.pattern.name)}</strong><span>${pct(s.solvedCleanRate)} clean-solve</span></div>
+              <div class="row space-between"><span class="row gap-sm" style="align-items:center"><span class="pattern-icon">${patternIcon(s.pattern.id, { size: 16 })}</span><strong>${esc(s.pattern.name)}</strong></span><span>${pct(s.solvedCleanRate)} clean-solve</span></div>
               <div class="bar"><div class="bar-fill" style="width:${Math.round((s.solvedCleanRate || 0) * 100)}%"></div></div>
             </li>`).join("")}
         </ul>`}
@@ -291,7 +352,7 @@ function queueItemHtml(state, p) {
     <li class="queue-item">
       <div>
         <div class="row gap-sm">
-          <span class="pill">${esc(patternName(state, p.patternId))}</span>
+          <span class="pill pill-icon"><span class="pattern-icon">${patternIcon(p.patternId, { size: 14 })}</span>${esc(patternName(state, p.patternId))}</span>
           <span class="pill pill-muted">${esc(p.difficulty)}</span>
           <span class="pill ${overdueLabel(p.nextReviewDate).includes("overdue") ? "pill-warn" : "pill-muted"}">${overdueLabel(p.nextReviewDate)}</span>
         </div>
@@ -325,10 +386,30 @@ function wireStartButtons(root, store, actions) {
 export function renderQueue(root, store, actions) {
   const state = store.state;
   const due = dueProblems(state);
+  const today = todayISO();
+  const buckets = { today: 0, mild: 0, stale: 0 }; // due today, 1-6d overdue, 7d+ overdue
+  due.forEach((p) => {
+    const d = p.nextReviewDate ? daysBetween(p.nextReviewDate, today) : 0;
+    if (d <= 0) buckets.today++;
+    else if (d < 7) buckets.mild++;
+    else buckets.stale++;
+  });
+  const total = due.length || 1;
   root.innerHTML = `
     <div class="card">
       <h2>Review queue</h2>
       <p class="muted">Weakest / most-overdue first. Today's budget is ${state.settings.dailyBudgetMin} min.</p>
+      ${due.length > 0 ? `
+      <div class="backlog-bar">
+        <div class="backlog-seg" style="width:${(buckets.today / total) * 100}%; background:var(--accent)"></div>
+        <div class="backlog-seg" style="width:${(buckets.mild / total) * 100}%; background:var(--warn)"></div>
+        <div class="backlog-seg" style="width:${(buckets.stale / total) * 100}%; background:var(--bad)"></div>
+      </div>
+      <div class="backlog-legend">
+        <span style="--_c:var(--accent)">${buckets.today} due today</span>
+        <span style="--_c:var(--warn)">${buckets.mild} overdue 1–6d</span>
+        <span style="--_c:var(--bad)">${buckets.stale} overdue 7d+ — slipping</span>
+      </div>` : ""}
       ${due.length === 0 ? `<p class="empty">Queue's clear.</p>` : `
       <ul class="queue-list">${due.map((p) => queueItemHtml(state, p)).join("")}</ul>`}
     </div>`;
@@ -526,20 +607,22 @@ export function renderLog(root, store, actions) {
 
 // ---------- Patterns ----------
 
-export function renderPatterns(root, store) {
+export function renderPatterns(root, store, actions) {
   const state = store.state;
   const stats = patternStats(state).sort((a, b) => (a.solvedCleanRate ?? 1) - (b.solvedCleanRate ?? 1));
   root.innerHTML = `
     <div class="card">
       <h2>Pattern mastery</h2>
-      <p class="muted">Weakest first — this is what "next 2 weeks of focus" should be picked from.</p>
+      <p class="muted">Weakest first — this is what "next 2 weeks of focus" should be picked from. Click a
+      pattern to open its Topics page.</p>
       <div class="table-wrap">
       <table class="table">
-        <thead><tr><th>Pattern</th><th># problems</th><th>Attempts</th><th>Clean-solve rate</th><th>Trend</th><th>ID'd correctly</th><th>Avg time to insight</th><th>Top mistake</th></tr></thead>
+        <thead><tr><th>Mastery</th><th>Pattern</th><th># problems</th><th>Attempts</th><th>Clean-solve rate</th><th>Trend</th><th>ID'd correctly</th><th>Avg time to insight</th><th>Top mistake</th></tr></thead>
         <tbody>
           ${stats.map((s) => `
-            <tr>
-              <td>${esc(s.pattern.name)}</td>
+            <tr class="table-row-link" data-open-topic="${esc(s.pattern.id)}">
+              <td>${ringSvg(s.attempts ? s.solvedCleanRate || 0 : 0, { size: 34, stroke: 4, label: s.attempts ? pct(s.solvedCleanRate) : "–" })}</td>
+              <td><span class="row gap-sm" style="align-items:center"><span class="pattern-icon">${patternIcon(s.pattern.id, { size: 15 })}</span>${esc(s.pattern.name)}</span></td>
               <td class="num">${s.problemCount}</td>
               <td class="num">${s.attempts}</td>
               <td class="num">${s.attempts ? `<div class="bar bar-inline"><div class="bar-fill" style="width:${Math.round((s.solvedCleanRate || 0) * 100)}%"></div></div>${pct(s.solvedCleanRate)}` : "—"}</td>
@@ -552,6 +635,13 @@ export function renderPatterns(root, store) {
       </table>
       </div>
     </div>`;
+
+  root.querySelectorAll("[data-open-topic]").forEach((row) => {
+    row.addEventListener("click", () => {
+      showTopic(row.dataset.openTopic);
+      actions.switchTab("topicDetail");
+    });
+  });
 }
 
 // ---------- Session: Workspace + Reflect ----------
@@ -776,7 +866,7 @@ export function renderReflect(root, store, actions) {
           <div class="quiz-options">
             ${reflectState.options.map((optId) => {
               const pat = state.patterns.find((x) => x.id === optId);
-              return `<button type="button" class="quiz-option" data-pattern-answer="${esc(optId)}">${esc(pat.name)}</button>`;
+              return `<button type="button" class="quiz-option" data-pattern-answer="${esc(optId)}"><span class="pattern-icon">${patternIcon(optId, { size: 15 })}</span>${esc(pat.name)}</button>`;
             }).join("")}
           </div>
           <div id="pattern-reveal" class="pattern-reveal" hidden></div>
@@ -965,7 +1055,18 @@ export function renderJournal(root, store) {
   const notes = [...state.journal].reverse();
   const mocks = [...state.mocks].reverse();
 
+  const reflectionCounts = {};
+  for (const a of entries) reflectionCounts[a.date] = (reflectionCounts[a.date] || 0) + 1;
+  for (const n of notes) reflectionCounts[n.date] = (reflectionCounts[n.date] || 0) + 1;
+  const hasReflections = entries.length + notes.length > 0;
+
   root.innerHTML = `
+    ${hasReflections ? `
+    <div class="card">
+      <h2>Reflection frequency</h2>
+      <p class="muted small">Every soul statement and note, by day. Reflecting regularly is what turns grinding into learning.</p>
+      ${heatmapSvg(reflectionCounts)}
+    </div>` : ""}
     <div class="card">
       <h2>Add a note</h2>
       <form id="journal-form" class="form">
@@ -991,12 +1092,15 @@ export function renderJournal(root, store) {
       <ul class="queue-list">
         ${mocks.map((m) => `
           <li class="queue-item">
-            <div>
-              <div class="row gap-sm">
-                <span class="pill ${m.outcome === "solved-clean" ? "pill-good" : "pill-muted"}">${esc(m.outcome)}</span>
-                <span class="pill pill-muted">${fmtDate(m.date)}</span>
+            <div class="row gap-sm" style="align-items:flex-start">
+              ${outcomeIcon(m.outcome)}
+              <div>
+                <div class="row gap-sm">
+                  <span class="pill ${m.outcome === "solved-clean" ? "pill-good" : "pill-muted"}">${esc(m.outcome)}</span>
+                  <span class="pill pill-muted">${fmtDate(m.date)}</span>
+                </div>
+                <div class="queue-name">${esc(state.problems.find((p) => p.id === m.problemId)?.name || "Untitled")}${m.communicationRating ? ` · comms ${m.communicationRating}/5` : ""}${m.durationActualMin != null ? ` · ${m.durationActualMin} min` : ""}</div>
               </div>
-              <div class="queue-name">${esc(state.problems.find((p) => p.id === m.problemId)?.name || "Untitled")}${m.communicationRating ? ` · comms ${m.communicationRating}/5` : ""}${m.durationActualMin != null ? ` · ${m.durationActualMin} min` : ""}</div>
             </div>
           </li>`).join("")}
       </ul>`}
@@ -1008,7 +1112,7 @@ export function renderJournal(root, store) {
         ${entries.map((a) => `
           <li>
             <div class="row space-between">
-              <strong>${esc(a.problemName)}</strong>
+              <span class="row gap-sm" style="align-items:center">${outcomeIcon(a.outcome)}<strong>${esc(a.problemName)}</strong></span>
               <span class="muted">${fmtDate(a.date)} · ${esc(a.outcome)}</span>
             </div>
             <p>${esc(a.soulStatement)}</p>
@@ -1064,9 +1168,9 @@ export function renderSystemDesign(root, store) {
       <h2>System design track</h2>
       <p class="muted">Unlocks once mock interviews show the coding fundamentals are solid — the point
       is to run this alongside coding prep once you're ready, not to defer it forever.</p>
-      <div class="row gap">
-        <div class="stat"><span class="stat-num">${sd.mocksLogged}/${sd.minMocks}</span><span class="stat-label">mocks logged</span></div>
-        <div class="stat"><span class="stat-num">${pct(sd.recentSolvedCleanRate)}</span><span class="stat-label">recent clean-solve (need ${pct(sd.minSolvedCleanRate)})</span></div>
+      <div class="row gap" style="align-items:center">
+        <div class="row gap-sm" style="align-items:center">${ringSvg(sd.minMocks ? Math.min(1, sd.mocksLogged / sd.minMocks) : 0, { size: 48, label: `${sd.mocksLogged}/${sd.minMocks}` })}<span class="stat-label">mocks logged</span></div>
+        <div class="row gap-sm" style="align-items:center">${ringSvg(sd.recentSolvedCleanRate || 0, { size: 48, color: (sd.recentSolvedCleanRate || 0) >= sd.minSolvedCleanRate ? "var(--good)" : "var(--accent)", label: pct(sd.recentSolvedCleanRate) })}<span class="stat-label">recent clean-solve (need ${pct(sd.minSolvedCleanRate)})</span></div>
       </div>
       <span class="badge ${sd.unlocked ? "badge-good" : "badge-warn"}">${sd.unlocked ? "Unlocked" : "Locked"}</span>
       <label class="field checkbox-field" style="margin-top:1rem">
@@ -1115,6 +1219,28 @@ export function renderSystemDesign(root, store) {
 
 // ---------- Topics ----------
 
+// Diagrams mount immediately on the (now dedicated, one-per-pattern) topic
+// page — there's nothing else competing for load time there — and their
+// play-button timers are torn down whenever that page re-renders, so
+// leaving mid-animation doesn't leave a setInterval ticking against a
+// detached diagram forever.
+let topicDiagramPlayers = [];
+
+// Cross-view handoff for "click a pattern card" -> dedicated page, the same
+// pattern used elsewhere (nav.prefillProblemId, reflectState): a module-level
+// slot app.js reads via showTopic()/current, not a routed URL param.
+export const topicNav = { patternId: null };
+export function showTopic(patternId) {
+  topicNav.patternId = patternId;
+}
+
+const DIFFICULTY_ORDER = { Easy: 0, Medium: 1, Hard: 2, Unrated: 1.5 };
+
+/** The Topics index — a table of contents, not an accordion: one card per
+ * pattern (icon, name, mastery, the plain-language hook) that links to its
+ * own dedicated page rather than expanding in place. 23 patterns in one
+ * scrolling accordion was exactly the "wall of everything" this whole
+ * redesign is against. */
 export function renderTopics(root, store, actions) {
   const state = store.state;
   const stats = patternStats(state);
@@ -1123,46 +1249,105 @@ export function renderTopics(root, store, actions) {
   root.innerHTML = `
     <div class="card">
       <h2>Topics</h2>
-      <p class="muted">The concept, how to recognize it, the invariant that makes it work, and the
-      pitfalls that actually cost people in interviews — plus your own logged problems as the practice
-      ladder for each, so it stays current instead of linking to problems you haven't touched.</p>
+      <p class="muted">Pick a pattern. Each page: what it is in plain terms, how to recognize it, the
+      invariant that makes it work, animated worked examples, and your own logged problems as the
+      practice ladder — so it stays accurate instead of linking to problems you haven't touched.</p>
     </div>
-    ${state.patterns.map((pat) => {
-      const t = TOPICS[pat.id];
-      const s = statByPattern[pat.id];
-      const problems = state.problems.filter((p) => p.patternId === pat.id)
-        .sort((a, b) => (a.difficulty === b.difficulty ? 0 : DIFFICULTY_ORDER[a.difficulty] - DIFFICULTY_ORDER[b.difficulty]));
-      const resources = (state.resources[pat.id] || []);
-      return `
-      <details class="card topic-card">
-        <summary>
-          <span class="topic-title">${esc(pat.name)}</span>
+    <div class="index-grid">
+      ${state.patterns.map((pat) => {
+        const s = statByPattern[pat.id];
+        const t = TOPICS[pat.id];
+        return `
+        <button type="button" class="card index-card topic-index-card" data-open-topic="${esc(pat.id)}">
+          <div class="row gap-sm" style="align-items:center">
+            <span class="topic-index-icon">${patternIcon(pat.id, { size: 22 })}</span>
+            <h3 style="margin:0">${esc(pat.name)}</h3>
+          </div>
+          <p class="muted small">${esc(t?.hook || pat.description)}</p>
           ${s && s.attempts ? `<span class="pill ${pct(s.solvedCleanRate)[0] === "1" ? "pill-good" : "pill-muted"}">${pct(s.solvedCleanRate)} clean-solve</span>` : `<span class="pill pill-muted">not practiced yet</span>`}
-        </summary>
-        <p>${esc(pat.description)}</p>
-        ${t ? `
-        <p><strong>Concept.</strong> ${esc(t.concept)}</p>
-        <p><strong>Recognize it from:</strong> ${t.recognize.map((r) => `<span class="pill pill-muted">${esc(r)}</span>`).join(" ")}</p>
-        <p><strong>Invariant.</strong> ${esc(t.invariant)}</p>
-        <p><strong>Pitfalls</strong></p>
-        <ul class="tight-list">${t.pitfalls.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>
-        ` : ""}
-        <p><strong>Practice ladder</strong> (your own logged problems, easiest first)</p>
-        ${problems.length === 0 ? `<p class="empty">None logged yet.</p>` : `
-        <ul class="queue-list">${problems.map((p) => queueItemHtml(state, p)).join("")}</ul>`}
-        <p><strong>Resources</strong></p>
-        ${resources.length === 0 ? `<p class="muted small">No links saved yet.</p>` : `
-        <ul class="resource-list">${resources.map((r) => `
-          <li><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title || r.url)}</a>
-          <button type="button" class="btn-icon" data-remove-resource="${esc(pat.id)}::${esc(r.id)}" aria-label="Remove">×</button></li>`).join("")}</ul>`}
-        <form class="form resource-form" data-add-resource="${esc(pat.id)}">
-          <input class="input" name="title" placeholder="Title (optional)" />
-          <input class="input" name="url" placeholder="https://youtube.com/watch?v=…" required />
-          <button class="btn btn-ghost btn-sm" type="submit">Add link</button>
-        </form>
-        <a class="btn btn-ghost btn-sm" href="https://www.youtube.com/results?search_query=${encodeURIComponent(pat.name + " leetcode pattern explained")}" target="_blank" rel="noopener">Search YouTube for "${esc(pat.name)}"</a>
-      </details>`;
-    }).join("")}`;
+        </button>`;
+      }).join("")}
+    </div>`;
+
+  root.querySelectorAll("[data-open-topic]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      showTopic(btn.dataset.openTopic);
+      actions.switchTab("topicDetail");
+    });
+  });
+}
+
+/** The dedicated per-pattern page — reached only by clicking a Topics card
+ * (topicNav.patternId set just before the tab switch), same handoff idiom
+ * used for prefilling Log Session and starting a Workspace session. */
+export function renderTopicDetail(root, store, actions) {
+  topicDiagramPlayers.forEach((p) => p.destroy());
+  topicDiagramPlayers = [];
+  const state = store.state;
+  const pat = state.patterns.find((p) => p.id === topicNav.patternId);
+  if (!pat) {
+    actions.switchTab("topics");
+    return;
+  }
+  const t = TOPICS[pat.id];
+  const problems = state.problems.filter((p) => p.patternId === pat.id)
+    .sort((a, b) => (a.difficulty === b.difficulty ? 0 : DIFFICULTY_ORDER[a.difficulty] - DIFFICULTY_ORDER[b.difficulty]));
+  const resources = state.resources[pat.id] || [];
+  const specs = DIAGRAM_SPECS[pat.id] || [];
+
+  root.innerHTML = `
+    <button type="button" class="btn btn-ghost btn-sm" id="topic-back">← Topics</button>
+    <div class="card topic-detail-header">
+      <div class="row gap-sm" style="align-items:center">
+        <span class="topic-index-icon topic-index-icon-lg">${patternIcon(pat.id, { size: 30 })}</span>
+        <div>
+          <h2 style="margin:0">${esc(pat.name)}</h2>
+          <p class="muted small" style="margin:0.15rem 0 0">${esc(pat.description)}</p>
+        </div>
+      </div>
+    </div>
+    ${t ? `
+    <div class="card">
+      <p class="topic-hook">${esc(t.hook)}</p>
+      <p><strong>More precisely.</strong> ${esc(t.concept)}</p>
+      <p><strong>Recognize it from:</strong> ${t.recognize.map((r) => `<span class="pill pill-muted">${esc(r)}</span>`).join(" ")}</p>
+      <p><strong>Invariant.</strong> ${esc(t.invariant)}</p>
+      <p><strong>Pitfalls</strong></p>
+      <ul class="tight-list">${t.pitfalls.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>
+    </div>` : ""}
+    ${specs.length ? `<div id="topic-diagrams"></div>` : ""}
+    <div class="card">
+      <h2>Practice ladder</h2>
+      <p class="muted small">Your own logged problems, easiest first.</p>
+      ${problems.length === 0 ? `<p class="empty">None logged yet.</p>` : `
+      <ul class="queue-list">${problems.map((p) => queueItemHtml(state, p)).join("")}</ul>`}
+    </div>
+    <div class="card">
+      <h2>Resources</h2>
+      ${resources.length === 0 ? `<p class="muted small">No links saved yet.</p>` : `
+      <ul class="resource-list">${resources.map((r) => `
+        <li><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title || r.url)}</a>
+        <button type="button" class="btn-icon" data-remove-resource="${esc(pat.id)}::${esc(r.id)}" aria-label="Remove">×</button></li>`).join("")}</ul>`}
+      <form class="form resource-form" data-add-resource="${esc(pat.id)}">
+        <input class="input" name="title" placeholder="Title (optional)" />
+        <input class="input" name="url" placeholder="https://youtube.com/watch?v=…" required />
+        <button class="btn btn-ghost btn-sm" type="submit">Add link</button>
+      </form>
+      <a class="btn btn-ghost btn-sm" href="https://www.youtube.com/results?search_query=${encodeURIComponent(pat.name + " leetcode pattern explained")}" target="_blank" rel="noopener">Search YouTube for "${esc(pat.name)}"</a>
+    </div>`;
+
+  root.querySelector("#topic-back").addEventListener("click", () => actions.switchTab("topics"));
+
+  const diagramHost = root.querySelector("#topic-diagrams");
+  if (diagramHost) {
+    specs.forEach((spec) => {
+      const mount = DIAGRAM_MOUNTERS[spec.kind];
+      if (!mount) return;
+      const slot = document.createElement("div");
+      diagramHost.appendChild(slot);
+      topicDiagramPlayers.push(mount(slot, spec));
+    });
+  }
 
   wireStartButtons(root, store, actions);
   root.querySelectorAll("[data-add-resource]").forEach((form) => {
@@ -1189,8 +1374,6 @@ export function renderTopics(root, store, actions) {
   });
 }
 
-const DIFFICULTY_ORDER = { Easy: 0, Medium: 1, Hard: 2, Unrated: 1.5 };
-
 // ---------- Quiz ----------
 
 let quizState = { current: null, options: [], answered: null, recentIds: [] };
@@ -1215,9 +1398,9 @@ export function renderQuiz(root, store, actions) {
   const p = quizState.current;
   root.innerHTML = `
     <div class="card">
-      <div class="row space-between">
+      <div class="row space-between" style="align-items:center">
         <h2>Pattern-recognition drill</h2>
-        <span class="muted small">${correct}/${total} lifetime${total ? ` (${pct(correct / total)})` : ""}</span>
+        <span class="row gap-sm" style="align-items:center">${total ? ringSvg(correct / total, { size: 36, stroke: 4, label: pct(correct / total) }) : ""}<span class="muted small">${correct}/${total} lifetime</span></span>
       </div>
       <p class="muted">If this popped up cold in an interview, what pattern would you reach for?</p>
       <div class="quiz-prompt">
@@ -1232,7 +1415,7 @@ export function renderQuiz(root, store, actions) {
             if (optId === p.patternId) cls += " correct";
             else if (optId === quizState.answered && optId !== p.patternId) cls += " incorrect";
           }
-          return `<button type="button" class="${cls}" data-answer="${esc(optId)}" ${quizState.answered ? "disabled" : ""}>${esc(pat.name)}</button>`;
+          return `<button type="button" class="${cls}" data-answer="${esc(optId)}" ${quizState.answered ? "disabled" : ""}><span class="pattern-icon">${patternIcon(optId, { size: 15 })}</span>${esc(pat.name)}</button>`;
         }).join("")}
       </div>
       ${quizState.answered ? `
@@ -1338,7 +1521,7 @@ export function renderWarmup(root, store, actions) {
             if (optId === p.patternId) cls += " correct";
             else if (optId === warmupState.answered && optId !== p.patternId) cls += " incorrect";
           }
-          return `<button type="button" class="${cls}" data-answer="${esc(optId)}" ${warmupState.answered ? "disabled" : ""}>${esc(pat.name)}</button>`;
+          return `<button type="button" class="${cls}" data-answer="${esc(optId)}" ${warmupState.answered ? "disabled" : ""}><span class="pattern-icon">${patternIcon(optId, { size: 15 })}</span>${esc(pat.name)}</button>`;
         }).join("")}
       </div>
       ${warmupState.answered ? `

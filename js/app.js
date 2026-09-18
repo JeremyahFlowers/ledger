@@ -1,25 +1,60 @@
 import { store } from "./store.js";
 import * as views from "./views.js";
-import { computePlantState } from "./logic.js";
+import { computePlantState, dueProblems, allAttempts, patternStats, systemDesignUnlock } from "./logic.js";
 import { plantSvg } from "./plant.js";
+import { navIcon } from "./icons.js";
 
-// Dashboard is the only real entry point into the guided path (session /
-// reflect / warmup are reached only by button, never listed here — see
-// SESSION_TABS below). Everything after it is the library: reference and
-// analysis tools for browsing on your own terms.
-const TABS = [
-  { id: "dashboard", label: "Dashboard", render: views.renderDashboard },
-  { id: "queue", label: "Review Queue", render: views.renderQueue },
-  { id: "patterns", label: "Patterns", render: views.renderPatterns },
-  { id: "topics", label: "Topics", render: views.renderTopics },
-  { id: "quiz", label: "Quiz", render: views.renderQuiz },
-  { id: "whiteboard", label: "Whiteboard", render: views.renderWhiteboard },
-  { id: "journal", label: "Journal", render: views.renderJournal },
-  { id: "leetcode", label: "LeetCode", render: views.renderLeetCode },
-  { id: "systemDesign", label: "System Design", render: views.renderSystemDesign },
-  { id: "log", label: "Log Manually", render: views.renderLog },
-  { id: "settings", label: "Settings", render: views.renderSettings },
-];
+// The nav reads like a table of contents, not a junk drawer: Home is the
+// cover page; everything else lives in one of a few named chapters, each
+// with its own index card explaining what's inside and when to reach for
+// it. Landing on a chapter's own tab shows that index by default — a
+// specific page inside it is always one more click, never the first click.
+const STANDALONE = {
+  dashboard: { label: "Home", icon: "home", render: views.renderDashboard },
+  settings: { label: "Settings", icon: "settings", render: views.renderSettings },
+};
+
+const SECTIONS = {
+  practice: {
+    label: "Practice",
+    icon: "practice",
+    blurb: "Ways to get reps in outside the guided Dashboard flow.",
+    pages: [
+      { id: "queue", label: "Review Queue", icon: "queue", render: views.renderQueue, blurb: "Everything due, not just what fits today's time budget.", stat: (state) => { const n = dueProblems(state).length; return n ? `${n} due now` : "All caught up"; } },
+      { id: "whiteboard", label: "Whiteboard", icon: "whiteboard", render: views.renderWhiteboard, blurb: "A freeform scratchpad for sketching outside an active session.", stat: (state) => `${state.whiteboards.length} board${state.whiteboards.length === 1 ? "" : "s"} saved` },
+      { id: "log", label: "Log Manually", icon: "log", render: views.renderLog, blurb: "Record something you already solved elsewhere — LeetCode, paper, a real interview.", stat: (state) => `${state.problems.length} problems logged` },
+    ],
+  },
+  learn: {
+    label: "Learn",
+    icon: "learn",
+    blurb: "Build understanding, not just volume.",
+    pages: [
+      { id: "topics", label: "Topics", icon: "topics", render: views.renderTopics, blurb: "One dedicated page per pattern — plain-language hook, concept, invariant, pitfalls, animated worked examples.", stat: (state) => `${state.patterns.length} patterns to explore` },
+      { id: "patterns", label: "Patterns", icon: "patterns", render: views.renderPatterns, blurb: "Your mastery table, weakest first — what the next two weeks should focus on.", stat: (state) => { const ranked = patternStats(state).filter((s) => s.attempts > 0).sort((a, b) => (a.solvedCleanRate ?? 1) - (b.solvedCleanRate ?? 1)); return ranked.length ? `Weakest: ${ranked[0].pattern.name}` : "No attempts logged yet"; } },
+      { id: "quiz", label: "Quiz", icon: "quiz", render: views.renderQuiz, blurb: "Open-ended pattern-recall drilling, the same mechanic used in every Reflect step.", stat: (state) => state.quiz.totalAsked ? `${Math.round((state.quiz.totalCorrect / state.quiz.totalAsked) * 100)}% lifetime accuracy` : "No questions answered yet" },
+    ],
+  },
+  track: {
+    label: "Track",
+    icon: "track",
+    blurb: "Where the record of your work lives.",
+    pages: [
+      { id: "journal", label: "Journal", icon: "journal", render: views.renderJournal, blurb: "Every soul statement and mock interview, plus freeform weekly retros.", stat: (state) => `${allAttempts(state).filter((a) => a.soulStatement).length} soul statements` },
+      { id: "leetcode", label: "LeetCode", icon: "leetcode", render: views.renderLeetCode, blurb: "Solved counts, activity, and recent submissions from your real profile.", stat: (state, store) => store.leetcode?.data?.solvedByDifficulty ? `${store.leetcode.data.solvedByDifficulty.All ?? 0} solved on LeetCode` : "Not synced yet" },
+      { id: "systemDesign", label: "System Design", icon: "systemDesign", render: views.renderSystemDesign, blurb: "A separate track, unlocked once coding fundamentals are solid.", stat: (state) => systemDesignUnlock(state).unlocked ? "Unlocked" : "Locked" },
+    ],
+  },
+};
+
+const PAGE_TO_SECTION = {};
+for (const [sectionId, section] of Object.entries(SECTIONS)) {
+  for (const page of section.pages) PAGE_TO_SECTION[page.id] = sectionId;
+}
+// The per-pattern Topics detail page isn't a registered page (there's one
+// per pattern, decided at runtime) — it belongs to Learn for nav-highlight
+// purposes, and app.js dispatches its render directly (see renderAll).
+PAGE_TO_SECTION.topicDetail = "learn";
 
 // Entered only via a Dashboard/Workspace button, never from the tab bar —
 // rendering one of these swaps the full nav for a minimal exit bar so the
@@ -57,6 +92,10 @@ function exitSession() {
   actions.switchTab("dashboard");
 }
 
+function navLabel(icon, label) {
+  return `<span class="nav-icon-label">${navIcon(icon, { size: 16 })}<span>${label}</span></span>`;
+}
+
 function renderNav() {
   const show = store.state != null;
   nav.hidden = !show;
@@ -64,16 +103,54 @@ function renderNav() {
 
   if (SESSION_TABS[activeTab]) {
     nav.innerHTML = `
-      <button class="tab session-exit" id="nav-exit">✕ Exit</button>
-      <span class="session-nav-label">${SESSION_TABS[activeTab].label}</span>`;
+      <div class="nav-row">
+        <button class="tab session-exit" id="nav-exit">✕ Exit</button>
+        <span class="session-nav-label">${SESSION_TABS[activeTab].label}</span>
+      </div>`;
     nav.querySelector("#nav-exit").addEventListener("click", exitSession);
     return;
   }
 
-  nav.innerHTML = TABS.map(
-    (t) => `<button class="tab ${t.id === activeTab ? "active" : ""}" data-tab="${t.id}">${t.label}</button>`
-  ).join("");
-  nav.querySelectorAll("button").forEach((btn) => {
+  const currentSectionId = SECTIONS[activeTab] ? activeTab : PAGE_TO_SECTION[activeTab] || null;
+
+  const primaryItems = [
+    { id: "dashboard", ...STANDALONE.dashboard },
+    ...Object.entries(SECTIONS).map(([id, s]) => ({ id, ...s })),
+    { id: "settings", ...STANDALONE.settings },
+  ];
+  let html = `<div class="nav-row nav-row-primary">${primaryItems.map((t) => `
+    <button class="tab ${t.id === activeTab || t.id === currentSectionId ? "active" : ""}" data-tab="${t.id}">${navLabel(t.icon, t.label)}</button>`).join("")}</div>`;
+
+  if (currentSectionId) {
+    const section = SECTIONS[currentSectionId];
+    html += `<div class="nav-row nav-row-secondary">
+      <span class="nav-chapter-label">${section.label}:</span>
+      <button class="tab tab-sub ${activeTab === currentSectionId ? "active" : ""}" data-tab="${currentSectionId}">Overview</button>
+      ${section.pages.map((p) => `<button class="tab tab-sub ${activeTab === p.id ? "active" : ""}" data-tab="${p.id}">${navLabel(p.icon, p.label)}</button>`).join("")}
+    </div>`;
+  }
+
+  nav.innerHTML = html;
+  nav.querySelectorAll("button[data-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => actions.switchTab(btn.dataset.tab));
+  });
+}
+
+/** A section's own tab shows this by default — a table of contents for that
+ * chapter, each entry explaining what it's for and when to reach for it,
+ * rather than dropping straight into whichever page happened to be first. */
+function renderSectionIndex(root, section, actions) {
+  root.innerHTML = `
+    <div class="card index-intro"><h2>${section.label}</h2><p class="muted">${section.blurb}</p></div>
+    <div class="index-grid">
+      ${section.pages.map((p) => `
+        <button type="button" class="card index-card" data-tab="${p.id}">
+          <div class="row gap-sm" style="align-items:center"><span class="topic-index-icon">${navIcon(p.icon, { size: 20 })}</span><h3 style="margin:0">${p.label}</h3></div>
+          <p class="muted small">${p.blurb}</p>
+          ${p.stat && store.state ? `<span class="index-card-stat">${p.stat(store.state, store)}</span>` : ""}
+        </button>`).join("")}
+    </div>`;
+  root.querySelectorAll("[data-tab]").forEach((btn) => {
     btn.addEventListener("click", () => actions.switchTab(btn.dataset.tab));
   });
 }
@@ -143,8 +220,25 @@ function renderAll() {
     SESSION_TABS[activeTab].render(root, store, actions);
     return;
   }
-  const tab = TABS.find((t) => t.id === activeTab) || TABS[0];
-  tab.render(root, store, actions);
+  if (activeTab === "topicDetail") {
+    views.renderTopicDetail(root, store, actions);
+    return;
+  }
+  if (STANDALONE[activeTab]) {
+    STANDALONE[activeTab].render(root, store, actions);
+    return;
+  }
+  if (SECTIONS[activeTab]) {
+    renderSectionIndex(root, SECTIONS[activeTab], actions);
+    return;
+  }
+  const owner = PAGE_TO_SECTION[activeTab];
+  const page = owner && SECTIONS[owner].pages.find((p) => p.id === activeTab);
+  if (page) {
+    page.render(root, store, actions);
+    return;
+  }
+  STANDALONE.dashboard.render(root, store, actions); // unknown/stale tab id — fall back home
 }
 
 const savedTheme = localStorage.getItem("ledger.theme");

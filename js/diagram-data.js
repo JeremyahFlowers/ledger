@@ -1,0 +1,451 @@
+// Worked examples for every pattern in Topics — real numbers, hand-traced
+// and checked, not placeholder data. Each entry names a diagrams.js
+// primitive (array/stack/grid/graph) plus the config that primitive expects.
+// Kept separate from topics-content.js so the prose and the animations can
+// be edited independently.
+
+export const DIAGRAM_SPECS = {
+  "two-pointers": [
+    {
+      kind: "array",
+      title: "Container With Most Water — converging from both ends",
+      array: [1, 8, 6, 2, 5, 4, 8, 3, 7],
+      steps: [
+        { pointers: { L: 0, R: 8 }, caption: "L=0 (h=1), R=8 (h=7). area = min(1,7) × 8 = 8. The shorter side is always the limiter — move it inward." },
+        { pointers: { L: 1, R: 8 }, caption: "L=1 (h=8), R=8 (h=7). area = min(8,7) × 7 = 49 — new best. Right is now the shorter side." },
+        { pointers: { L: 1, R: 7 }, caption: "L=1 (h=8), R=7 (h=3). area = 3 × 6 = 18. Worse than 49 — keep moving the shorter side." },
+        { pointers: { L: 1, R: 6 }, caption: "L=1 (h=8), R=6 (h=8). area = 8 × 5 = 40. Closer, but still short of 49." },
+        { pointers: { L: 1, R: 2 }, caption: "Pointers keep converging — nothing beats 49 again before they meet. Answer: 49." },
+      ],
+    },
+    {
+      kind: "array",
+      title: "3Sum — fix one index, two-pointer the rest",
+      array: [-4, -1, -1, 0, 1, 2],
+      steps: [
+        { pointers: { i: 1, L: 2, R: 5 }, highlight: [1], caption: "Fix i=1 (value −1). Need L+R = 1 to balance it. L=2 (−1), R=5 (2): sum=1 — match! Triplet (−1,−1,2)." },
+        { pointers: { i: 1, L: 3, R: 4 }, highlight: [1], caption: "Move both pointers inward. L=3 (0), R=4 (1): sum=1 — another match! Triplet (−1,0,1)." },
+        { pointers: { i: 1, L: 4, R: 3 }, highlight: [1], dim: [4, 5], caption: "L and R have crossed — done with i=1. Move on to the next fixed index." },
+      ],
+    },
+  ],
+
+  "sliding-window": [
+    {
+      kind: "array",
+      title: "Longest Substring Without Repeating Characters",
+      array: ["a", "b", "c", "a", "b", "c", "b", "b"],
+      steps: [
+        { pointers: { L: 0, R: 2 }, highlight: [0, 1, 2], caption: "Expand R while every character is new. Window \"abc\", length 3 — current best." },
+        { pointers: { L: 0, R: 3 }, highlight: [0, 1, 2, 3], caption: "R=3 is 'a' — already in the window. Shrink from the left, past the earlier 'a'." },
+        { pointers: { L: 1, R: 3 }, highlight: [1, 2, 3], caption: "L jumps to 1. Window \"bca\", length 3 — tied for best, not beaten yet." },
+        { pointers: { L: 5, R: 7 }, highlight: [5, 6, 7], dim: [0, 1, 2, 3, 4], caption: "Every later repeat forces another jump the same way. Final answer: length 3 (\"abc\")." },
+      ],
+    },
+    {
+      kind: "array",
+      title: "Minimum Window Substring — grow to valid, then shrink",
+      array: ["a", "a", "b", "c"],
+      steps: [
+        { pointers: { L: 0, R: 3 }, highlight: [0, 1, 2, 3], caption: "Expand R until every required character (a, b, c) is in the window. Window \"aabc\" — formed." },
+        { pointers: { L: 1, R: 3 }, highlight: [1, 2, 3], caption: "Still formed after dropping the extra leading 'a' — shrink again, and record this as the new best: length 3." },
+        { pointers: { L: 2, R: 3 }, highlight: [2, 3], dim: [0, 1], caption: "Dropping the required 'a' breaks it — stop shrinking. R is already at the end. Minimum window: \"abc\", length 3." },
+      ],
+    },
+  ],
+
+  "arrays-hashing": [
+    {
+      kind: "array",
+      title: "Group Anagrams — hash by sorted signature",
+      array: ["eat", "tea", "tan", "ate", "nat", "bat"],
+      steps: [
+        { pointers: { i: 0 }, highlight: [0], caption: "\"eat\" → sorted key \"aet\". map = { aet: [eat] }" },
+        { pointers: { i: 1 }, highlight: [0, 1], caption: "\"tea\" → sorted key \"aet\" too — same bucket. map = { aet: [eat, tea] }" },
+        { pointers: { i: 2 }, highlight: [2], caption: "\"tan\" → sorted key \"ant\" — new bucket. map = { aet: […], ant: [tan] }" },
+        { pointers: { i: 5 }, highlight: [0, 1, 3, 4, 2, 5], caption: "By the end: { aet: [eat,tea,ate], ant: [tan,nat], abt: [bat] } — three groups from one pass." },
+      ],
+    },
+  ],
+
+  strings: [
+    {
+      kind: "array",
+      title: "Reverse Words in a String — tokenize, then prepend",
+      array: ["the", "sky", "is", "blue"],
+      steps: [
+        { pointers: { i: 0 }, highlight: [0], caption: "Token \"the\" → output: \"the\"" },
+        { pointers: { i: 1 }, highlight: [1], caption: "Token \"sky\" → prepend → output: \"sky the\"" },
+        { pointers: { i: 2 }, highlight: [2], caption: "Token \"is\" → prepend → output: \"is sky the\"" },
+        { pointers: { i: 3 }, highlight: [3], caption: "Token \"blue\" → prepend → output: \"blue is sky the\". Each token only ever moves once." },
+      ],
+    },
+  ],
+
+  "binary-search": [
+    {
+      kind: "array",
+      title: "Classic search — halving the space each step",
+      array: [1, 3, 5, 7, 9, 11, 13],
+      steps: [
+        { pointers: { lo: 0, mid: 3, hi: 6 }, caption: "lo=0, hi=6, mid=3 → value 7. Target 9 is bigger, so it can't be on the left — discard that half." },
+        { pointers: { lo: 4, mid: 5, hi: 6 }, dim: [0, 1, 2, 3], caption: "lo=4, hi=6, mid=5 → value 11. Target 9 is smaller — discard the right half." },
+        { pointers: { lo: 4, mid: 4, hi: 4 }, dim: [0, 1, 2, 3, 5, 6], highlight: [4], caption: "lo=hi=mid=4 → value 9. Found — 7 elements searched in 2 comparisons." },
+      ],
+    },
+  ],
+
+  "recursion-dp": [
+    {
+      kind: "grid",
+      title: "Climbing Stairs — bottom-up table, each cell reused",
+      rows: 1,
+      cols: 6,
+      cellLabels: { cols: ["dp[0]", "dp[1]", "dp[2]", "dp[3]", "dp[4]", "dp[5]"] },
+      steps: [
+        { values: [[1, 1, null, null, null, null]], active: [[0, 0], [0, 1]], caption: "Base cases: 1 way to be at step 0, 1 way to be at step 1." },
+        { values: [[1, 1, 2, null, null, null]], active: [[0, 2]], highlight: [[0, 0], [0, 1]], caption: "dp[2] = dp[1] + dp[0] = 1+1 = 2 — reused, not recomputed." },
+        { values: [[1, 1, 2, 3, null, null]], active: [[0, 3]], highlight: [[0, 1], [0, 2]], caption: "dp[3] = dp[2] + dp[1] = 2+1 = 3." },
+        { values: [[1, 1, 2, 3, 5, 8]], active: [[0, 4], [0, 5]], caption: "Same reuse all the way up: dp[5] = dp[4] + dp[3] = 5+3 = 8 ways to climb 5 stairs." },
+      ],
+    },
+    {
+      kind: "graph",
+      title: "Why memoization matters — the duplicate work in fib(4)",
+      height: 170,
+      nodes: [
+        { id: "f4", label: "fib(4)", x: 160, y: 20 },
+        { id: "f3", label: "fib(3)", x: 90, y: 75 },
+        { id: "f2a", label: "fib(2)", x: 230, y: 75 },
+        { id: "f2b", label: "fib(2)", x: 55, y: 135 },
+        { id: "f1", label: "fib(1)", x: 125, y: 135 },
+      ],
+      edges: [{ from: "f4", to: "f3" }, { from: "f4", to: "f2a" }, { from: "f3", to: "f2b" }, { from: "f3", to: "f1" }],
+      steps: [
+        { activeNodes: ["f4"], caption: "fib(4) needs fib(3) and fib(2)." },
+        { doneNodes: ["f4"], activeNodes: ["f3"], activeEdges: [["f4", "f3"]], caption: "Expand fib(3) first: it needs fib(2) and fib(1)." },
+        { doneNodes: ["f4", "f3"], activeNodes: ["f2b", "f1"], activeEdges: [["f3", "f2b"], ["f3", "f1"]], caption: "fib(3) computes fib(2) and fib(1) from scratch." },
+        { doneNodes: ["f4", "f3", "f2b", "f1"], activeNodes: ["f2a"], activeEdges: [["f4", "f2a"]], caption: "Now fib(4)'s other child, fib(2), runs — recomputing exactly what fib(3) just did. This exact bug is live in this repo's own minimum_cost_to_merge_sorted_list.cpp, unmemoized." },
+      ],
+    },
+  ],
+
+  "bit-manipulation": [
+    {
+      kind: "grid",
+      title: "Single Number — XOR cancels every pair",
+      rows: 1,
+      cols: 4,
+      cellLabels: { cols: ["bit3", "bit2", "bit1", "bit0"] },
+      steps: [
+        { values: [[0, 0, 0, 0]], caption: "xor = 0000 (0). Start scanning [4, 1, 2, 1, 2]." },
+        { values: [[0, 1, 0, 0]], active: [[0, 1]], caption: "xor ^= 4 → 0100 (4)." },
+        { values: [[0, 1, 0, 1]], active: [[0, 3]], caption: "xor ^= 1 → 0101 (5)." },
+        { values: [[0, 1, 1, 1]], active: [[0, 2]], caption: "xor ^= 2 → 0111 (7)." },
+        { values: [[0, 1, 1, 0]], active: [[0, 3]], caption: "xor ^= 1 → 0110 (6). The first 1 has now cancelled itself out." },
+        { values: [[0, 1, 0, 0]], active: [[0, 2]], caption: "xor ^= 2 → 0100 (4). Both 2's and both 1's cancelled — only the single 4 survives." },
+      ],
+    },
+  ],
+
+  "2d-matrix": [
+    {
+      kind: "grid",
+      title: "Spiral traversal — walk, then shrink the boundary",
+      rows: 3,
+      cols: 3,
+      steps: [
+        { values: [[1, null, null], [null, null, null], [null, null, null]], active: [[0, 0]], caption: "Walk right along the top row." },
+        { values: [[1, 2, 3], [null, null, null], [null, null, null]], active: [[0, 1], [0, 2]], caption: "1, 2, 3 — hit the right edge. Turn down." },
+        { values: [[1, 2, 3], [null, null, 6], [null, null, 9]], active: [[1, 2], [2, 2]], caption: "6, 9 — walk down the right column. Hit the bottom. Turn left." },
+        { values: [[1, 2, 3], [null, null, 6], [7, 8, 9]], active: [[2, 1], [2, 0]], caption: "8, 7 — walk left along the bottom. Hit the left edge. Turn up." },
+        { values: [[1, 2, 3], [4, null, 6], [7, 8, 9]], active: [[1, 0]], caption: "4 — the boundary has shrunk down to just the center cell left." },
+        { values: [[1, 2, 3], [4, 5, 6], [7, 8, 9]], active: [[1, 1]], caption: "5 — visited last. Full order: 1,2,3,6,9,8,7,4,5." },
+      ],
+    },
+  ],
+
+  knapsack: [
+    {
+      kind: "grid",
+      title: "0/1 Knapsack — include vs. exclude at every cell",
+      rows: 4,
+      cols: 6,
+      cellLabels: { cols: ["cap 0", "cap 1", "cap 2", "cap 3", "cap 4", "cap 5"] },
+      steps: [
+        { values: [[0, 0, 0, 0, 0, 0], [null, null, null, null, null, null], [null, null, null, null, null, null], [null, null, null, null, null, null]], caption: "Row 0: no items available yet — every capacity holds value 0." },
+        { values: [[0, 0, 0, 0, 0, 0], [0, 0, 3, 3, 3, 3], [null, null, null, null, null, null], [null, null, null, null, null, null]], active: [[1, 2]], caption: "Item A (weight 2, value 3): once capacity ≥ 2, it fits — value jumps to 3 and holds." },
+        { values: [[0, 0, 0, 0, 0, 0], [0, 0, 3, 3, 3, 3], [0, 0, 3, 4, 4, 7], [null, null, null, null, null, null]], active: [[2, 5]], caption: "Item B (weight 3, value 4) added. At capacity 5: skip B → 3, or take B (leaves 2 for A's 3) → 7. Take it." },
+        { values: [[0, 0, 0, 0, 0, 0], [0, 0, 3, 3, 3, 3], [0, 0, 3, 4, 4, 7], [0, 0, 3, 4, 5, 7]], active: [[3, 4], [3, 5]], caption: "Item C (weight 4, value 5): at cap 4, C alone (5) beats the old 4 — take it. At cap 5, C alone only scores 5 — worse than A+B's 7. Final answer: 7." },
+      ],
+    },
+  ],
+
+  monotonic_stack: [
+    {
+      kind: "stack",
+      title: "Next Greater Element — a stack that stays decreasing",
+      array: [2, 1, 5, 6, 2, 3],
+      steps: [
+        { cursor: 0, stack: [], caption: "i=0 (2): stack is empty — push it." },
+        { cursor: 0, stack: [2], caption: "Pushed. Stack (bottom→top): [2]." },
+        { cursor: 1, stack: [2], caption: "i=1 (1): top (2) is bigger, so 1 resolves nothing yet — push it too." },
+        { cursor: 1, stack: [2, 1], caption: "Stack: [2, 1] — still decreasing top to bottom." },
+        { cursor: 2, stack: [], consumed: [0, 1], caption: "i=2 (5): 5 > top (1) — pop, 5 is 1's next-greater. 5 > new top (2) — pop again, 5 is 2's next-greater too. Push 5." },
+        { cursor: 2, stack: [5], consumed: [0, 1], caption: "Stack: [5]." },
+        { cursor: 3, stack: [], consumed: [0, 1, 2], caption: "i=3 (6): 6 > top (5) — pop, 6 is 5's next-greater. Push 6." },
+        { cursor: 3, stack: [6], consumed: [0, 1, 2], caption: "Stack: [6]." },
+        { cursor: 4, stack: [6, 2], consumed: [0, 1, 2], caption: "i=4 (2): smaller than top (6) — no pops, just push." },
+        { cursor: 5, stack: [6], consumed: [0, 1, 2, 4], caption: "i=5 (3): 3 > top (2) — pop, 3 is 2's next-greater. 3 < new top (6) — stop, push 3." },
+        { cursor: 5, stack: [6, 3], consumed: [0, 1, 2, 4], caption: "Final stack [6, 3]: neither ever finds a next-greater element. Result: [5,5,6,-1,3,-1]." },
+      ],
+    },
+  ],
+
+  mst: [
+    {
+      kind: "graph",
+      title: "Prim's — always take the cheapest edge out of the tree",
+      nodes: [
+        { id: "A", x: 40, y: 90 }, { id: "B", x: 130, y: 40 }, { id: "C", x: 130, y: 140 }, { id: "D", x: 250, y: 90 },
+      ],
+      edges: [
+        { from: "A", to: "B", label: "1" }, { from: "A", to: "C", label: "4" },
+        { from: "B", to: "C", label: "2" }, { from: "B", to: "D", label: "6" }, { from: "C", to: "D", label: "3" },
+      ],
+      steps: [
+        { activeNodes: ["A"], caption: "Start anywhere — say A. Look at every edge leaving the growing tree." },
+        { activeNodes: ["A", "B"], doneEdges: [["A", "B"]], caption: "Cheapest edge from A is A–B (1). Add B." },
+        { activeNodes: ["A", "B", "C"], doneEdges: [["A", "B"], ["B", "C"]], caption: "Cheapest edge leaving {A,B} is B–C (2), not A–C (4). Add C." },
+        { activeNodes: ["A", "B", "C", "D"], doneEdges: [["A", "B"], ["B", "C"], ["C", "D"]], caption: "Cheapest edge leaving {A,B,C} is C–D (3), beating B–D (6). Tree complete — total weight 6." },
+      ],
+    },
+  ],
+
+  quick_sort: [
+    {
+      kind: "array",
+      title: "Sort Colors — three pointers, one pass",
+      array: [2, 0, 2, 1, 1, 0],
+      steps: [
+        { values: [2, 0, 2, 1, 1, 0], pointers: { low: 0, mid: 0, high: 5 }, caption: "low=mid=0, high=5. nums[mid]=2 → swap with high, shrink high." },
+        { values: [0, 0, 2, 1, 1, 2], pointers: { low: 0, mid: 0, high: 4 }, caption: "nums[mid]=0 now → swap with low (no-op here), advance both low and mid." },
+        { values: [0, 0, 2, 1, 1, 2], pointers: { low: 1, mid: 1, high: 4 }, caption: "nums[mid]=0 again → advance low and mid." },
+        { values: [0, 0, 2, 1, 1, 2], pointers: { low: 2, mid: 2, high: 4 }, caption: "nums[mid]=2 → swap with high, shrink high." },
+        { values: [0, 0, 1, 1, 2, 2], pointers: { low: 2, mid: 2, high: 3 }, caption: "nums[mid]=1 → already in the middle zone, just advance mid." },
+        { values: [0, 0, 1, 1, 2, 2], pointers: { low: 2, mid: 4, high: 3 }, caption: "mid has passed high — done. [0,0,1,1,2,2], sorted in one pass, three pointers, no extra space." },
+      ],
+    },
+  ],
+
+  topological_sort: [
+    {
+      kind: "graph",
+      title: "Kahn's algorithm — peel off in-degree-0 nodes",
+      nodes: [
+        { id: "A", x: 40, y: 90 }, { id: "B", x: 140, y: 40 }, { id: "C", x: 140, y: 140 }, { id: "D", x: 250, y: 90 },
+      ],
+      edges: [{ from: "A", to: "B" }, { from: "A", to: "C" }, { from: "B", to: "D" }, { from: "C", to: "D" }],
+      steps: [
+        { activeNodes: ["A"], caption: "In-degree 0 means no prerequisites — A can go first." },
+        { doneNodes: ["A"], activeNodes: ["B", "C"], doneEdges: [["A", "B"], ["A", "C"]], caption: "Remove A, decrement B and C's in-degree to 0 — both unlock at once." },
+        { doneNodes: ["A", "B"], activeNodes: ["C"], doneEdges: [["A", "B"], ["A", "C"], ["B", "D"]], caption: "Take B. D still needs C, so it's not ready yet." },
+        { doneNodes: ["A", "B", "C"], activeNodes: ["D"], doneEdges: [["A", "B"], ["A", "C"], ["B", "D"], ["C", "D"]], caption: "Take C — D's last prerequisite is satisfied. D unlocks." },
+        { doneNodes: ["A", "B", "C", "D"], caption: "Order: A, B, C, D. If any node never reached in-degree 0, that would mean a cycle — no valid order exists." },
+      ],
+    },
+  ],
+
+  trie: [
+    {
+      kind: "graph",
+      title: "Inserting cat, car, dog — shared prefixes cost nothing extra",
+      height: 190,
+      nodes: [
+        { id: "root", label: "•", x: 160, y: 15 },
+        { id: "c", label: "c", x: 90, y: 60 },
+        { id: "d", label: "d", x: 230, y: 60 },
+        { id: "ca", label: "a", x: 60, y: 105 },
+        { id: "do", label: "o", x: 230, y: 105 },
+        { id: "cat", label: "t•", x: 30, y: 150 },
+        { id: "car", label: "r•", x: 90, y: 150 },
+        { id: "dog", label: "g•", x: 230, y: 150 },
+      ],
+      edges: [
+        { from: "root", to: "c" }, { from: "root", to: "d" }, { from: "c", to: "ca" },
+        { from: "ca", to: "cat" }, { from: "ca", to: "car" }, { from: "d", to: "do" }, { from: "do", to: "dog" },
+      ],
+      steps: [
+        { doneNodes: ["root"], caption: "Start at the root — the empty prefix." },
+        { doneNodes: ["root", "c"], doneEdges: [["root", "c"]], caption: "Insert \"cat\": no child 'c' yet — create one." },
+        { doneNodes: ["root", "c", "ca"], doneEdges: [["root", "c"], ["c", "ca"]], caption: "Continue \"cat\": create 'a' under 'c'." },
+        { doneNodes: ["root", "c", "ca", "cat"], doneEdges: [["root", "c"], ["c", "ca"], ["ca", "cat"]], caption: "Create 't', mark it end-of-word — \"cat\" is now complete." },
+        { doneNodes: ["root", "c", "ca", "cat", "car"], doneEdges: [["root", "c"], ["c", "ca"], ["ca", "cat"], ["ca", "car"]], caption: "Insert \"car\": root→c→a already exist — reuse them. Only create 'r'. Shared prefixes cost nothing extra." },
+        { doneNodes: ["root", "c", "ca", "cat", "car", "d", "do", "dog"], doneEdges: [["root", "c"], ["c", "ca"], ["ca", "cat"], ["ca", "car"], ["root", "d"], ["d", "do"], ["do", "dog"]], caption: "Insert \"dog\": a totally new path, root→d→o→g." },
+      ],
+    },
+  ],
+
+  "union-find": [
+    {
+      kind: "graph",
+      title: "Union operations merge components, not just pairs",
+      nodes: [
+        { id: "1", x: 40, y: 90 }, { id: "2", x: 110, y: 40 }, { id: "3", x: 180, y: 90 }, { id: "4", x: 110, y: 140 }, { id: "5", x: 260, y: 90 },
+      ],
+      edges: [{ from: "1", to: "2" }, { from: "3", to: "4" }, { from: "2", to: "3" }],
+      steps: [
+        { caption: "5 separate components to start: {1} {2} {3} {4} {5}." },
+        { activeNodes: ["1", "2"], doneEdges: [["1", "2"]], caption: "union(1,2): different roots — merge. Now {1,2} {3} {4} {5}." },
+        { activeNodes: ["3", "4"], doneEdges: [["1", "2"], ["3", "4"]], caption: "union(3,4): merge. Now {1,2} {3,4} {5}." },
+        { activeNodes: ["2", "3"], doneEdges: [["1", "2"], ["3", "4"], ["2", "3"]], caption: "union(2,3): merges the two GROUPS in one operation. Now {1,2,3,4} {5}." },
+        { doneEdges: [["1", "2"], ["3", "4"], ["2", "3"]], caption: "find(1) and find(4) now return the same root — connected, with no direct edge between them. Node 5 stays its own component." },
+      ],
+    },
+  ],
+
+  "linked-list": [
+    {
+      kind: "graph",
+      title: "Reversing 1→2→3→4 — rewire, don't rebuild",
+      height: 130,
+      nodes: [
+        { id: "n1", label: "1", x: 40, y: 70 }, { id: "n2", label: "2", x: 110, y: 70 },
+        { id: "n3", label: "3", x: 180, y: 70 }, { id: "n4", label: "4", x: 250, y: 70 },
+      ],
+      edges: [{ from: "n1", to: "n2" }, { from: "n2", to: "n3" }, { from: "n3", to: "n4" }],
+      steps: [
+        { activeNodes: ["n1"], caption: "prev = None, curr = 1. This node will end up as the new tail, pointing to None." },
+        { activeNodes: ["n1", "n2"], doneEdges: [["n1", "n2"]], caption: "Save curr.next (2) first, then point 1.next back to prev (None). Advance: prev=1, curr=2." },
+        { activeNodes: ["n2", "n3"], doneEdges: [["n1", "n2"], ["n2", "n3"]], caption: "Point 2.next back to prev (1). Advance: prev=2, curr=3." },
+        { activeNodes: ["n3", "n4"], doneEdges: [["n1", "n2"], ["n2", "n3"], ["n3", "n4"]], caption: "Point 3.next back to prev (2). Advance: prev=3, curr=4." },
+        { doneNodes: ["n1", "n2", "n3", "n4"], doneEdges: [["n1", "n2"], ["n2", "n3"], ["n3", "n4"]], caption: "Point 4.next back to prev (3). curr becomes None — loop ends. List is now 4→3→2→1." },
+      ],
+    },
+  ],
+
+  trees: [
+    {
+      kind: "graph",
+      title: "BFS level-order traversal",
+      height: 170,
+      nodes: [
+        { id: "n1", label: "1", x: 140, y: 15 },
+        { id: "n2", label: "2", x: 80, y: 60 }, { id: "n3", label: "3", x: 200, y: 60 },
+        { id: "n4", label: "4", x: 50, y: 105 }, { id: "n5", label: "5", x: 110, y: 105 },
+        { id: "n6", label: "6", x: 170, y: 105 }, { id: "n7", label: "7", x: 230, y: 105 },
+      ],
+      edges: [
+        { from: "n1", to: "n2" }, { from: "n1", to: "n3" }, { from: "n2", to: "n4" },
+        { from: "n2", to: "n5" }, { from: "n3", to: "n6" }, { from: "n3", to: "n7" },
+      ],
+      steps: [
+        { activeNodes: ["n1"], caption: "Start at the root. Queue: [1]." },
+        { doneNodes: ["n1"], activeNodes: ["n2", "n3"], doneEdges: [["n1", "n2"], ["n1", "n3"]], caption: "Visit 1, enqueue its children. Queue: [2, 3]." },
+        { doneNodes: ["n1", "n2", "n3"], activeNodes: ["n4", "n5", "n6", "n7"], doneEdges: [["n1", "n2"], ["n1", "n3"], ["n2", "n4"], ["n2", "n5"], ["n3", "n6"], ["n3", "n7"]], caption: "Visit 2 then 3, enqueueing 4, 5, 6, 7 as we go. Queue: [4,5,6,7]." },
+        { doneNodes: ["n1", "n2", "n3", "n4", "n5", "n6", "n7"], doneEdges: [["n1", "n2"], ["n1", "n3"], ["n2", "n4"], ["n2", "n5"], ["n3", "n6"], ["n3", "n7"]], caption: "Visit each in turn — queue empties. BFS order: 1,2,3,4,5,6,7 — exactly level by level." },
+      ],
+    },
+  ],
+
+  "graphs-bfs-dfs": [
+    {
+      kind: "grid",
+      title: "Number of Islands — flood fill each connected blob",
+      rows: 4,
+      cols: 4,
+      steps: [
+        { values: [[1, 1, 0, 0], [1, 0, 0, 0], [0, 0, 1, 1], [0, 0, 0, 0]], active: [[0, 0]], caption: "Scan for an unvisited '1'. Found one at (0,0) — start a DFS flood-fill. Islands so far: 1." },
+        { values: [[1, 1, 0, 0], [1, 0, 0, 0], [0, 0, 1, 1], [0, 0, 0, 0]], active: [[0, 0], [0, 1], [1, 0]], caption: "Flood fill spreads to every connected land cell: (0,1) and (1,0). All marked visited — this whole blob is one island." },
+        { values: [[1, 1, 0, 0], [1, 0, 0, 0], [0, 0, 1, 1], [0, 0, 0, 0]], active: [[2, 2], [2, 3]], highlight: [[0, 0], [0, 1], [1, 0]], caption: "Continue scanning — next unvisited '1' is at (2,2). New flood-fill, islands so far: 2. It spreads to (2,3)." },
+        { values: [[1, 1, 0, 0], [1, 0, 0, 0], [0, 0, 1, 1], [0, 0, 0, 0]], highlight: [[0, 0], [0, 1], [1, 0], [2, 2], [2, 3]], caption: "No unvisited land left. Total islands: 2 — the number of separate flood-fills it took, not the number of land cells." },
+      ],
+    },
+  ],
+
+  backtracking: [
+    {
+      kind: "graph",
+      title: "All subsets of [1, 2] — include or exclude, at every element",
+      height: 170,
+      nodes: [
+        { id: "root", label: "{}", x: 140, y: 15 },
+        { id: "in1", label: "{1}", x: 70, y: 60 }, { id: "ex1", label: "{}", x: 210, y: 60 },
+        { id: "in1in2", label: "{1,2}", x: 40, y: 105 }, { id: "in1ex2", label: "{1}", x: 100, y: 105 },
+        { id: "ex1in2", label: "{2}", x: 180, y: 105 }, { id: "ex1ex2", label: "{}", x: 240, y: 105 },
+      ],
+      edges: [
+        { from: "root", to: "in1" }, { from: "root", to: "ex1" },
+        { from: "in1", to: "in1in2" }, { from: "in1", to: "in1ex2" },
+        { from: "ex1", to: "ex1in2" }, { from: "ex1", to: "ex1ex2" },
+      ],
+      steps: [
+        { activeNodes: ["root"], caption: "Start with an empty subset. At each element, choose: include it, or don't." },
+        { doneNodes: ["root"], activeNodes: ["in1", "ex1"], doneEdges: [["root", "in1"], ["root", "ex1"]], caption: "Element 1: branch into 'include 1' and 'exclude 1'." },
+        { doneNodes: ["root", "in1", "ex1"], activeNodes: ["in1in2", "in1ex2", "ex1in2", "ex1ex2"], doneEdges: [["root", "in1"], ["root", "ex1"], ["in1", "in1in2"], ["in1", "in1ex2"], ["ex1", "ex1in2"], ["ex1", "ex1ex2"]], caption: "Element 2: each branch splits again the same way. Four leaves = four complete subsets: {1,2}, {1}, {2}, {}." },
+      ],
+    },
+  ],
+
+  heap: [
+    {
+      kind: "stack",
+      title: "Kth Largest (k=3) — keep only the top 3 seen so far",
+      array: [3, 1, 5, 12, 2, 11],
+      steps: [
+        { cursor: 0, stack: [], caption: "k=3. Scan begins; keep a pool of the 3 largest seen so far." },
+        { cursor: 0, stack: [3], caption: "3: pool has room — add it. Pool: {3}." },
+        { cursor: 1, stack: [3, 1], caption: "1: still room — add it. Pool: {3, 1}." },
+        { cursor: 2, stack: [3, 1, 5], caption: "5: pool now full at size 3: {3, 1, 5}." },
+        { cursor: 3, stack: [3, 5, 12], caption: "12: bigger than the pool's smallest (1) — evict 1, add 12. Pool: {3, 5, 12}." },
+        { cursor: 4, stack: [3, 5, 12], caption: "2: smaller than the pool's smallest (3) — can't be in the top 3. Skip it." },
+        { cursor: 5, stack: [5, 12, 11], caption: "11: bigger than the pool's smallest (3) — evict 3, add 11. Pool: {5, 12, 11}." },
+        { cursor: 5, stack: [5, 12, 11], caption: "Scan done. The pool's smallest member, 5, IS the answer — the 3rd largest overall." },
+      ],
+    },
+  ],
+
+  intervals: [
+    {
+      kind: "array",
+      title: "Merge Intervals — sweep once, sorted by start",
+      array: ["[1,3]", "[2,6]", "[8,10]", "[15,18]"],
+      steps: [
+        { pointers: { i: 0 }, highlight: [0], caption: "Sorted by start. Begin with [1,3] as the current merged interval." },
+        { pointers: { i: 1 }, highlight: [0, 1], caption: "[2,6] starts (2) before the current interval ends (3) — overlap! Merge into [1,6]." },
+        { pointers: { i: 2 }, highlight: [2], dim: [0, 1], caption: "[8,10] starts (8) after [1,6] ends — no overlap. [1,6] is final. [8,10] becomes the new current interval." },
+        { pointers: { i: 3 }, highlight: [3], dim: [0, 1, 2], caption: "[15,18] starts after [8,10] ends — no overlap either. Result: [1,6], [8,10], [15,18]." },
+      ],
+    },
+  ],
+
+  "prefix-sum": [
+    {
+      kind: "grid",
+      title: "Build once, query in O(1) forever after",
+      rows: 1,
+      cols: 6,
+      cellLabels: { cols: ["p[0]", "p[1]", "p[2]", "p[3]", "p[4]", "p[5]"] },
+      steps: [
+        { values: [[0, null, null, null, null, null]], active: [[0, 0]], caption: "prefix[0] = 0 — the sum of nothing, before the array even starts." },
+        { values: [[0, 2, 6, 7, 12, null]], active: [[0, 4]], caption: "Each prefix[i] = prefix[i-1] + nums[i-1]. Built up to prefix[4] = 12 — the sum of the first 4 numbers." },
+        { values: [[0, 2, 6, 7, 12, 15]], active: [[0, 5]], caption: "prefix[5] = 15 — the full array sum. Prefix array done, in one pass." },
+        { values: [[0, 2, 6, 7, 12, 15]], highlight: [[0, 1], [0, 4]], caption: "Sum of indices 1..3 (values 4,1,5)? Just prefix[4] − prefix[1] = 12 − 2 = 10. No loop needed." },
+      ],
+    },
+  ],
+
+  greedy: [
+    {
+      kind: "array",
+      title: "Jump Game — track the farthest reachable index",
+      array: [2, 3, 1, 1, 4],
+      steps: [
+        { pointers: { i: 0 }, highlight: [0], caption: "i=0, value 2: can reach up to index 0+2=2. Farthest reachable: 2." },
+        { pointers: { i: 1 }, highlight: [0, 1], caption: "i=1, value 3: can reach up to 1+3=4 — that's the last index! Farthest: 4." },
+        { pointers: { i: 2 }, highlight: [0, 1, 2], caption: "i=2: this cell only offers +1, but farthest is already 4 — no need to reconsider earlier choices." },
+        { pointers: { i: 4 }, highlight: [0, 1, 2, 3, 4], caption: "By the time i reaches 4, farthest has stayed ≥ 4 the whole way — reachable. Greedy never looked back." },
+      ],
+    },
+  ],
+};
