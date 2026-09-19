@@ -138,7 +138,15 @@ function heatmapSvg(counts, { weeks = 20 } = {}) {
   }
   const width = col * (cell + gap);
   const height = 7 * (cell + gap);
-  return `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" preserveAspectRatio="xMinYMin meet" class="heatmap">${rects}</svg>`;
+  // role="img" with one summary, because the alternative is a screen reader
+  // reading out every cell — a 20-week heatmap is 140 of them, almost all
+  // "0 on a date you did nothing", which is worse than no chart at all.
+  const activeDays = Object.values(counts).filter((n) => n > 0).length;
+  const total = Object.values(counts).reduce((sum, n) => sum + n, 0);
+  const label = activeDays
+    ? `Activity heatmap: ${total} across ${activeDays} active day${activeDays === 1 ? "" : "s"} in the last ${weeks} weeks.`
+    : `Activity heatmap: nothing recorded in the last ${weeks} weeks.`;
+  return `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" preserveAspectRatio="xMinYMin meet" class="heatmap" role="img" aria-label="${esc(label)}">${rects}</svg>`;
 }
 
 /** Converts LeetCode's unix-day-seconds submissionCalendar keys into
@@ -219,7 +227,9 @@ function sparklineSvg(points, { width = 80, height = 22 } = {}) {
   if (!points.length) return "";
   const step = points.length > 1 ? width / (points.length - 1) : 0;
   const coords = points.map((v, i) => `${(i * step).toFixed(1)},${(height - v * height).toFixed(1)}`).join(" ");
-  return `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" class="sparkline"><polyline points="${coords}" /></svg>`;
+  // Purely illustrative — it always sits beside the same figure in text, so
+  // announcing it a second time as a shape adds nothing.
+  return `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" class="sparkline" aria-hidden="true"><polyline points="${coords}" /></svg>`;
 }
 
 /** A small circular progress ring — the recurring visual for "how much of
@@ -261,14 +271,17 @@ function weekStripSvg(state) {
   const today = todayISO();
   const cell = 12, gap = 4;
   let rects = "";
+  let activeCount = 0;
   for (let i = 6; i >= 0; i--) {
     const d = addDaysISO(today, -i);
     const on = !!activity[d];
+    if (on) activeCount += 1;
     const x = (6 - i) * (cell + gap);
     rects += `<rect x="${x}" y="0" width="${cell}" height="${cell}" rx="3" fill="${on ? "var(--accent)" : "var(--surface-alt)"}"><title>${d}${on ? " — practiced" : ""}</title></rect>`;
   }
   const width = 7 * (cell + gap) - gap;
-  return `<svg viewBox="0 0 ${width} ${cell}" width="${width}" height="${cell}" class="week-strip">${rects}</svg>`;
+  return `<svg viewBox="0 0 ${width} ${cell}" width="${width}" height="${cell}" class="week-strip" role="img"
+    aria-label="Practised on ${activeCount} of the last 7 days.">${rects}</svg>`;
 }
 
 export function toast(msg) {
