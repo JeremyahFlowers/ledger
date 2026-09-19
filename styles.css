@@ -587,6 +587,27 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 .session-steps li { margin-bottom: 0.3rem; }
 .session-steps li:first-child { margin-bottom: 0.5rem; }
 
+/* ---------- Loading skeletons ---------- */
+
+/* Placeholders that occupy the same space the real content will, so a slow
+   fetch settles into place instead of shifting the page when it arrives. */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-alt) 25%, var(--border) 50%, var(--surface-alt) 75%);
+  background-size: 200% 100%;
+  border-radius: 5px;
+  animation: skeleton-sweep 1.4s ease-in-out infinite;
+}
+.skeleton-line { height: 0.75rem; margin: 0.45rem 0; }
+.skeleton-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+  padding: 0.6rem 0; border-bottom: 1px solid var(--border);
+}
+.skeleton-row:last-child { border-bottom: none; }
+@keyframes skeleton-sweep {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
 /* ---------- Progress charts ---------- */
 
 .chart-wrap { overflow-x: auto; }

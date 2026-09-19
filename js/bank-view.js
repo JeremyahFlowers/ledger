@@ -45,12 +45,42 @@ export async function renderBank(root, store, actions) {
   }
 
   if (state.status === "loading") {
-    root.innerHTML = `<div class="card"><p class="muted">Loading the problem bank…</p></div>`;
+    // The catalog is around a megabyte, so this is a real wait on a slow
+    // connection. The chrome that will still be there afterwards is drawn now,
+    // with placeholder rows in place of the list, so the page settles into
+    // itself rather than being replaced by a different layout when it lands.
+    root.innerHTML = `
+      ${modeTabsHtml(backlogProblems(store.state).length)}
+      <div class="card">
+        <h2>Problem bank</h2>
+        <p class="muted">Loading ~2,500 pattern-labelled problems…</p>
+        <div class="skeleton skeleton-line" style="width:70%"></div>
+        <div class="skeleton skeleton-line" style="width:45%"></div>
+      </div>
+      <div class="card" aria-hidden="true">
+        ${Array.from({ length: 6 }, () => `
+          <div class="skeleton-row">
+            <div><div class="skeleton skeleton-line" style="width:5rem"></div>
+                 <div class="skeleton skeleton-line" style="width:14rem"></div></div>
+            <div class="skeleton skeleton-line" style="width:4rem"></div>
+          </div>`).join("")}
+      </div>`;
     return;
   }
   if (state.status === "error") {
-    root.innerHTML = `<div class="card banner banner-bad"><p>Couldn't load the problem bank.</p>
-      <p class="muted small">${esc(state.error)}</p></div>`;
+    root.innerHTML = `
+      <div class="card banner banner-bad">
+        <p><strong>Couldn't load the problem bank.</strong></p>
+        <p class="small">${esc(state.error)}</p>
+        <p class="muted small">Everything else still works — the bank is a separate file the app
+        fetches, so this doesn't affect your own problems or your review schedule.</p>
+        <button class="btn btn-ghost btn-sm" id="bank-retry">Try again</button>
+      </div>`;
+    root.querySelector("#bank-retry").addEventListener("click", () => {
+      state.status = "idle";
+      state.error = "";
+      actions.rerender();
+    });
     return;
   }
 
