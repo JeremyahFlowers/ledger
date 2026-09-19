@@ -8,12 +8,38 @@ import { TOPICS } from "./topics-content.js";
 import { loadCodeMirror, CODE_MODES } from "./codemirror-loader.js";
 import { createWhiteboard } from "./whiteboard.js";
 import { plantSvg } from "./plant.js";
-import { arrayDiagram, stackDiagram, gridDiagram, graphDiagram } from "./diagrams.js";
-import { DIAGRAM_SPECS } from "./diagram-data.js";
 import { patternIcon, navIcon } from "./icons.js";
 import { problemUrl } from "./catalog.js";
 
-const DIAGRAM_MOUNTERS = { array: arrayDiagram, stack: stackDiagram, grid: gridDiagram, graph: graphDiagram };
+/**
+ * The diagram renderer and its worked examples, fetched on first use.
+ *
+ * Together they're the heaviest thing in the bundle — about 70 KB of the 394 KB
+ * the app loads — and they are needed on exactly one screen. Loading them
+ * eagerly meant everyone paid for them to open the Dashboard and start a
+ * session. Memoized, so moving between topic pages fetches nothing.
+ */
+let diagramModules = null;
+function loadDiagramModules() {
+  if (!diagramModules) {
+    diagramModules = Promise.all([
+      import("./diagrams.js"),
+      import("./diagram-data.js"),
+    ]).then(([renderers, data]) => ({
+      mounters: {
+        array: renderers.arrayDiagram,
+        stack: renderers.stackDiagram,
+        grid: renderers.gridDiagram,
+        graph: renderers.graphDiagram,
+      },
+      specs: data.DIAGRAM_SPECS,
+    })).catch((err) => {
+      diagramModules = null; // a failed load shouldn't be permanent
+      throw err;
+    });
+  }
+  return diagramModules;
+}
 
 const VITALITY_LABEL = { thriving: "Thriving", steady: "Steady", stressed: "Stressed", wilting: "Wilting" };
 
@@ -1443,6 +1469,9 @@ export function renderSystemDesign(root, store) {
 // leaving mid-animation doesn't leave a setInterval ticking against a
 // detached diagram forever.
 let topicDiagramPlayers = [];
+// Bumped on every topic render so a slow diagram import can tell whether the
+// page it was loading for is still the one on screen.
+let topicRenderToken = 0;
 
 // Cross-view handoff for "click a pattern card" -> dedicated page, the same
 // pattern used elsewhere (nav.prefillProblemId, reflectState): a module-level
@@ -1522,7 +1551,6 @@ export function renderTopicDetail(root, store, actions) {
   const problems = state.problems.filter((p) => p.patternId === pat.id)
     .sort((a, b) => (a.difficulty === b.difficulty ? 0 : DIFFICULTY_ORDER[a.difficulty] - DIFFICULTY_ORDER[b.difficulty]));
   const resources = state.resources[pat.id] || [];
-  const specs = DIAGRAM_SPECS[pat.id] || [];
 
   root.innerHTML = `
     <button type="button" class="btn btn-ghost btn-sm" id="topic-back">← Topics</button>
@@ -1544,7 +1572,10 @@ export function renderTopicDetail(root, store, actions) {
       <p><strong>Pitfalls</strong></p>
       <ul class="tight-list">${t.pitfalls.map((p) => `<li>${richText(p)}</li>`).join("")}</ul>
     </div>` : ""}
-    ${specs.length ? `<div id="topic-diagrams"></div>` : ""}
+    <div id="topic-diagrams">
+      <div class="card"><div class="skeleton skeleton-line" style="width:40%"></div>
+      <div class="skeleton" style="height:7rem;margin-top:0.6rem"></div></div>
+    </div>
     <div class="card">
       <h2>Practice ladder</h2>
       <p class="muted small">Your own logged problems, easiest first.</p>
@@ -1570,12 +1601,23 @@ export function renderTopicDetail(root, store, actions) {
 
   const diagramHost = root.querySelector("#topic-diagrams");
   if (diagramHost) {
-    specs.forEach((spec) => {
-      const mount = DIAGRAM_MOUNTERS[spec.kind];
-      if (!mount) return;
-      const slot = document.createElement("div");
-      diagramHost.appendChild(slot);
-      topicDiagramPlayers.push(mount(slot, spec));
+    const renderToken = ++topicRenderToken;
+    loadDiagramModules().then(({ mounters, specs: allSpecs }) => {
+      // Guard against arriving after the user has already moved on — mounting
+      // into a detached node would leak players that never get destroyed.
+      if (renderToken !== topicRenderToken || !document.contains(diagramHost)) return;
+      diagramHost.innerHTML = "";
+      for (const spec of allSpecs[pat.id] || []) {
+        const mount = mounters[spec.kind];
+        if (!mount) continue;
+        const slot = document.createElement("div");
+        diagramHost.appendChild(slot);
+        topicDiagramPlayers.push(mount(slot, spec));
+      }
+    }).catch(() => {
+      if (renderToken !== topicRenderToken) return;
+      diagramHost.innerHTML = `<div class="card"><p class="muted small">The worked examples couldn't
+        be loaded. Everything above is unaffected.</p></div>`;
     });
   }
 
