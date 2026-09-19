@@ -1082,6 +1082,13 @@ export function renderReflect(root, store, actions) {
   const insightMin = session.insightAt ? Math.round((session.insightAt - session.startedAt) / 60000) : null;
   const solveMin = session.endedAt ? Math.round((session.endedAt - session.startedAt) / 60000) : null;
 
+  const answered = reflectState.patternAnswered;
+  const revealMarkup = answered
+    ? `<p class="quiz-feedback">${answered === p.patternId
+        ? "Correct — that's the core pattern."
+        : `The core pattern is <strong>${esc(patternName(state, p.patternId))}</strong>.`}</p>${patternRevealHtml(state, p, p.patternId)}`
+    : "";
+
   root.innerHTML = `
     <div class="card">
       <h2>${esc(p.name)} — reflect</h2>
@@ -1103,10 +1110,20 @@ export function renderReflect(root, store, actions) {
           <div class="quiz-options">
             ${reflectState.options.map((optId) => {
               const pat = state.patterns.find((x) => x.id === optId);
-              return `<button type="button" class="quiz-option" data-pattern-answer="${esc(optId)}"><span class="pattern-icon">${patternIcon(optId, { size: 15 })}</span>${esc(pat.name)}</button>`;
+              // Answered state lives in reflectState, not in the DOM: recording
+              // the recall stat triggers a store mutation, which re-renders this
+              // whole view. Markup that only got its answered state from a click
+              // handler lost it on that re-render — and the early-return guard
+              // then refused every retry, so the session could never be saved.
+              const classes = ["quiz-option"];
+              if (answered) {
+                if (optId === p.patternId) classes.push("correct");
+                else if (optId === answered) classes.push("incorrect");
+              }
+              return `<button type="button" class="${classes.join(" ")}" data-pattern-answer="${esc(optId)}" ${answered ? "disabled" : ""}><span class="pattern-icon">${patternIcon(optId, { size: 15 })}</span>${esc(pat.name)}</button>`;
             }).join("")}
           </div>
-          <div id="pattern-reveal" class="pattern-reveal" hidden></div>
+          <div id="pattern-reveal" class="pattern-reveal" ${answered ? "" : "hidden"}>${answered ? revealMarkup : ""}</div>
         </div>
 
         <div class="field">
@@ -1124,15 +1141,13 @@ export function renderReflect(root, store, actions) {
           <input class="input" type="number" min="1" max="5" name="communicationRating" /></label>` : ""}
 
         <div class="row gap">
-          <button class="btn btn-primary" type="submit" id="reflect-save" disabled>Pick a pattern above first</button>
+          <button class="btn btn-primary" type="submit" id="reflect-save" ${answered ? "" : "disabled"}>${answered ? "Save &amp; finish" : "Pick a pattern above first"}</button>
           <button class="btn btn-ghost" type="button" id="reflect-discard">Discard this session</button>
         </div>
       </form>
     </div>`;
 
   const form = root.querySelector("#reflect-form");
-  const saveBtn = root.querySelector("#reflect-save");
-  const revealHost = root.querySelector("#pattern-reveal");
 
   root.querySelectorAll("[data-pattern-answer]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -1140,24 +1155,25 @@ export function renderReflect(root, store, actions) {
       const chosen = btn.dataset.patternAnswer;
       reflectState.patternAnswered = chosen;
       const correct = chosen === p.patternId;
+
+      // Updated in place rather than by re-rendering. This form holds an
+      // outcome, mistake tags and a soul statement the user may already have
+      // filled in, and rebuilding the markup would discard all of it. The
+      // markup above still derives from reflectState, so a re-render triggered
+      // by anything else restores this same state rather than losing it.
       root.querySelectorAll("[data-pattern-answer]").forEach((b) => {
         b.disabled = true;
         if (b.dataset.patternAnswer === p.patternId) b.classList.add("correct");
         else if (b === btn) b.classList.add("incorrect");
       });
-      revealHost.innerHTML = `<p class="quiz-feedback">${correct ? "Correct — that's the core pattern." : `The core pattern is <strong>${esc(patternName(state, p.patternId))}</strong>.`}</p>${patternRevealHtml(state, p, p.patternId)}`;
+      const revealHost = root.querySelector("#pattern-reveal");
+      revealHost.innerHTML = `<p class="quiz-feedback">${correct
+        ? "Correct — that's the core pattern."
+        : `The core pattern is <strong>${esc(patternName(state, p.patternId))}</strong>.`}</p>${patternRevealHtml(state, p, p.patternId)}`;
       revealHost.hidden = false;
+      const saveBtn = root.querySelector("#reflect-save");
       saveBtn.disabled = false;
       saveBtn.textContent = "Save & finish";
-      // Feeds the same recall-accuracy stat the Quiz/Warmup tabs use, and
-      // that the plant's health reads — every real session is itself a
-      // pattern-recall rep, not just the dedicated drills.
-      store.mutate((s) => {
-        s.quiz.totalAsked += 1;
-        if (correct) s.quiz.totalCorrect += 1;
-        s.quiz.recent.push({ correct });
-        if (s.quiz.recent.length > 20) s.quiz.recent.shift();
-      }, "Ledger: session pattern-recall answer");
     });
   });
 
@@ -1201,6 +1217,17 @@ export function renderReflect(root, store, actions) {
         activateProblem(problem); // working it is what moves it out of the bank
         applyOutcome(problem, outcome, s.settings);
         updateStreak(s);
+
+        // Every session is itself a pattern-recall rep, feeding the same stat
+        // the Quiz and Warmup tabs use and the plant's health reads. Recorded
+        // here rather than when the answer is clicked so that discarding a
+        // session really does save nothing, and so answering mid-form doesn't
+        // trigger a mutation that would re-render the form out from under you.
+        s.quiz.totalAsked += 1;
+        if (patternCorrect) s.quiz.totalCorrect += 1;
+        s.quiz.recent.push({ correct: patternCorrect });
+        if (s.quiz.recent.length > 20) s.quiz.recent.shift();
+
         if (isMock) {
           s.mocks.push({
             id: uid(), date, problemId: problem.id, outcome,
