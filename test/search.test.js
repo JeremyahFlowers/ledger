@@ -8,7 +8,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { score } from "../js/search.js";
+import { score, groupByKind } from "../js/search.js";
 
 describe("score", () => {
   test("test_score_exactTitle_outranksEverythingElse", () => {
@@ -49,5 +49,39 @@ describe("score", () => {
   test("test_score_numberInQuery_matchesAProblemNumber", () => {
     // Callers append the number to the haystack so "15" finds problem 15.
     assert.ok(score("3Sum 15", "15") != null);
+  });
+});
+
+describe("groupByKind", () => {
+  const hit = (kind, title) => ({ kind, title });
+
+  test("test_groupByKind_interleavedKinds_becomeContiguousRuns", () => {
+    // Score order alone splits a kind into two runs, which renders as the same
+    // group heading appearing twice down the list.
+    const grouped = groupByKind([
+      hit("pattern", "a"), hit("mine", "b"), hit("pattern", "c"), hit("catalog", "d"),
+    ]);
+    assert.deepEqual(grouped.map((r) => r.kind), ["pattern", "pattern", "mine", "catalog"]);
+  });
+
+  test("test_groupByKind_kindWithTheBestHitComesFirst", () => {
+    const grouped = groupByKind([hit("catalog", "a"), hit("pattern", "b")]);
+    assert.equal(grouped[0].kind, "catalog", "the strongest match still leads");
+  });
+
+  test("test_groupByKind_keepsScoreOrderWithinAKind", () => {
+    const grouped = groupByKind([
+      hit("pattern", "first"), hit("mine", "x"), hit("pattern", "second"),
+    ]);
+    assert.deepEqual(grouped.slice(0, 2).map((r) => r.title), ["first", "second"]);
+  });
+
+  test("test_groupByKind_losesNothing", () => {
+    const input = [hit("pattern", "a"), hit("mine", "b"), hit("catalog", "c"), hit("mine", "d")];
+    assert.equal(groupByKind(input).length, input.length);
+  });
+
+  test("test_groupByKind_emptyList_returnsEmpty", () => {
+    assert.deepEqual(groupByKind([]), []);
   });
 });

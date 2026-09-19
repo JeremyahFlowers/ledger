@@ -1,6 +1,6 @@
 import { store } from "./store.js";
 import * as views from "./views.js";
-import { computePlantState, dueProblems, allAttempts, patternStats, systemDesignUnlock, backlogProblems, progressSummary } from "./logic.js";
+import { computePlantState, dueProblems, allAttempts, patternStats, systemDesignUnlock, backlogProblems, progressSummary, startDayTimer, stopDayTimer } from "./logic.js";
 import { plantSvg } from "./plant.js";
 import { navIcon } from "./icons.js";
 import { renderAnalyze } from "./analyze-view.js";
@@ -284,6 +284,15 @@ function applyPageWidth() {
 // be a second copy of the same thing on the same screen.
 const PLANT_WIDGET_HIDDEN_ON = new Set(["dashboard"]);
 
+// The widget is inert apart from this one control, so the click is bound here
+// on the container rather than on a button that gets replaced.
+function toggleDayClock() {
+  store.mutate((s) => {
+    if (s.dayTimer?.running) stopDayTimer(s);
+    else startDayTimer(s);
+  }, "Ledger: day clock");
+}
+
 // Built once per view change, then updated in place every tick. Rebuilding it
 // on the tick restarted the CSS transition from scratch each second, which is
 // what made the plant step rather than grow.
@@ -295,14 +304,18 @@ function renderPlantWidget() {
   if (!show) return;
   if (!host.querySelector(".plant-widget-inner")) {
     host.innerHTML = views.plantWidgetHtml(store.state);
+    // Bound once, on the host, which outlives every rebuild of its contents.
+    host.addEventListener("click", (event) => {
+      if (event.target.closest(".plant-widget-toggle")) toggleDayClock();
+    });
   }
   views.updatePlantWidget(host, store.state);
 }
 
-// One interval for the whole app rather than one per view. The plant and the
-// budget ring both have to keep moving while the user is doing something else
-// entirely — that's the point of them — and a per-render timer would leave
-// stragglers ticking against cards that had already been replaced.
+// One interval for the whole app rather than one per view. The plant has to
+// keep moving while the user is doing something else entirely — that's the
+// point of it — and a per-render timer would leave stragglers ticking against
+// markup that had already been replaced.
 let clockTick = null;
 function startClocks() {
   clearInterval(clockTick);
@@ -311,11 +324,6 @@ function startClocks() {
     // cold start are exactly when it hasn't.
     if (!store.state) return;
     renderPlantWidget();
-    const clock = document.getElementById("budget-clock");
-    if (clock) {
-      clock.outerHTML = views.budgetClockHtml(store.state);
-      views.wireBudgetToggle(store);
-    }
   }, 1000);
 }
 

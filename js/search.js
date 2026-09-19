@@ -229,7 +229,7 @@ function runSearch(rawQuery) {
   }
 
   results.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
-  results = capPerGroup(results);
+  results = groupByKind(capPerGroup(results));
   activeIndex = 0;
   page = 0;
   paint(query);
@@ -248,6 +248,28 @@ function topPatternOf(entry) {
 function capPerGroup(list) {
   const counts = { pattern: 0, mine: 0, catalog: 0 };
   return list.filter((r) => ++counts[r.kind] <= MAX_PER_GROUP);
+}
+
+/**
+ * Gather each kind into one contiguous run, keeping the score order inside it.
+ *
+ * Sorting purely by score interleaves the kinds, because the per-kind
+ * proximity bonuses mean a weaker pattern can outrank a stronger catalog hit
+ * and then fall below one of your own problems. The list stayed correctly
+ * ranked but grew a second "Pattern" heading further down, which reads as a
+ * bug rather than as ranking.
+ *
+ * Kinds are ordered by their best hit, so whichever kind holds the strongest
+ * match still leads.
+ */
+export function groupByKind(list) {
+  const order = [];
+  const buckets = new Map();
+  for (const r of list) {
+    if (!buckets.has(r.kind)) { buckets.set(r.kind, []); order.push(r.kind); }
+    buckets.get(r.kind).push(r);
+  }
+  return order.flatMap((kind) => buckets.get(kind));
 }
 
 const KIND_LABEL = { pattern: "Pattern", mine: "Your problems", catalog: "Catalog" };

@@ -889,25 +889,6 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 }
 .topbar-icon-button:hover { background: var(--surface-alt); color: var(--text); }
 
-/* ---------- Daily budget clock ---------- */
-
-.budget-clock {
-  display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
-}
-/* The plant scales with --pressure, set per render from budgetPressure():
-   +1 at the budget, falling through 0 and down to -1 as the day overruns. The
-   range is deliberately narrow — 0.82 to 1.15 — because this has to read as
-   the plant responding to the day, not as a growth animation competing with
-   the real stage the user has earned. */
-.budget-plant {
-  display: inline-flex;
-  transform: scale(calc(1 + var(--pressure, 0) * 0.15));
-  transform-origin: bottom center;
-  transition: transform 400ms ease, filter 400ms ease;
-}
-/* Past the budget the pressure goes negative, so this shrinks and desaturates
-   at the same time — one change the eye reads without having to be told. */
-.budget-plant { filter: saturate(calc(1 + var(--pressure, 0) * 0.4)); }
 .budget-warn { color: var(--warn); font-weight: 600; }
 .budget-over { color: var(--bad); font-weight: 700; }
 
@@ -932,11 +913,17 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
   /* Square, so it reads as one panel in the corner rather than a label with a
      picture above it. The plant takes the room it needs and the clock sits
      under it; the box itself stays the same shape whatever they do. */
+  /* Height is stated as well as width. aspect-ratio alone only sets the
+     *preferred* box: the plant SVG is 1.2x as tall as it is wide, and once it
+     plus the clock and the caption came to more than the width, the box grew
+     to fit them and stopped being square. A fixed height plus a plant that
+     shrinks to the room left over keeps it square whatever is inside. */
   width: var(--plant-widget-size, 140px);
-  aspect-ratio: 1;
+  height: var(--plant-widget-size, 140px);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 0.1rem;
   padding: 0.5rem;
+  overflow: hidden;
   border-radius: var(--radius);
   /* Enough of a ground to stay legible over a whiteboard or an editor,
      little enough to stay out of the way of them. */
@@ -961,7 +948,38 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
   transition: transform 1s linear, filter 1s linear;
   filter: saturate(calc(1 + var(--pressure, 0) * 0.4));
 }
-.plant-widget-art svg { width: 100%; height: auto; max-height: 100%; }
+/* width:auto so the SVG is bound by the height it has been given rather than
+   by the pane's width — it is taller than it is wide, so height is what runs
+   out first. */
+.plant-widget-art svg { width: auto; height: 100%; max-width: 100%; }
+
+/* The panel takes no pointer events; this takes them back. Pausing the day is
+   the one thing worth being able to do from the corner of any page, and unlike
+   everything else here it doesn't navigate anywhere. */
+.plant-widget-toggle {
+  pointer-events: auto;
+  margin-top: 0.15rem;
+  width: 22px; height: 22px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); color: var(--text-muted);
+  cursor: pointer;
+}
+.plant-widget-toggle:hover { color: var(--accent); border-color: var(--accent); }
+/* Play and pause drawn in CSS: two shapes, flipped on every toggle, not worth
+   an icon round-trip. */
+.plant-widget-toggle::before {
+  content: "";
+  width: 0; height: 0;
+  border-left: 7px solid currentColor;
+  border-block: 5px solid transparent;
+  margin-left: 2px;                 /* optically centres a triangle */
+}
+.plant-widget-toggle[data-running="true"]::before {
+  width: 7px; height: 9px; margin-left: 0;
+  border: none; border-inline: 3px solid currentColor;
+  box-sizing: border-box;
+}
 .plant-widget-clock {
   font-family: var(--font-mono); font-size: 1.05rem; font-weight: 700;
   font-variant-numeric: tabular-nums; line-height: 1.1;
