@@ -1,5 +1,5 @@
 import {
-  todayISO, applyOutcome, activateProblem, dueProblems, planToday, allAttempts, patternStats, progressSummary,
+  todayISO, applyOutcome, activateProblem, dueProblems, planToday, allAttempts, patternStats, progressSummary, PLANT_STAGES,
   updateStreak, systemDesignUnlock, uid, MISTAKE_TAGS, MOCK_CHECKLIST, daysBetween,
   activityByDate, patternTrend, pickQuizProblem, quizOptions, addDaysISO, recommendSession,
   computePlantState,
@@ -37,8 +37,32 @@ function plantCardHtml(plant) {
           <li>${signals.recallRate != null ? `${pct(signals.recallRate)} pattern-recall accuracy recently` : "Answer a few pattern-recall questions to start tracking this"}</li>
           ${issues.map((i) => `<li>${esc(i)}</li>`).join("")}
         </ul>
+        ${growthPathHtml(plant)}
       </div>
     </div>`;
+}
+
+/**
+ * The whole growth path, with where you are marked.
+ *
+ * Stages are reached by practising on distinct days, which means the later ones
+ * are months away — and a reward you can't see isn't motivating. Showing the
+ * road makes the slow axis legible, and it's the honest one: stage is the only
+ * thing here that a single heavy weekend cannot move.
+ */
+function growthPathHtml(plant) {
+  const reachedIndex = PLANT_STAGES.findIndex((s) => s.key === plant.stage);
+  return `
+    <ol class="growth-path" aria-label="Growth stages, currently ${esc(plant.stageLabel)}">
+      ${PLANT_STAGES.map((stage, i) => {
+        const state = i < reachedIndex ? "past" : i === reachedIndex ? "current" : "future";
+        return `
+        <li class="growth-step ${state}" title="${esc(stage.label)}${state === "future" ? ` — ${stage.min} practice days` : ""}">
+          ${plantSvg(stage.key, state === "future" ? "stressed" : plant.vitality, { size: 26, decorative: true })}
+          <span class="growth-step-label">${esc(stage.label)}</span>
+        </li>`;
+      }).join("")}
+    </ol>`;
 }
 
 // Cross-tab handoff: "Log a rep" buttons elsewhere set this, renderLog reads
