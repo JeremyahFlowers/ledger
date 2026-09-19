@@ -48,6 +48,20 @@ export const nav = { prefillProblemId: null };
 export function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
+/**
+ * Escaped text with markdown-style `inline code` marked up.
+ *
+ * The topic content is written as prose with backticks around identifiers —
+ * "Using `if` to shrink when the window needs a `while`" — and rendering it
+ * through esc() alone put literal backticks on screen. Escaping happens first
+ * and the only markup introduced afterwards is <code>, so this cannot be used
+ * to inject anything: by the time the replacement runs there are no angle
+ * brackets left to close.
+ */
+export function richText(s) {
+  return esc(s).replace(/`([^`]+)`/g, "<code>$1</code>");
+}
+
 export function pct(x) {
   return x == null ? "—" : `${Math.round(x * 100)}%`;
 }
@@ -1356,12 +1370,12 @@ export function renderTopicDetail(root, store, actions) {
     </div>
     ${t ? `
     <div class="card">
-      <p class="topic-hook">${esc(t.hook)}</p>
-      <p><strong>More precisely.</strong> ${esc(t.concept)}</p>
-      <p><strong>Recognize it from:</strong> ${t.recognize.map((r) => `<span class="pill pill-muted">${esc(r)}</span>`).join(" ")}</p>
-      <p><strong>Invariant.</strong> ${esc(t.invariant)}</p>
+      <p class="topic-hook">${richText(t.hook)}</p>
+      <p><strong>More precisely.</strong> ${richText(t.concept)}</p>
+      <p><strong>Recognize it from:</strong> ${t.recognize.map((r) => `<span class="pill pill-muted">${richText(r)}</span>`).join(" ")}</p>
+      <p><strong>Invariant.</strong> ${richText(t.invariant)}</p>
       <p><strong>Pitfalls</strong></p>
-      <ul class="tight-list">${t.pitfalls.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>
+      <ul class="tight-list">${t.pitfalls.map((p) => `<li>${richText(p)}</li>`).join("")}</ul>
     </div>` : ""}
     ${specs.length ? `<div id="topic-diagrams"></div>` : ""}
     <div class="card">
