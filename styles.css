@@ -587,6 +587,42 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 .session-steps li { margin-bottom: 0.3rem; }
 .session-steps li:first-child { margin-bottom: 0.5rem; }
 
+/* ---------- Progress charts ---------- */
+
+.chart-wrap { overflow-x: auto; }
+.chart { width: 100%; min-width: 22rem; height: auto; display: block; }
+.chart-label { font-size: 9px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+/* Volume is deliberately the least prominent chart on the page — it's context
+   for the other two, not a score to beat. */
+.volume-bars {
+  list-style: none; margin: 0.5rem 0 0; padding: 0;
+  display: flex; align-items: flex-end; gap: 0.35rem; height: 5.5rem;
+}
+.volume-bars li {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: flex-end; height: 100%; gap: 0.25rem;
+}
+.volume-bar {
+  width: 100%; max-width: 2.2rem; min-height: 2px;
+  height: var(--h);
+  border-radius: 3px 3px 0 0;
+  background: var(--accent);
+  opacity: 0.75;
+}
+.volume-bars li:hover .volume-bar { opacity: 1; }
+
+.mover-list { list-style: none; margin: 0; padding: 0; }
+.mover-list li {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+  padding: 0.4rem 0; border-bottom: 1px solid var(--border);
+}
+.mover-list li:last-child { border-bottom: none; }
+.mover-delta { font-variant-numeric: tabular-nums; font-weight: 650; font-size: 0.85rem; text-align: right; }
+.mover-delta.up { color: var(--good); }
+.mover-delta.down { color: var(--bad); }
+.mover-delta .muted { display: block; font-weight: 400; }
+
 /* ---------- Empty states ---------- */
 
 /* An empty section should say what belongs here, not just that nothing does.

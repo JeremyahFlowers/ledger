@@ -1,11 +1,12 @@
 import { store } from "./store.js";
 import * as views from "./views.js";
-import { computePlantState, dueProblems, allAttempts, patternStats, systemDesignUnlock, backlogProblems } from "./logic.js";
+import { computePlantState, dueProblems, allAttempts, patternStats, systemDesignUnlock, backlogProblems, progressSummary } from "./logic.js";
 import { plantSvg } from "./plant.js";
 import { navIcon } from "./icons.js";
 import { renderAnalyze } from "./analyze-view.js";
 import { renderBank } from "./bank-view.js";
 import { installShortcuts, toggleHelp } from "./shortcuts.js";
+import { renderProgress } from "./progress-view.js";
 import { recommendSession } from "./logic.js";
 
 // The nav reads like a table of contents, not a junk drawer: Home is the
@@ -46,6 +47,7 @@ const SECTIONS = {
     icon: "track",
     blurb: "Where the record of your work lives.",
     pages: [
+      { id: "progress", label: "Progress", icon: "progress", render: renderProgress, blurb: "Whether you're actually improving — clean solves and time-to-insight over the last two months, and which patterns moved.", stat: (state) => { const s = progressSummary(state); return s.hasEnoughData ? (s.cleanRateDelta > 0.03 ? "Trending up" : s.cleanRateDelta < -0.03 ? "Trending down" : "Holding steady") : "Needs more data"; } },
       { id: "journal", label: "Journal", icon: "journal", render: views.renderJournal, blurb: "Every soul statement and mock interview, plus freeform weekly retros.", stat: (state) => `${allAttempts(state).filter((a) => a.soulStatement).length} soul statements` },
       { id: "leetcode", label: "LeetCode", icon: "leetcode", render: views.renderLeetCode, blurb: "Solved counts, activity, and recent submissions from your real profile.", stat: (state, store) => store.leetcode?.data?.solvedByDifficulty ? `${store.leetcode.data.solvedByDifficulty.All ?? 0} solved on LeetCode` : "Not synced yet" },
       { id: "systemDesign", label: "System Design", icon: "systemDesign", render: views.renderSystemDesign, blurb: "A separate track, unlocked once coding fundamentals are solid.", stat: (state) => systemDesignUnlock(state).unlocked ? "Unlocked" : "Locked" },

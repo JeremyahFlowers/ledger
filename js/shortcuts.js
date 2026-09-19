@@ -34,6 +34,7 @@ export const GO_TO = {
   o: { tab: "topics", label: "Topics" },
   m: { tab: "patterns", label: "Pattern mastery" },
   z: { tab: "quiz", label: "Quiz" },
+  r: { tab: "progress", label: "Progress" },
   j: { tab: "journal", label: "Journal" },
   s: { tab: "settings", label: "Settings" },
 };

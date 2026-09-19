@@ -416,3 +416,143 @@ export function recommendSession(state) {
 
   return { type: "none", problem: null, patternId: null, message: "You've covered today's queue. That's a real stopping point." };
 }
+
+// ---------- Progress over time ----------
+//
+// The app already records everything needed to answer "am I actually getting
+// better?", but scattered across three pages: outcomes in the queue, recall
+// accuracy in the quiz, per-pattern rates in the mastery table. These functions
+// aggregate that into a trajectory.
+//
+// Deliberately, none of them reward volume on its own. The failure mode this
+// whole app exists to prevent is grinding harder and calling it progress, so
+// the measures here are about getting *better* — solving cleanly, and
+// recognizing the pattern faster — with volume reported only so a spike
+// followed by a collapse is visible for what it is.
+
+const MS_PER_DAY = 86400000;
+export const PROGRESS_WEEKS = 8;
+/** Below this a week's rate is noise, not a trend, and is reported as null. */
+const MIN_ATTEMPTS_FOR_RATE = 2;
+/** A week this far above the trailing norm is a spike worth naming. */
+const SPIKE_MULTIPLE = 2.5;
+
+function mondayOf(iso) {
+  const d = new Date(`${iso}T00:00:00`);
+  const dayFromMonday = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - dayFromMonday);
+  return d.toISOString().slice(0, 10);
+}
+
+function median(values) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/**
+ * One row per week, oldest first, including weeks with no activity — a gap is
+ * part of the story and collapsing it would hide exactly the pattern worth
+ * seeing.
+ */
+export function weeklyProgress(state, weeks = PROGRESS_WEEKS) {
+  const attempts = allAttempts(state);
+  const thisMonday = mondayOf(todayISO());
+
+  const buckets = new Map();
+  for (let i = weeks - 1; i >= 0; i--) {
+    const d = new Date(`${thisMonday}T00:00:00`);
+    d.setDate(d.getDate() - i * 7);
+    buckets.set(d.toISOString().slice(0, 10), []);
+  }
+  for (const a of attempts) {
+    const week = mondayOf(a.date);
+    if (buckets.has(week)) buckets.get(week).push(a);
+  }
+
+  return [...buckets.entries()].map(([weekStart, rows]) => {
+    const clean = rows.filter((a) => a.outcome === "solved-clean").length;
+    const insights = rows.map((a) => a.timeToInsightMin).filter((n) => typeof n === "number");
+    return {
+      weekStart,
+      attempts: rows.length,
+      cleanRate: rows.length >= MIN_ATTEMPTS_FOR_RATE ? clean / rows.length : null,
+      medianInsightMin: median(insights),
+      minutes: rows.reduce((sum, a) => sum + (a.timeToSolveMin || 0), 0),
+    };
+  });
+}
+
+/**
+ * Which patterns moved, comparing the most recent attempts against what came
+ * before them.
+ *
+ * Split by attempt count rather than by date: practice is uneven, and a
+ * fortnight where a pattern never came up says nothing about whether it
+ * improved. Patterns without enough attempts on both sides are left out rather
+ * than shown with a meaningless delta.
+ */
+export function patternMovement(state, { recent = 5, minEach = 2 } = {}) {
+  const out = [];
+  for (const pattern of state.patterns) {
+    const attempts = allAttempts(state, pattern.id);
+    if (attempts.length < minEach * 2) continue;
+
+    const split = Math.max(minEach, attempts.length - recent);
+    const before = attempts.slice(0, split);
+    const after = attempts.slice(split);
+    if (before.length < minEach || after.length < minEach) continue;
+
+    const rate = (rows) => rows.filter((a) => a.outcome === "solved-clean").length / rows.length;
+    const beforeRate = rate(before);
+    const afterRate = rate(after);
+    out.push({
+      pattern,
+      before: beforeRate,
+      after: afterRate,
+      delta: afterRate - beforeRate,
+      attempts: attempts.length,
+    });
+  }
+  return out.sort((a, b) => b.delta - a.delta);
+}
+
+/**
+ * A plain-language read of the trajectory, plus anything worth flagging.
+ *
+ * The flag matters as much as the trend: a week at several times the usual
+ * volume is the shape that precedes burning out and stopping, and this app
+ * exists because that happened. Naming it while it's happening is the point.
+ */
+export function progressSummary(state, weeks = PROGRESS_WEEKS) {
+  const rows = weeklyProgress(state, weeks);
+  const rated = rows.filter((r) => r.cleanRate != null);
+  const timed = rows.filter((r) => r.medianInsightMin != null);
+
+  const half = Math.floor(rated.length / 2);
+  const avg = (list, key) => (list.length ? list.reduce((s, r) => s + r[key], 0) / list.length : null);
+  const cleanEarlier = half ? avg(rated.slice(0, half), "cleanRate") : null;
+  const cleanRecent = half ? avg(rated.slice(half), "cleanRate") : null;
+
+  const insightHalf = Math.floor(timed.length / 2);
+  const insightEarlier = insightHalf ? avg(timed.slice(0, insightHalf), "medianInsightMin") : null;
+  const insightRecent = insightHalf ? avg(timed.slice(insightHalf), "medianInsightMin") : null;
+
+  const active = rows.filter((r) => r.attempts > 0);
+  const typical = active.length > 1
+    ? active.slice(0, -1).reduce((s, r) => s + r.attempts, 0) / Math.max(1, active.length - 1)
+    : null;
+  const latest = rows[rows.length - 1];
+  const spike = typical != null && typical > 0 && latest.attempts > typical * SPIKE_MULTIPLE;
+
+  return {
+    weeks: rows,
+    hasEnoughData: rated.length >= 2,
+    cleanRateDelta: cleanEarlier != null && cleanRecent != null ? cleanRecent - cleanEarlier : null,
+    insightDelta: insightEarlier != null && insightRecent != null ? insightRecent - insightEarlier : null,
+    totalAttempts: rows.reduce((s, r) => s + r.attempts, 0),
+    activeWeeks: active.length,
+    spike: spike ? { attempts: latest.attempts, typical: Math.round(typical * 10) / 10 } : null,
+  };
+}
