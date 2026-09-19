@@ -17,7 +17,13 @@
 // guarantee that is to prefer the network whenever there is one. The app
 // already needs the network to sync, so this costs little; the cache still
 // makes it fully usable offline.
-const CACHE = "ledger-shell-v4";
+const CACHE = "ledger-shell-v5";
+// Deliberately absent: js/diagrams.js and js/diagram-data.js. They're around
+// 70 KB, loaded dynamically by the topic pages only, and precaching them put
+// that back on every first visit — including for someone who never opens a
+// topic. The fetch handler caches whatever is actually requested, so they're
+// available offline once used, which is the right trade: you pay for what you
+// open, and what you've opened keeps working on a train.
 const SHELL = [
   "./",
   "./index.html",
@@ -32,8 +38,6 @@ const SHELL = [
   "./js/github-client.js",
   "./js/icons.js",
   "./js/plant.js",
-  "./js/diagrams.js",
-  "./js/diagram-data.js",
   "./js/topics-content.js",
   "./js/whiteboard.js",
   "./js/codemirror-loader.js",
@@ -42,6 +46,9 @@ const SHELL = [
   "./js/catalog.js",
   "./js/analyze-view.js",
   "./js/bank-view.js",
+  "./js/progress-view.js",
+  "./js/search.js",
+  "./js/shortcuts.js",
 ];
 
 self.addEventListener("install", (event) => {
