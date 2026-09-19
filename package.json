@@ -9,7 +9,8 @@
     "test:coverage": "node --test --experimental-test-coverage 'test/*.test.js'",
     "test:watch": "node --test --watch 'test/*.test.js'",
     "check": "node scripts/check-modules.mjs",
-    "verify": "npm run check && npm test"
+    "verify": "npm run check && npm test",
+    "dev": "python3 scripts/dev-server.py"
   },
   "engines": {
     "node": ">=20"

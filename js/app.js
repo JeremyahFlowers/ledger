@@ -76,6 +76,27 @@ const nav = document.getElementById("tab-nav");
 const root = document.getElementById("view-root");
 const statusEl = document.getElementById("sync-status");
 const plantEl = document.getElementById("plant-indicator");
+const announcer = document.getElementById("view-announcer");
+
+/** Human-readable name of whatever is on screen, for the live region. */
+function currentViewName() {
+  if (SESSION_TABS[activeTab]) return SESSION_TABS[activeTab].label;
+  if (STANDALONE[activeTab]) return STANDALONE[activeTab].label;
+  if (SECTIONS[activeTab]) return `${SECTIONS[activeTab].label} overview`;
+  if (activeTab === "topicDetail") return "Pattern detail";
+  const owner = PAGE_TO_SECTION[activeTab];
+  const page = owner && SECTIONS[owner].pages.find((p) => p.id === activeTab);
+  return page ? `${SECTIONS[owner].label}, ${page.label}` : "Ledger";
+}
+
+let lastAnnounced = null;
+function announceView() {
+  if (!announcer) return;
+  const name = currentViewName();
+  if (name === lastAnnounced) return; // re-renders are not navigations
+  lastAnnounced = name;
+  announcer.textContent = name;
+}
 
 const actions = {
   switchTab(id) {
@@ -122,15 +143,21 @@ function renderNav() {
     ...Object.entries(SECTIONS).map(([id, s]) => ({ id, ...s })),
     { id: "settings", ...STANDALONE.settings },
   ];
-  let html = `<div class="nav-row nav-row-primary">${primaryItems.map((t) => `
-    <button class="tab ${t.id === activeTab || t.id === currentSectionId ? "active" : ""}" data-tab="${t.id}">${navLabel(t.icon, t.label)}</button>`).join("")}</div>`;
+  // aria-current marks the active entry for assistive technology; the "active"
+  // class only conveys it visually.
+  const current = (isActive) => (isActive ? ' aria-current="page"' : "");
+  let html = `<div class="nav-row nav-row-primary">${primaryItems.map((t) => {
+    const isActive = t.id === activeTab || t.id === currentSectionId;
+    return `
+    <button class="tab ${isActive ? "active" : ""}"${current(isActive)} data-tab="${t.id}">${navLabel(t.icon, t.label)}</button>`;
+  }).join("")}</div>`;
 
   if (currentSectionId) {
     const section = SECTIONS[currentSectionId];
     html += `<div class="nav-row nav-row-secondary">
       <span class="nav-chapter-label">${section.label}:</span>
-      <button class="tab tab-sub ${activeTab === currentSectionId ? "active" : ""}" data-tab="${currentSectionId}">Overview</button>
-      ${section.pages.map((p) => `<button class="tab tab-sub ${activeTab === p.id ? "active" : ""}" data-tab="${p.id}">${navLabel(p.icon, p.label)}</button>`).join("")}
+      <button class="tab tab-sub ${activeTab === currentSectionId ? "active" : ""}"${current(activeTab === currentSectionId)} data-tab="${currentSectionId}">Overview</button>
+      ${section.pages.map((p) => `<button class="tab tab-sub ${activeTab === p.id ? "active" : ""}"${current(activeTab === p.id)} data-tab="${p.id}">${navLabel(p.icon, p.label)}</button>`).join("")}
     </div>`;
   }
 
@@ -203,6 +230,7 @@ function renderAll() {
   renderNav();
   renderStatus();
   renderPlantIndicator();
+  announceView();
 
   if (store.status === "unconfigured") {
     views.renderSetup(root, store);

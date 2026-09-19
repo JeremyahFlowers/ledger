@@ -85,7 +85,16 @@ a { color: var(--accent-strong); }
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
-.brand { display: flex; align-items: baseline; gap: 0.5rem; font-weight: 700; letter-spacing: -0.01em; }
+/* This is the document's h1, for heading structure — but the size is the
+   wordmark's, not the browser's h1 default, so font-size and margin are stated
+   explicitly rather than inherited. */
+.brand {
+  display: flex; align-items: baseline; gap: 0.5rem;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
 .brand-mark { font-family: var(--font-mono); color: var(--accent); }
 .status { font-size: 0.8rem; padding: 0.25rem 0.6rem; border-radius: 999px; white-space: nowrap; }
 .status-good { color: var(--good); background: var(--good-bg); }
@@ -557,6 +566,126 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 .bank-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
   gap: 0.75rem; margin-top: 0.75rem; }
 @media (max-width: 560px) { .bank-filters { grid-template-columns: 1fr; } }
+
+
+/* ---------- Focus, skip link, screen-reader text ---------- */
+
+/* Focus was styled on buttons and inputs only, which left every other
+   interactive element — nav tabs, prediction rows, index cards, quiz options,
+   clickable table rows — with no visible focus at all. Keyboard users could
+   reach them and have no idea where they were. */
+.tab:focus-visible,
+.pred-row:focus-visible,
+.index-card:focus-visible,
+.quiz-option:focus-visible,
+.table-row-link:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible,
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+/* <main> only takes focus programmatically, via the skip link; showing a ring
+   around the whole page when it does would be noise. */
+#view-root:focus { outline: none; }
+
+.skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: -4rem;
+  z-index: 100;
+  padding: 0.6rem 0.9rem;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+  text-decoration: none;
+  transition: top 0.15s ease;
+}
+.skip-link:focus { top: 0.5rem; }
+
+/* Available to assistive technology, absent from the visual design. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- Touch and small screens ---------- */
+
+/* Measured on a 390px viewport: 36 controls were under the 44px minimum for a
+   comfortable touch target, the smallest being a 13px checkbox. These rules are
+   scoped to coarse pointers so a mouse-driven desktop keeps its tighter,
+   information-dense spacing — the fix is for thumbs, not for everyone. */
+@media (pointer: coarse) {
+  .btn, .tab, .pred-row, .index-card, .quiz-option, .table-row-link {
+    min-height: 44px;
+  }
+  .btn-sm {
+    min-height: 40px;
+    padding-inline: 0.85rem;
+  }
+  /* The checkbox itself can't grow much without looking odd, so the label row
+     carries the touch area instead. */
+  .checkbox-field {
+    min-height: 44px;
+    align-items: center;
+  }
+  .checkbox-field input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+  }
+  .queue-item .btn { min-height: 40px; }
+}
+
+/* iOS Safari zooms the entire page when a focused field's text is under 16px,
+   which on this app meant tapping the bank's search box threw the layout out of
+   position. 16px is the floor, not a preference. */
+@media (max-width: 860px) {
+  .input, .select, .textarea, input, select, textarea {
+    font-size: 16px;
+  }
+}
+
+/* The pattern mastery table carries nine columns — fine on a laptop, unreadable
+   on a phone, where it rendered 1038px wide inside a 386px scroller. Rather
+   than force sideways scrolling through the most-used screen on mobile, the
+   columns that inform a decision are kept and the reference detail is dropped:
+   how weak a pattern is, and whether it's improving. */
+@media (max-width: 900px) {
+  .table th:nth-child(3), .table td:nth-child(3),   /* # problems */
+  .table th:nth-child(7), .table td:nth-child(7),   /* ID'd correctly */
+  .table th:nth-child(8), .table td:nth-child(8) {  /* avg time to insight */
+    display: none;
+  }
+}
+@media (max-width: 620px) {
+  .table th:nth-child(4), .table td:nth-child(4),   /* attempts */
+  .table th:nth-child(9), .table td:nth-child(9) {  /* top mistake */
+    display: none;
+  }
+  .table th, .table td { padding-inline: 0.4rem; }
+}
+
+/* A horizontally scrollable region gives no hint that it scrolls until you try.
+   A soft edge fade says "there's more this way" without adding chrome. */
+.table-wrap {
+  background:
+    linear-gradient(to right, var(--surface) 30%, transparent),
+    linear-gradient(to left, var(--surface) 30%, transparent) 100% 0,
+    radial-gradient(farthest-side at 0 50%, rgba(0, 0, 0, 0.14), transparent),
+    radial-gradient(farthest-side at 100% 50%, rgba(0, 0, 0, 0.14), transparent) 100% 0;
+  background-repeat: no-repeat;
+  background-size: 40px 100%, 40px 100%, 14px 100%, 14px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
