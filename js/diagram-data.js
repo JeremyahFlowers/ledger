@@ -66,6 +66,16 @@ export const DIAGRAM_SPECS = {
         { pointers: { i: 5 }, highlight: [0, 1, 3, 4, 2, 5], caption: "By the end: { aet: [eat,tea,ate], ant: [tan,nat], abt: [bat] } — three groups from one pass." },
       ],
     },
+    {
+      kind: "array",
+      title: "Two Sum — trade a second pass for a lookup",
+      array: [2, 7, 11, 15],
+      steps: [
+        { pointers: { i: 0 }, highlight: [0], caption: "Target 9. At 2, ask the question backwards: has 7 been seen? Nothing is stored yet — no. Remember that 2 lives at index 0." },
+        { pointers: { i: 1 }, highlight: [0, 1], caption: "At 7, ask for 9−7 = 2. It's in the map, at index 0 — answer [0,1], found before reaching the rest of the array." },
+        { pointers: { i: 1 }, highlight: [0, 1], dim: [2, 3], caption: "The nested loop asked \"do these two add up?\" n² times. Storing what you've already passed turns it into one question per element." },
+      ],
+    },
   ],
 
   strings: [
@@ -215,6 +225,19 @@ export const DIAGRAM_SPECS = {
         { cursor: 5, stack: [6, 3], consumed: [0, 1, 2, 4], caption: "Final stack [6, 3]: neither ever finds a next-greater element. Result: [5,5,6,-1,3,-1]." },
       ],
     },
+    {
+      kind: "stack",
+      title: "Largest Rectangle in Histogram — the stack remembers where a bar could start",
+      array: [2, 1, 5, 6, 2, 3],
+      steps: [
+        { cursor: 0, stack: [2], caption: "Heights [2,1,5,6,2,3]. Push 2. While the stack only grows, every bar in it could still extend further right." },
+        { cursor: 1, stack: [1], consumed: [0], caption: "i=1 (1) is shorter, so bar 2 can't extend past here. Pop it: height 2, width 1, area 2." },
+        { cursor: 3, stack: [1, 5, 6], consumed: [0], caption: "5 then 6 are each taller than the top — push both. Stack heights [1,5,6], still increasing." },
+        { cursor: 4, stack: [1, 5], consumed: [0, 3], caption: "i=4 (2) is shorter. Pop 6: it can't extend left past 5 or right past here, so width 1, area 6." },
+        { cursor: 4, stack: [1, 2], consumed: [0, 2, 3], caption: "Still shorter than 5, so pop that too. 5 spans from just after the 1 to just before here — width 2, area 10. That's the answer." },
+        { cursor: 5, stack: [1, 2, 3], consumed: [0, 2, 3], caption: "Finish the pass and drain what's left: areas 3, 8 and 6. None beat 10. Each bar is pushed and popped exactly once — linear, not quadratic." },
+      ],
+    },
   ],
 
   mst: [
@@ -315,6 +338,24 @@ export const DIAGRAM_SPECS = {
         { activeNodes: ["3", "4"], doneEdges: [["1", "2"], ["3", "4"]], caption: "union(3,4): merge. Now {1,2} {3,4} {5}." },
         { activeNodes: ["2", "3"], doneEdges: [["1", "2"], ["3", "4"], ["2", "3"]], caption: "union(2,3): merges the two GROUPS in one operation. Now {1,2,3,4} {5}." },
         { doneEdges: [["1", "2"], ["3", "4"], ["2", "3"]], caption: "find(1) and find(4) now return the same root — connected, with no direct edge between them. Node 5 stays its own component." },
+      ],
+    },
+    {
+      kind: "graph",
+      title: "Path compression — every lookup flattens the tree it walked",
+      nodes: [
+        { id: "1", x: 60, y: 140 }, { id: "2", x: 120, y: 100 },
+        { id: "3", x: 180, y: 60 }, { id: "4", x: 250, y: 30 },
+      ],
+      edges: [
+        { from: "1", to: "2" }, { from: "2", to: "3" }, { from: "3", to: "4" },
+      ],
+      height: 175,
+      steps: [
+        { activeNodes: ["1"], caption: "Unions done carelessly can leave a chain: 1 points to 2, 2 to 3, 3 to 4. Asking which set 1 belongs to means walking all of it." },
+        { activeNodes: ["2", "3"], doneNodes: ["1"], activeEdges: [["1", "2"], ["2", "3"]], caption: "Walk up: 1 → 2 → 3. On a long chain this is the whole cost of the structure." },
+        { activeNodes: ["4"], doneNodes: ["1", "2", "3"], activeEdges: [["3", "4"]], caption: "Reach 4, which points at itself — that's the root, and the answer." },
+        { doneNodes: ["1", "2", "3", "4"], doneEdges: [["1", "2"], ["2", "3"], ["3", "4"]], caption: "Now the useful part: on the way back, point every node visited straight at 4. The walk paid for itself — the next lookup for any of them is one step." },
       ],
     },
   ],
@@ -475,6 +516,19 @@ export const DIAGRAM_SPECS = {
         { cursor: 5, stack: [5, 12, 11], caption: "Scan done. The pool's smallest member, 5, IS the answer — the 3rd largest overall." },
       ],
     },
+    {
+      kind: "grid",
+      title: "Running median — two heaps facing each other",
+      rows: 2, cols: 4,
+      cellLabels: { cols: ["", "", "", ""] },
+      steps: [
+        { values: [[5, "", "", ""], ["", "", "", ""]], active: [[0, 0]], caption: "Top row is the smaller half (a max-heap, biggest at hand); bottom row is the larger half (a min-heap). First value 5 — median 5." },
+        { values: [[5, "", "", ""], [15, "", "", ""]], active: [[0, 0], [1, 0]], caption: "15 is bigger than 5, so it belongs to the larger half. Even split — median is the average of the two facing values: 10." },
+        { values: [[5, 1, "", ""], [15, "", "", ""]], active: [[0, 0]], caption: "1 joins the smaller half. That half is now bigger, so the median is simply its largest: 5." },
+        { values: [[3, 1, "", ""], [5, 15, "", ""]], active: [[0, 0], [1, 0]], caption: "3 joins the smaller half, making it two ahead — so its largest, 5, moves across. Balanced again: median (3+5)/2 = 4." },
+        { values: [[3, 1, "", ""], [5, 15, "", ""]], highlight: [[0, 0], [1, 0]], caption: "The median is always at the boundary, so it's O(1) to read and O(log n) to insert. Sorting the stream each time would be O(n log n) per value." },
+      ],
+    },
   ],
 
   intervals: [
@@ -487,6 +541,17 @@ export const DIAGRAM_SPECS = {
         { pointers: { i: 1 }, highlight: [0, 1], caption: "[2,6] starts (2) before the current interval ends (3) — overlap! Merge into [1,6]." },
         { pointers: { i: 2 }, highlight: [2], dim: [0, 1], caption: "[8,10] starts (8) after [1,6] ends — no overlap. [1,6] is final. [8,10] becomes the new current interval." },
         { pointers: { i: 3 }, highlight: [3], dim: [0, 1, 2], caption: "[15,18] starts after [8,10] ends — no overlap either. Result: [1,6], [8,10], [15,18]." },
+      ],
+    },
+    {
+      kind: "array",
+      title: "Insert Interval — three phases, no re-sorting",
+      array: ["[1,3]", "[6,9]", "new [2,5]"],
+      steps: [
+        { pointers: { i: 2 }, highlight: [2], caption: "The list is already sorted and non-overlapping. Inserting [2,5] can't break that — it only has to be spliced into the right place." },
+        { pointers: { i: 0 }, highlight: [0, 2], caption: "[1,3] ends at 3, which is past the new interval's start of 2 — they touch. Absorb it: the new interval becomes [1,5]." },
+        { pointers: { i: 1 }, highlight: [1], dim: [0, 2], caption: "[6,9] starts at 6, after 5 — no overlap, and since the list is sorted, nothing later can overlap either. Stop checking." },
+        { pointers: { i: 1 }, highlight: [0, 1], caption: "Result [1,5], [6,9]. Everything before the overlap is copied, the overlapping run collapses into one, everything after is copied — one pass." },
       ],
     },
   ],
