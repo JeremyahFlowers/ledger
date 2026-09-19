@@ -1850,19 +1850,30 @@ export function renderSettings(root, store, actions) {
   root.innerHTML = `
     <div class="card">
       <h2>Daily budget</h2>
-      <form id="budget-form" class="form">
+      <p class="muted small">A ceiling, not a target. Today's plan is filled up to this many minutes
+      with the weakest and most overdue problems, and everything beyond it is pushed to the review
+      queue rather than onto today. Finishing the plan is a complete day — the app will say so and
+      stop asking for more.</p>
+      <form id="budget-form" class="settings-form">
         <label class="field inline"><span class="label">Minutes per day</span>
-          <input class="input" type="number" name="dailyBudgetMin" value="${state.settings.dailyBudgetMin}" style="max-width:6rem" /></label>
+          <input class="input" type="number" name="dailyBudgetMin" min="10" max="480"
+                 value="${state.settings.dailyBudgetMin}" style="max-width:6rem" /></label>
         <button class="btn btn-primary" type="submit">Save</button>
       </form>
     </div>
     <div class="card">
       <h2>GitHub connection</h2>
       <p class="muted">${esc(cfg.owner)}/${esc(cfg.repo)} @ ${esc(cfg.branch)} — <code>${esc(cfg.path)}</code></p>
+      <p class="muted small">Every change is written straight to that file, which is what lets the
+      same log follow you between laptop and phone. Disconnecting only forgets the token on this
+      device — nothing on GitHub is touched, and reconnecting brings it all back.</p>
       <button class="btn btn-ghost" id="disconnect">Disconnect this device</button>
     </div>
     <div class="card">
       <h2>Backup</h2>
+      <p class="muted small">Your prep log already lives in version control, so this is for moving it
+      somewhere else or keeping a copy outside GitHub. The export is the whole state — problems,
+      attempts, soul statements, streaks. Importing replaces everything currently here.</p>
       <div class="row gap">
         <button class="btn btn-ghost" id="export-json">Export JSON</button>
         <label class="btn btn-ghost file-btn">Import JSON<input type="file" id="import-json" accept="application/json" hidden /></label>
