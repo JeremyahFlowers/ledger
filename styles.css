@@ -904,6 +904,16 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 .budget-warn { color: var(--warn); font-weight: 600; }
 .budget-over { color: var(--bad); font-weight: 700; }
 
+/* ---------- Version ---------- */
+
+.version-card { border-color: var(--accent); }
+.version-number {
+  font-family: var(--font-mono); font-size: 0.85rem; font-weight: 700;
+  color: var(--accent); vertical-align: middle;
+  padding: 0.1rem 0.45rem; border-radius: 999px;
+  background: var(--surface-alt);
+}
+
 /* ---------- The standing plant ----------
 
    Bottom-right on every page but Home, so the "how is today going" signal is

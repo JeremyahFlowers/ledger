@@ -17,7 +17,14 @@
 // guarantee that is to prefer the network whenever there is one. The app
 // already needs the network to sync, so this costs little; the cache still
 // makes it fully usable offline.
-const CACHE = "ledger-shell-v7";
+// Read from the query string app.js registered this worker with
+// (./sw.js?v=1.0.0), so the cache is named after the release and there is no
+// second version number here to forget to bump. See js/version.js.
+//
+// The fallback only applies if the worker is somehow registered without one,
+// in which case a fixed name is still better than an undefined cache.
+const APP_VERSION = new URL(self.location).searchParams.get("v") || "unversioned";
+const CACHE = `ledger-shell-${APP_VERSION}`;
 // Deliberately absent: js/diagrams.js and js/diagram-data.js. They're around
 // 70 KB, loaded dynamically by the topic pages only, and precaching them put
 // that back on every first visit — including for someone who never opens a
@@ -50,6 +57,7 @@ const SHELL = [
   "./js/search.js",
   "./js/shortcuts.js",
   "./js/split-pane.js",
+  "./js/version.js",
 ];
 
 self.addEventListener("install", (event) => {

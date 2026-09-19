@@ -8,6 +8,7 @@ import {
 import {
   installSplitters, loadSizes, gridTemplate, redistribute,
 } from "./split-pane.js";
+import { APP_VERSION, RELEASED } from "./version.js";
 import { TOPICS } from "./topics-content.js";
 import { loadCodeMirror, CODE_MODES } from "./codemirror-loader.js";
 import { createWhiteboard } from "./whiteboard.js";
@@ -2391,6 +2392,16 @@ export function renderSettings(root, store, actions) {
   const cfg = JSON.parse(localStorage.getItem("ledger.config") || "{}");
 
   root.innerHTML = `
+    <div class="card version-card">
+      <div class="row space-between" style="align-items:baseline;flex-wrap:wrap;gap:0.5rem">
+        <h2 style="margin:0">Ledger <span class="version-number">v${esc(APP_VERSION)}</span></h2>
+        <span class="muted small">released ${esc(RELEASED)}</span>
+      </div>
+      <p class="muted small" style="margin:0.4rem 0 0">What changed in this version, and every one
+      before it, is in <a href="https://github.com/JeremyahFlowers/ledger/blob/main/CHANGELOG.md"
+      target="_blank" rel="noopener noreferrer">the changelog</a>.</p>
+    </div>
+
     <div class="card">
       <h2>Daily budget</h2>
       <p class="muted small">A ceiling, not a target. Today's plan is filled up to this many minutes

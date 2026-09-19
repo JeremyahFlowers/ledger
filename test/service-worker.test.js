@@ -81,8 +81,10 @@ describe("service worker precache", () => {
 
   test("test_serviceWorker_cacheNameIsVersioned", () => {
     // The activate handler deletes every cache whose name doesn't match, so an
-    // unchanged name after a shape change leaves stale entries in place.
-    assert.match(SW, /const CACHE = "ledger-shell-v\d+";/);
+    // unchanged name after a shape change leaves stale entries in place. The
+    // name now comes from the release version the worker was registered with
+    // rather than a second number kept here — see test/version.test.js.
+    assert.match(SW, /const CACHE = `ledger-shell-\$\{APP_VERSION\}`;/);
   });
 });
 
@@ -105,11 +107,13 @@ describe("service worker freshness", () => {
     assert.match(sw, /fetch\(path,\s*\{\s*cache:\s*"no-cache"\s*\}\)/);
   });
 
-  test("test_sw_cacheVersion_isBumpedWheneverTheStrategyChanges", () => {
-    // An old worker keeps serving its own cache until the version string
-    // changes, so a strategy fix that forgets this ships to nobody.
-    const version = sw.match(/ledger-shell-v(\d+)/);
-    assert.ok(version, "cache name must carry a version");
-    assert.ok(Number(version[1]) >= 7, "bump the cache version when the strategy changes");
+  test("test_sw_cacheIsInvalidatedByTheReleaseVersion", () => {
+    // An old worker keeps serving its own cache until the cache name changes,
+    // so a strategy fix that forgets to change it ships to nobody. This used
+    // to be a hand-bumped integer in sw.js, which is exactly the kind of
+    // second number that gets forgotten; the release version now drives it,
+    // and any release necessarily changes it.
+    assert.match(sw, /ledger-shell-\$\{APP_VERSION\}/);
+    assert.match(sw, /searchParams\.get\("v"\)/);
   });
 });

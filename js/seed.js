@@ -2,6 +2,7 @@
 // the leetcode repo today. Every problem starts due immediately (box 0) so
 // day one already has a real review queue instead of an empty app.
 import { todayISO, newDayTimer } from "./logic.js";
+import { APP_VERSION } from "./version.js";
 
 const PATTERNS = [
   ["two-pointers", "Two Pointers", "Converging or fixed-offset pointers over a sorted or linear structure."],
@@ -95,6 +96,11 @@ export function migrateState(state) {
   // day, so an absent one and a stale one behave identically.
   if (!state.dayTimer) state.dayTimer = newDayTimer();
   if (!state.meta) state.meta = { schemaVersion: 2, createdAt: new Date().toISOString() };
+  // Which release last opened this file. Separate from schemaVersion, which
+  // says what shape the data is in: this says which build produced it, so when
+  // something looks wrong in a synced state there's a way to tell what wrote
+  // it without guessing from the commit history.
+  state.meta.appVersion = APP_VERSION;
   // Backfill any patterns added after this state.json was first created —
   // merge by id so nothing already there (and no progress against it) is
   // touched, just append what's missing.

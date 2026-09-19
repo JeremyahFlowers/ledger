@@ -9,6 +9,7 @@ import { installShortcuts, toggleHelp } from "./shortcuts.js";
 import { renderProgress } from "./progress-view.js";
 import { installSearch, openSearch, closeSearch, isSearchOpen } from "./search.js";
 import { recommendSession } from "./logic.js";
+import { APP_VERSION } from "./version.js";
 
 // The nav reads like a table of contents, not a junk drawer: Home is the
 // cover page; everything else lives in one of a few named chapters, each
@@ -443,7 +444,10 @@ startClocks();
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {
+    // The version in the URL is what makes a release reach people: it changes
+    // the worker's script URL, so the browser treats it as a new worker and
+    // installs it, and the worker names its cache after it. See js/version.js.
+    navigator.serviceWorker.register(`./sw.js?v=${APP_VERSION}`).catch(() => {
       /* offline shell caching is a nicety, not a requirement */
     });
   });
