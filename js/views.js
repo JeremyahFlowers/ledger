@@ -467,7 +467,10 @@ export function renderSetup(root, store) {
       </ol>
       <form id="setup-form" class="form">
         <label class="field"><span class="label">GitHub username / org</span>
-          <input class="input" name="owner" required placeholder="e.g. gamingprophs" /></label>
+          <!-- Generic on purpose: this repo is public, and the placeholder
+               shouldn't carry a real person's handle or any part of their
+               email address. -->
+          <input class="input" name="owner" required placeholder="your-github-username" /></label>
         <label class="field"><span class="label">Repository name</span>
           <input class="input" name="repo" required placeholder="leetcode" /></label>
         <label class="field"><span class="label">Branch</span>
