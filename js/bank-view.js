@@ -33,6 +33,13 @@ const state = {
   search: "",
   hideSaved: true,
   shown: PAGE_SIZE,
+  // Slugs saved during this visit. "Hide saved" is about not re-reading a list
+  // you've already worked through, so it applies to what was saved before you
+  // got here — pulling out the row you just clicked makes the list reflow under
+  // the cursor and the next Save button slide into the spot you're about to
+  // click again. These stay, showing "saved", until a filter change rebuilds
+  // the list on purpose.
+  justSaved: new Set(),
 };
 
 export async function renderBank(root, store, actions) {
@@ -203,7 +210,7 @@ function renderMine(root, store, actions, bank) {
         </div>`).join("")}`}`;
 
   root.querySelectorAll("[data-mode]").forEach((btn) => {
-    btn.addEventListener("click", () => { state.mode = btn.dataset.mode; actions.rerender(); });
+    btn.addEventListener("click", () => { switchMode(btn.dataset.mode, actions); });
   });
   root.querySelectorAll("[data-start]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -249,12 +256,20 @@ function rowHtml(problem, saved) {
     </li>`;
 }
 
+/** Both the browse and "my bank" screens render the same mode switch, so the
+ * handler lives here rather than being wired twice. */
+function switchMode(mode, actions) {
+  state.mode = mode;
+  state.justSaved.clear();
+  actions.rerender();
+}
+
 function filtered(appState, saved) {
   const q = state.search.trim().toLowerCase();
   return state.catalog.problems.filter((p) => {
     if (state.pattern && (p.patterns[state.pattern] || 0) < PATTERN_CONFIDENCE) return false;
     if (state.difficulty && p.difficulty !== state.difficulty) return false;
-    if (state.hideSaved && saved.has(p.slug)) return false;
+    if (state.hideSaved && saved.has(p.slug) && !state.justSaved.has(p.slug)) return false;
     if (!q) return true;
     return p.title.toLowerCase().includes(q) || String(p.number ?? "").includes(q);
   });
@@ -262,12 +277,16 @@ function filtered(appState, saved) {
 
 function wire(root, store, actions, matches, saved) {
   root.querySelectorAll("[data-mode]").forEach((btn) => {
-    btn.addEventListener("click", () => { state.mode = btn.dataset.mode; actions.rerender(); });
+    btn.addEventListener("click", () => { switchMode(btn.dataset.mode, actions); });
   });
 
   const onFilterChange = (key) => (e) => {
     state[key] = e.target.type === "checkbox" ? e.target.checked : e.target.value;
     state.shown = PAGE_SIZE;
+    // Changing a filter is asking for the list to be rebuilt, so the
+    // just-saved exemption has served its purpose and shouldn't leak into the
+    // next set of results.
+    state.justSaved.clear();
     actions.rerender();
   };
   root.querySelector("#bank-pattern").addEventListener("change", onFilterChange("pattern"));
@@ -284,6 +303,7 @@ function wire(root, store, actions, matches, saved) {
     timer = setTimeout(() => {
       state.search = value;
       state.shown = PAGE_SIZE;
+      state.justSaved.clear();
       actions.rerender();
       const box = document.querySelector("#bank-search");
       if (box) {
@@ -305,8 +325,14 @@ function wire(root, store, actions, matches, saved) {
     btn.addEventListener("click", () => {
       const problem = state.catalog.problems.find((p) => p.slug === btn.dataset.save);
       if (!problem) return;
+      // Recorded before the save, because saveToBank re-renders synchronously
+      // and filtered() reads this on the way through.
+      //
+      // No DOM poking afterwards either: rowHtml already draws the "saved"
+      // pill from state, and the button we were clicked from is detached by
+      // the time this handler returns.
+      state.justSaved.add(problem.slug);
       saveToBank(store, [problem]);
-      btn.replaceWith(pill("saved"));
     });
   });
 
@@ -324,13 +350,6 @@ function wire(root, store, actions, matches, saved) {
       actions.rerender();
     });
   }
-}
-
-function pill(text) {
-  const el = document.createElement("span");
-  el.className = "pill pill-good";
-  el.textContent = text;
-  return el;
 }
 
 /**

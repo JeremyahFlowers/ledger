@@ -340,6 +340,15 @@ function markedUp(text, spanWeights) {
 function practiceHtml(store) {
   const pattern = state.selected;
   const label = patternLabel(pattern);
+  // Derived on every render rather than marked on the button at click time.
+  // Adding one mutates the store, which re-renders this whole view and discards
+  // any DOM the click handler had just touched — so "added" has to be something
+  // the markup can work out for itself, or it disappears the instant it's set.
+  //
+  // state.suggestions is the list captured at analysis time and is deliberately
+  // not re-filtered against this: a problem you just added should stay put and
+  // show as added, not vanish out from under the cursor.
+  const owned = savedSlugs(store.state.problems);
   return `
     <div class="card">
       <h2>Practice this shape</h2>
@@ -363,7 +372,9 @@ function practiceHtml(store) {
                 </div>
                 <div class="row gap-sm">
                   <a class="btn btn-ghost btn-sm" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">Open</a>
-                  <button class="btn btn-ghost btn-sm" data-add="${esc(p.slug)}" data-testid="analyze-add-problem">Add to queue</button>
+                  ${owned.has(p.slug)
+                    ? `<span class="pill pill-good" data-testid="analyze-added">in your queue</span>`
+                    : `<button class="btn btn-ghost btn-sm" data-add="${esc(p.slug)}" data-testid="analyze-add-problem">Add to queue</button>`}
                 </div>
               </li>`).join("")}
           </ul>`}
@@ -391,9 +402,9 @@ function wireResults(root, store, actions) {
     btn.addEventListener("click", () => {
       const problem = state.suggestions.find((p) => p.slug === btn.dataset.add);
       if (!problem) return;
+      // addToQueue re-renders, replacing this button with the "in your queue"
+      // pill, so there is nothing to update on the node we were clicked from.
       addToQueue(store, problem, state.selected);
-      btn.disabled = true;
-      btn.textContent = "Added";
       toast(`${problem.title} added to your review queue.`);
     });
   });
@@ -403,7 +414,10 @@ function wireResults(root, store, actions) {
  * it shows up in the next session plan like anything else they've logged. */
 function addToQueue(store, problem, patternId) {
   store.mutate((s) => {
-    if (s.problems.some((p) => p.catalogSlug === problem.slug || p.name === problem.title)) return;
+    // Same test the markup uses to decide between the button and the pill. Two
+    // different notions of "already have this" would let the button offer an
+    // add that silently does nothing, or mark something as added that isn't.
+    if (savedSlugs(s.problems).has(problem.slug)) return;
     // Added straight into the rotation, not the bank: you just analyzed this
     // problem, so it's something you want in front of you now. The bank is for
     // material you're stockpiling for later.
