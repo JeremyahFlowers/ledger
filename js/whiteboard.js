@@ -100,6 +100,11 @@ export function createWhiteboard(root) {
   return {
     isEmpty: () => strokes.length === 0,
     toDataUrl: () => canvas.toDataURL("image/png"),
+    // Exposed for the workspace, where dragging a pane splitter changes the
+    // canvas's box without the window ever firing a resize. Safe to call at
+    // any point: the board is stroke-backed, so resize() replays what was
+    // drawn rather than scaling or clearing a bitmap.
+    resize,
     destroy: () => window.removeEventListener("resize", resize),
   };
 }

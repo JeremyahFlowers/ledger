@@ -22,7 +22,9 @@ function installDomStub() {
   const store = new Map();
   const element = {
     innerHTML: "", textContent: "", value: "", hidden: false, className: "",
-    dataset: {}, style: {}, classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+    dataset: {}, offsetHeight: 0,
+    style: { setProperty() {}, removeProperty() {}, getPropertyValue: () => "" },
+    classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
     addEventListener() {}, removeEventListener() {}, appendChild() {}, replaceWith() {},
     setAttribute() {}, removeAttribute() {}, getAttribute: () => null, focus() {},
     setSelectionRange() {}, remove() {}, closest: () => null,

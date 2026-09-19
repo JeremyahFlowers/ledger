@@ -252,6 +252,11 @@ function rowHtml(problem, saved) {
         ${isSaved
           ? `<span class="pill pill-good">saved</span>`
           : `<button class="btn btn-ghost btn-sm" data-save="${esc(problem.slug)}" data-testid="bank-save">Save</button>`}
+        <!-- Browsing and wanting to work something now was a three-step detour:
+             save it, switch to My bank, find it again, start. This does all of
+             that in one click. -->
+        <button class="btn btn-primary btn-sm" data-start-catalog="${esc(problem.slug)}"
+                data-testid="bank-browse-start">Start</button>
       </div>
     </li>`;
 }
@@ -333,6 +338,27 @@ function wire(root, store, actions, matches, saved) {
       // the time this handler returns.
       state.justSaved.add(problem.slug);
       saveToBank(store, [problem]);
+    });
+  });
+
+  root.querySelectorAll("[data-start-catalog]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const slug = btn.dataset.startCatalog;
+      const entry = state.catalog.problems.find((p) => p.slug === slug);
+      if (!entry) return;
+      // It has to exist as one of the user's own problems before a session can
+      // be logged against it, so saving is part of starting rather than a
+      // separate step they have to know to do first. Already-saved problems
+      // are found rather than duplicated.
+      const existing = store.state.problems.find((p) => (p.catalogSlug || slugify(p.name)) === slug);
+      if (!existing) {
+        state.justSaved.add(slug);
+        saveToBank(store, [entry]);
+      }
+      const problem = store.state.problems.find((p) => (p.catalogSlug || slugify(p.name)) === slug);
+      if (!problem) return;
+      startSession(problem);
+      actions.switchTab("workspace");
     });
   });
 

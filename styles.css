@@ -18,6 +18,9 @@
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --radius: 10px;
   --shadow: 0 1px 2px rgba(20, 32, 29, 0.06), 0 1px 1px rgba(20, 32, 29, 0.04);
+  /* Page gutter scales with the viewport: a phone can't spare 2rem either
+     side, and a 27" monitor looks wrong without it. */
+  --page-pad: clamp(0.75rem, 1.6vw, 1.75rem);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -131,12 +134,29 @@ a { color: var(--accent-strong); }
 .tab-sub { font-size: 0.76rem; padding: 0.3rem 0.65rem; }
 .tab-sub.active { background: var(--surface-alt); color: var(--text); border-color: var(--border); }
 
+/* One 960px column used to govern every page, which meant the mastery table
+   and a page of prose got identical width — cramped for the table on a large
+   monitor, far too wide for the prose to read comfortably. Width is now a
+   property of the content: app.js stamps a tier on <main> per page, and a tier
+   only moves --page-max.
+
+   Widening everything is not the goal. A line of body text wants roughly
+   65-75 characters however large the display is, so the reading pages stay
+   deliberately narrow. It's the grids, tables and catalogs that were being
+   held back, and the workspace that wants the whole window. */
 main {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 1rem;
+  width: 100%;
+  max-width: var(--page-max, 1120px);
+  margin-inline: auto;
+  padding: var(--page-pad);
   display: block;
 }
+/* Dashboards, catalogs and wide tables: as much room as the screen offers. */
+main.page-wide { --page-max: 1560px; }
+/* Prose. Narrower than the default, on purpose. */
+main.page-read { --page-max: 880px; }
+/* The session workspace is an IDE, not a document — it owns its own edges. */
+main.page-full { --page-max: none; padding: 0; }
 
 .card {
   background: var(--surface);
@@ -151,6 +171,12 @@ main {
 @media (min-width: 720px) {
   .dashboard-grid { grid-template-columns: 1fr 1fr; }
   .dashboard-grid .streak-card, .dashboard-grid > .card:nth-child(2) { grid-column: 1 / -1; }
+}
+/* Past roughly 1200px two columns leave a lot of empty card; a third keeps the
+   cards at a readable width instead of letting each one sprawl. The recommendation
+   and today's plan stay full-bleed at the top — they're what the page is for. */
+@media (min-width: 1200px) {
+  .dashboard-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
 .muted { color: var(--text-muted); }
@@ -399,8 +425,113 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 /* ---------- Session (Workspace / Reflect / Warmup) ---------- */
 .session-cta-card { border-color: var(--accent); }
 .session-cta-row { flex-wrap: wrap; gap: 0.75rem; }
+/* The pre-start screen is a reading screen — you're deciding whether to start
+   the clock, not working — so it keeps a comfortable column. The live
+   workspace below is the opposite and takes the whole window. */
 .session-card { max-width: 720px; margin: 0 auto; }
 .session-problem-title { margin-top: 0.3rem; }
+
+/* ---------- Live workspace ----------
+
+   Three panes — statement, code, whiteboard — sized by fractions that
+   js/split-pane.js writes onto grid-template-columns as the user drags. The
+   whole thing is pinned to the viewport rather than scrolling with the page:
+   during a session the workspace IS the page, and an editor that scrolls out
+   of view while you're typing in it is worse than a short one.
+
+   100dvh, not 100vh: on mobile Safari the URL bar is included in vh, so the
+   submit row sat permanently under the bottom chrome. */
+.ws {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - var(--chrome-height, 0px));
+  overflow: hidden;
+}
+.ws-bar {
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  padding: 0.6rem var(--page-pad);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.ws-bar-id { min-width: 0; flex: 1 1 16rem; }
+.ws-bar-id .session-problem-title { font-size: 1.05rem; margin: 0.2rem 0 0; }
+.ws-bar-actions { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin-left: auto; }
+.ws-bar .session-clock { font-size: 1.5rem; }
+
+.ws-panes {
+  flex: 1;
+  display: grid;
+  min-height: 0;   /* without this a grid child refuses to shrink and the row overflows */
+  background: var(--bg);
+  padding-inline: 0.5rem;
+}
+.ws-pane {
+  display: flex; flex-direction: column; min-width: 0; min-height: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin: 0.5rem 0;
+  overflow: hidden;
+}
+.ws-pane-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  padding: 0.4rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-alt);
+  flex: 0 0 auto;
+}
+.ws-pane-body { flex: 1; min-height: 0; overflow: auto; padding: 0.7rem 0.8rem; }
+/* The editor and the board manage their own padding and must fill the pane. */
+.ws-pane-body-flush { padding: 0; display: flex; flex-direction: column; }
+
+.ws-splitter {
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+}
+/* The hit area is the full 8px track, but only a hairline is drawn — a thick
+   visible bar between every pane turns the workspace into a grid of boxes. */
+.ws-splitter::after {
+  content: ""; position: absolute; inset-block: 0; left: 50%;
+  width: 1px; transform: translateX(-50%);
+  background: var(--border);
+}
+.ws-splitter:hover::after, .ws-splitter.dragging::after, .ws-splitter:focus-visible::after {
+  width: 3px; background: var(--accent);
+}
+.ws-splitter:focus-visible { outline: none; }
+
+.code-editor-fill { flex: 1; min-height: 0; border: none; border-radius: 0; }
+/* Both classes are on the same element, and `.code-editor-host .CodeMirror`
+   sets a fixed 220px further down this file. At equal specificity that one
+   would win on source order and the editor would keep its short default height
+   inside a full-height pane, so this deliberately qualifies with both. */
+.code-editor-host.code-editor-fill .CodeMirror { height: 100%; }
+.ws-checklist { flex: 0 0 auto; border-top: 1px solid var(--border); padding: 0.6rem 0.8rem; }
+
+.ws-statement { white-space: pre-wrap; font-size: 0.9rem; line-height: 1.55; }
+.ws-statement-empty { display: flex; flex-direction: column; gap: 0.6rem; align-items: flex-start; }
+.ws-statement-input { width: 100%; font-family: var(--font-mono); font-size: 0.82rem; }
+.select-xs { padding: 0.15rem 0.4rem; font-size: 0.78rem; width: auto; }
+.btn-xs { padding: 0.15rem 0.5rem; font-size: 0.75rem; min-height: 0; }
+
+/* The standalone Whiteboard page sizes its canvas to a fixed 360px, which is
+   right for a scratchpad sitting in a column of cards. In the workspace the
+   board is a full pane, so it fills the height it's been given instead. */
+#ws-board-host { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0.5rem; }
+#ws-board-host .whiteboard-canvas { flex: 1; height: auto; min-height: 0; }
+
+/* Side-by-side panes need width. Below this the workspace stacks: the statement
+   and code become full-width rows you scroll between, and dragging a splitter
+   sideways stops making sense, so the splitters go away entirely. */
+@media (max-width: 860px) {
+  .ws { height: auto; overflow: visible; }
+  .ws-panes { grid-template-columns: 1fr !important; }
+  .ws-splitter { display: none; }
+  .ws-pane { margin: 0.4rem var(--page-pad); }
+  .code-editor-fill .CodeMirror { height: 60vh; }
+  .ws-pane-body { max-height: 70vh; }
+}
 .session-clock {
   font-family: var(--font-mono); font-size: 2rem; font-weight: 700;
   font-variant-numeric: tabular-nums; white-space: nowrap;

@@ -2,8 +2,11 @@ import {
   todayISO, applyOutcome, activateProblem, dueProblems, planToday, allAttempts, patternStats, progressSummary, PLANT_STAGES, compareStates,
   updateStreak, systemDesignUnlock, uid, MISTAKE_TAGS, MOCK_CHECKLIST, daysBetween,
   activityByDate, patternTrend, pickQuizProblem, quizOptions, addDaysISO, recommendSession,
-  computePlantState,
+  computePlantState, normalizeStatement, MAX_STATEMENT_CHARS,
 } from "./logic.js";
+import {
+  installSplitters, loadSizes, gridTemplate, redistribute,
+} from "./split-pane.js";
 import { TOPICS } from "./topics-content.js";
 import { loadCodeMirror, CODE_MODES } from "./codemirror-loader.js";
 import { createWhiteboard } from "./whiteboard.js";
@@ -882,6 +885,20 @@ export function renderPatterns(root, store, actions) {
 // destroys the live widget and loses whatever was typed/drawn. Every
 // in-session interaction (mark insight, toggle whiteboard, check a checklist
 // item) mutates specific DOM nodes directly instead.
+//
+// That rule used to be only a convention, and it was being broken from outside
+// this file: store.flush() emits on the way into a save and again on the way
+// out, every emit runs renderAll, and renderAll calls straight back into
+// renderWorkspace. So a debounced save landing while someone was mid-problem
+// rebuilt the markup underneath them and took the code with it. session.mounted
+// now makes the rule something the function enforces rather than something
+// callers are trusted to respect — see the guard in renderWorkspace.
+
+// Statement, code, whiteboard. Code gets the largest share because it's where
+// the time goes; the statement is a reading column and doesn't need to be as
+// wide as the thing you're writing.
+const DEFAULT_PANES = [0.3, 0.45, 0.25];
+const SPLITTER_PX = 8;
 
 let session = null;
 let reflectState = null;
@@ -893,6 +910,7 @@ export function startSession(problem, { isMock = false } = {}) {
     intervalId: null, whiteboardCtl: null, whiteboardShown: false,
     cm: null, codeLang: "cpp", checklist: {},
     capturedCode: "", capturedWhiteboardDataUrl: null,
+    mounted: false, teardownSplitters: null,
   };
 }
 
@@ -900,6 +918,7 @@ export function startSession(problem, { isMock = false } = {}) {
 export function abandonSession() {
   if (session?.intervalId) clearInterval(session.intervalId);
   if (session?.whiteboardCtl) session.whiteboardCtl.destroy();
+  if (session?.teardownSplitters) session.teardownSplitters();
   session = null;
   reflectState = null;
 }
@@ -959,40 +978,72 @@ export function renderWorkspace(root, store, actions) {
     return;
   }
 
+  // The editor and board are live DOM widgets, so this markup may only ever be
+  // built once per session. Anything that would previously have re-rendered —
+  // a sync finishing, a statement being saved — now lands here and stops.
+  if (session.mounted && root.querySelector("#ws-panes")) return;
+
   root.innerHTML = `
-    <div class="card session-card">
-      <div class="row space-between session-cta-row">
-        <div>${header}</div>
+    <div class="ws">
+      <div class="ws-bar">
+        <div class="ws-bar-id">${header}</div>
         <div class="session-clock" id="ws-clock">00:00</div>
-      </div>
-      <div class="row gap-sm" style="margin: 0.5rem 0">
-        <button type="button" class="btn btn-ghost btn-sm" id="ws-mark-insight" ${session.insightAt ? "disabled" : ""}>
-          ${session.insightAt ? `Insight at ${Math.round((session.insightAt - session.startedAt) / 60000)} min` : "I've got my approach"}
-        </button>
-        <button type="button" class="btn btn-ghost btn-sm" id="ws-toggle-board">${session.whiteboardShown ? "Hide whiteboard" : "Show whiteboard"}</button>
-        ${readUrl ? `<a class="btn btn-ghost btn-sm" href="${esc(readUrl)}" target="_blank" rel="noopener noreferrer"
-          title="Re-read the problem without losing the timer">Problem &#8599;</a>` : ""}
-      </div>
-      <div id="ws-board-host" ${session.whiteboardShown ? "" : "hidden"}></div>
-      <div class="field" style="margin-top:0.6rem">
-        <div class="row space-between">
-          <span class="label">Your code</span>
-          <select class="select" id="ws-code-lang" style="max-width:9rem">
-            ${Object.entries(CODE_MODES).map(([k, v]) => `<option value="${k}" ${k === session.codeLang ? "selected" : ""}>${v.label}</option>`).join("")}
-          </select>
+        <div class="ws-bar-actions">
+          <button type="button" class="btn btn-ghost btn-sm" id="ws-mark-insight" ${session.insightAt ? "disabled" : ""}>
+            ${session.insightAt ? `Insight at ${Math.round((session.insightAt - session.startedAt) / 60000)} min` : "I've got my approach"}
+          </button>
+          <button type="button" class="btn btn-ghost btn-sm" id="ws-toggle-board"
+                  aria-pressed="${session.whiteboardShown}">Whiteboard</button>
+          ${readUrl ? `<a class="btn btn-ghost btn-sm" href="${esc(readUrl)}" target="_blank" rel="noopener noreferrer"
+            title="Re-read the problem without losing the timer">Problem &#8599;</a>` : ""}
+          <button class="btn btn-primary btn-sm" id="ws-submit">Submit solution</button>
+          <button class="btn btn-ghost btn-sm session-exit" id="ws-exit">Exit</button>
         </div>
-        <div id="ws-code-editor" class="code-editor-host code-editor-tall"></div>
       </div>
-      ${session.isMock ? `
-      <p class="label" style="margin-top:0.6rem">Verbalization checklist</p>
-      <ul class="checklist">
-        ${MOCK_CHECKLIST.map((item, i) => `<li><label><input type="checkbox" data-ws-check="${i}" ${session.checklist[i] ? "checked" : ""} /> ${esc(item)}</label></li>`).join("")}
-      </ul>` : ""}
-      <div class="row gap" style="margin-top:0.75rem">
-        <button class="btn btn-primary" id="ws-submit">Submit solution</button>
-        <button class="btn btn-ghost" id="ws-exit">Exit without saving</button>
+      <div class="ws-panes" id="ws-panes">
+        <section class="ws-pane" id="ws-pane-statement" aria-label="Problem statement">
+          <header class="ws-pane-head">
+            <span class="label">Problem</span>
+            <button type="button" class="btn btn-ghost btn-xs" id="ws-edit-statement"
+              ${p.statement ? "" : "hidden"}>Edit</button>
+          </header>
+          <div class="ws-pane-body" id="ws-statement-body">${statementHtml(p)}</div>
+        </section>
+        <div class="ws-splitter" data-splitter="0" role="separator" tabindex="0"
+             aria-orientation="vertical" aria-label="Resize problem and code panes"></div>
+        <section class="ws-pane" id="ws-pane-code" aria-label="Code editor">
+          <header class="ws-pane-head">
+            <span class="label">Your code</span>
+            <select class="select select-xs" id="ws-code-lang" aria-label="Language">
+              ${Object.entries(CODE_MODES).map(([k, v]) => `<option value="${k}" ${k === session.codeLang ? "selected" : ""}>${v.label}</option>`).join("")}
+            </select>
+          </header>
+          <div class="ws-pane-body ws-pane-body-flush">
+            <div id="ws-code-editor" class="code-editor-host code-editor-fill"></div>
+            ${session.isMock ? `
+            <div class="ws-checklist">
+              <p class="label">Verbalization checklist</p>
+              <ul class="checklist">
+                ${MOCK_CHECKLIST.map((item, i) => `<li><label><input type="checkbox" data-ws-check="${i}" ${session.checklist[i] ? "checked" : ""} /> ${esc(item)}</label></li>`).join("")}
+              </ul>
+            </div>` : ""}
+          </div>
+        </section>
+        <div class="ws-splitter" data-splitter="1" role="separator" tabindex="0"
+             aria-orientation="vertical" aria-label="Resize code and whiteboard panes"></div>
+        <section class="ws-pane" id="ws-pane-board" aria-label="Whiteboard">
+          <header class="ws-pane-head">
+            <span class="label">Whiteboard</span>
+            <!-- Closing the board from the board is the obvious gesture; the
+                 toolbar button is how it comes back once it's gone. -->
+            <button type="button" class="btn btn-ghost btn-xs" id="ws-close-board"
+                    title="Minimize whiteboard" aria-label="Minimize whiteboard">&minus;</button>
+          </header>
+          <div class="ws-pane-body ws-pane-body-flush"><div id="ws-board-host"></div></div>
+        </section>
       </div>
     </div>`;
+  session.mounted = true;
 
   clearInterval(session.intervalId);
   session.intervalId = setInterval(() => {
@@ -1004,18 +1055,50 @@ export function renderWorkspace(root, store, actions) {
     clock.textContent = fmtClock(Date.now() - session.startedAt);
   }, 250);
 
+  // ---- panes ----
+  //
+  // Sizes are written straight onto the grid rather than re-rendered, for the
+  // same reason as everything else in here: the panes have live widgets in
+  // them. applyPanes() is the single place that turns the fractions into
+  // layout, so a drag, a keyboard nudge and the whiteboard toggle all land the
+  // same way.
+  const panes = root.querySelector("#ws-panes");
   const boardHost = root.querySelector("#ws-board-host");
-  if (session.whiteboardShown && !session.whiteboardCtl) {
-    session.whiteboardCtl = createWhiteboard(boardHost);
-  }
-  root.querySelector("#ws-toggle-board").addEventListener("click", (e) => {
-    session.whiteboardShown = !session.whiteboardShown;
-    boardHost.hidden = !session.whiteboardShown;
-    e.target.textContent = session.whiteboardShown ? "Hide whiteboard" : "Show whiteboard";
-    if (session.whiteboardShown && !session.whiteboardCtl) {
-      session.whiteboardCtl = createWhiteboard(boardHost);
-    }
+  const visible = () => [true, true, session.whiteboardShown];
+  let sizes = loadSizes(DEFAULT_PANES);
+
+  const applyPanes = (next) => {
+    sizes = next;
+    panes.style.gridTemplateColumns = gridTemplate(next, visible(), SPLITTER_PX);
+    root.querySelector("#ws-pane-board").hidden = !session.whiteboardShown;
+    root.querySelector('[data-splitter="1"]').hidden = !session.whiteboardShown;
+    // CodeMirror caches its own width and will keep drawing at the old size —
+    // including putting the cursor in the wrong place — until it is told.
+    if (session.cm) session.cm.refresh();
+    if (session.whiteboardCtl?.resize) session.whiteboardCtl.resize();
+  };
+  applyPanes(redistribute(sizes, visible(), DEFAULT_PANES));
+
+  session.teardownSplitters = installSplitters({
+    container: panes,
+    getSizes: () => sizes,
+    setSizes: (next) => { sizes = next; },
+    apply: applyPanes,
   });
+
+  // One function behind both controls — the toolbar toggle and the minimize
+  // button on the board itself — so they can't disagree about the state.
+  const boardBtn = root.querySelector("#ws-toggle-board");
+  const setBoard = (shown) => {
+    session.whiteboardShown = shown;
+    boardBtn.setAttribute("aria-pressed", String(shown));
+    // Created on first show rather than up front: someone who never opens the
+    // board shouldn't pay for a canvas and its listeners.
+    if (shown && !session.whiteboardCtl) session.whiteboardCtl = createWhiteboard(boardHost);
+    applyPanes(redistribute(sizes, visible(), DEFAULT_PANES));
+  };
+  boardBtn.addEventListener("click", () => setBoard(!session.whiteboardShown));
+  root.querySelector("#ws-close-board").addEventListener("click", () => setBoard(false));
 
   const codeHost = root.querySelector("#ws-code-editor");
   const langSelect = root.querySelector("#ws-code-lang");
@@ -1032,6 +1115,8 @@ export function renderWorkspace(root, store, actions) {
     session.codeLang = langSelect.value;
     if (session.cm) session.cm.setOption("mode", CODE_MODES[session.codeLang].mode);
   });
+
+  wireStatementPane(root, store, p);
 
   root.querySelector("#ws-mark-insight").addEventListener("click", (e) => {
     if (session.insightAt) return;
@@ -1062,6 +1147,78 @@ export function renderWorkspace(root, store, actions) {
     abandonSession();
     actions.switchTab("dashboard");
   });
+}
+
+/**
+ * The problem statement pane.
+ *
+ * The app ships no statement text: the catalog carries titles, difficulties
+ * and pattern labels, and the prose belongs to whoever published the problem.
+ * So the statement is the user's own copy, pasted once and then kept in their
+ * private repo — which is why this reads and writes it rather than fetching
+ * anything.
+ *
+ * Pasting it once is worth it because the alternative is what this used to be:
+ * a link that throws you into another tab, where the timer isn't, every time
+ * you need to re-read a constraint.
+ */
+function statementHtml(problem) {
+  if (!problem.statement) {
+    return `
+      <div class="ws-statement-empty">
+        <p class="muted small">Paste the problem text here and it stays with this problem —
+        no more switching tabs mid-solve to re-read a constraint.</p>
+        <textarea class="textarea ws-statement-input" id="ws-statement-input" rows="10"
+          placeholder="Paste the problem statement, constraints and examples…"></textarea>
+        <button type="button" class="btn btn-sm btn-primary" id="ws-save-statement">Save statement</button>
+      </div>`;
+  }
+  return `<div class="ws-statement">${richText(problem.statement)}</div>`;
+}
+
+function wireStatementPane(root, store, problem) {
+  const body = root.querySelector("#ws-statement-body");
+  const editBtn = root.querySelector("#ws-edit-statement");
+
+  // Only this pane is ever rebuilt. Resetting the workspace root would take
+  // the editor and the whiteboard with it.
+  const repaint = () => {
+    body.innerHTML = statementHtml(problem);
+    editBtn.hidden = !problem.statement;
+    wireSave();
+  };
+
+  function wireSave() {
+    const saveBtn = body.querySelector("#ws-save-statement");
+    if (!saveBtn) return;
+    saveBtn.addEventListener("click", () => {
+      const input = body.querySelector("#ws-statement-input");
+      const { text, truncated } = normalizeStatement(input.value);
+      if (!text) return;
+      store.mutate((s) => {
+        const stored = s.problems.find((x) => x.id === problem.id);
+        if (stored) stored.statement = text;
+      }, `Ledger: statement for ${problem.name}`);
+      // The store copy is what persists; this keeps the in-session object in
+      // step so the pane can repaint without re-reading state.
+      problem.statement = text;
+      repaint();
+      if (truncated) toast(`Saved, but trimmed to ${MAX_STATEMENT_CHARS.toLocaleString()} characters.`);
+    });
+  }
+
+  editBtn.addEventListener("click", () => {
+    const current = problem.statement || "";
+    body.innerHTML = `
+      <div class="ws-statement-empty">
+        <textarea class="textarea ws-statement-input" id="ws-statement-input" rows="14">${esc(current)}</textarea>
+        <button type="button" class="btn btn-sm btn-primary" id="ws-save-statement">Save statement</button>
+      </div>`;
+    editBtn.hidden = true;
+    wireSave();
+  });
+
+  wireSave();
 }
 
 function patternRevealHtml(state, problem, correctPatternId) {

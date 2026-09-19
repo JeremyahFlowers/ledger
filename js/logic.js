@@ -100,6 +100,32 @@ export function activateProblem(problem) {
   if (!problem.nextReviewDate) problem.nextReviewDate = todayISO();
 }
 
+// A problem statement is the user's own pasted copy, kept in their private
+// repo. The app ships no statement text of its own: the catalog carries titles,
+// difficulties and pattern labels, which are facts about a problem, not the
+// problem's prose.
+//
+// The cap exists because the whole state is one JSON file synced through the
+// GitHub Contents API, which refuses anything over 1 MB. A statement runs
+// 1-3 KB, so a few hundred of them is a real fraction of that budget; 12 KB is
+// far more than any single statement needs and still bounds the worst case.
+export const MAX_STATEMENT_CHARS = 12000;
+
+/**
+ * Prepare a pasted statement for storage.
+ *
+ * Reports truncation rather than silently cutting the text, so the UI can say
+ * so — finding out that the bottom of a problem is missing halfway through
+ * solving it would be worse than being told up front.
+ */
+export function normalizeStatement(text) {
+  const trimmed = String(text ?? "").replace(/\r\n/g, "\n").trim();
+  return {
+    text: trimmed.slice(0, MAX_STATEMENT_CHARS),
+    truncated: trimmed.length > MAX_STATEMENT_CHARS,
+  };
+}
+
 /** Greedily fills today's review budget with the weakest/most-overdue
  * problems first, so a 75-minute day never silently drops what matters most. */
 export function planToday(state) {

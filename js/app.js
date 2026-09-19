@@ -261,11 +261,53 @@ function celebrateGrowth() {
 
 plantEl.addEventListener("click", () => actions.switchTab("dashboard"));
 
+// How much width a page should get. Absent from this map means the default
+// tier, which suits a page of mixed cards. See the --page-max block in
+// styles.css for why this is per-page rather than one width for everything.
+const PAGE_WIDTH = {
+  workspace: "page-full",     // an IDE: statement, editor and board side by side
+  dashboard: "page-wide",     // a grid of cards, and the more of them visible the better
+  bank: "page-wide",          // ~2,500 rows to scan
+  patterns: "page-wide",      // the nine-column mastery table
+  progress: "page-wide",      // charts read better wide than tall
+  leetcode: "page-wide",
+  topicDetail: "page-read",   // prose and worked examples
+  topics: "page-read",
+  journal: "page-read",
+  reflect: "page-read",       // a form you think carefully about, not a dashboard
+};
+
+function applyPageWidth() {
+  root.classList.remove("page-full", "page-wide", "page-read");
+  const tier = PAGE_WIDTH[activeTab];
+  if (tier) root.classList.add(tier);
+}
+
+// The workspace sizes itself against the viewport, so it needs to know how
+// much of it the header and nav have taken. Measured rather than hardcoded
+// because the nav wraps to a second row at narrow widths and the number is
+// different on every device.
+function trackChromeHeight() {
+  const topbar = document.querySelector(".topbar");
+  const publish = () => {
+    const height = topbar.offsetHeight + (nav.hidden ? 0 : nav.offsetHeight);
+    document.documentElement.style.setProperty("--chrome-height", `${height}px`);
+  };
+  if (typeof ResizeObserver === "function") {
+    const observer = new ResizeObserver(publish);
+    observer.observe(topbar);
+    observer.observe(nav);
+  }
+  window.addEventListener("resize", publish);
+  publish();
+}
+
 function renderAll() {
   renderNav();
   renderStatus();
   renderPlantIndicator();
   announceView();
+  applyPageWidth();
 
   if (store.status === "unconfigured") {
     views.renderSetup(root, store);
@@ -357,6 +399,7 @@ if (savedTheme && savedTheme !== "system") document.documentElement.dataset.them
 store.onChange(renderAll);
 store.init();
 renderAll();
+trackChromeHeight();
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
