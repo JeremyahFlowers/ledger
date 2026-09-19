@@ -17,12 +17,17 @@
   <a class="skip-link" href="#view-root">Skip to content</a>
   <header class="topbar">
     <h1 class="brand"><span class="brand-mark" aria-hidden="true">{ }</span> Ledger</h1>
+    <!-- Search is the fastest way to anything in the app, so it gets the
+         centre of the header and a real input rather than an icon that opens
+         a dialog. Typing into it is the whole interaction. -->
+    <div class="topbar-search">
+      <input id="search-input" class="search-input" type="search" autocomplete="off"
+             placeholder="Search problems, patterns, topics…" aria-label="Search"
+             role="combobox" aria-expanded="false" aria-controls="search-results" />
+      <div id="search-panel" class="search-panel" hidden></div>
+    </div>
     <div class="row gap-sm" style="align-items:center">
       <span id="plant-indicator" class="topbar-plant"></span>
-      <!-- Search is the fastest way to anything, so it gets a visible control
-           rather than living only behind a keystroke. -->
-      <button id="search-button" class="topbar-icon-button" type="button"
-              title="Search (/)" aria-label="Search"></button>
       <!-- A shortcut nobody knows about may as well not exist. -->
       <button id="shortcut-hint" class="shortcut-hint" type="button"
               title="Keyboard shortcuts">Press <kbd>?</kbd></button>

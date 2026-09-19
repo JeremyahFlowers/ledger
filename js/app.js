@@ -361,12 +361,6 @@ function startRecommendedSession() {
 
 document.getElementById("shortcut-hint")?.addEventListener("click", toggleHelp);
 
-const searchButton = document.getElementById("search-button");
-if (searchButton) {
-  searchButton.innerHTML = navIcon("search", { size: 17 });
-  searchButton.addEventListener("click", openSearch);
-}
-
 installSearch({
   store,
   actions: {

@@ -80,14 +80,20 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--surfac
 a { color: var(--accent-strong); }
 [hidden] { display: none !important; }
 
+/* Three columns rather than flex space-between, so the search bar is centred
+   on the header itself. Under flex it was centred on whatever the brand and
+   the status chips left over, and those change width as the sync state
+   changes — the bar visibly drifted as the app saved. */
 .topbar {
   position: sticky; top: 0; z-index: 10;
-  display: flex; align-items: center; justify-content: space-between;
+  display: grid; align-items: center;
+  grid-template-columns: 1fr minmax(0, auto) 1fr;
   gap: 0.75rem;
   padding: 0.7rem 1rem;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
+.topbar > .row:last-child { justify-self: end; }
 /* This is the document's h1, for heading structure — but the size is the
    wordmark's, not the browser's h1 default, so font-size and margin are stated
    explicitly rather than inherited. */
@@ -887,31 +893,41 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 
 /* ---------- Global search ---------- */
 
-.search-overlay {
-  position: fixed; inset: 0; z-index: 210;
-  display: flex; align-items: flex-start; justify-content: center;
-  padding: 4rem 1rem 1rem;
-  background: rgba(8, 14, 12, 0.55);
-  backdrop-filter: blur(2px);
+/* Search sits in the middle of the header as a real input. It used to be an
+   icon that opened a modal over the page, which meant every lookup was a
+   context switch — and a modal is a heavy way to ask "where's that problem".
+   The results hang under the bar instead, so the app stays visible behind
+   them. */
+.topbar-search {
+  position: relative;
+  width: min(34rem, 42vw);
+}
+.search-input {
+  width: 100%;
+  font: inherit; font-size: 0.9rem;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface-alt); color: var(--text);
+  outline: none;
+}
+.search-input:focus {
+  border-color: var(--accent);
+  background: var(--surface);
 }
 .search-panel {
-  width: min(34rem, 100%);
+  position: absolute; z-index: 220;
+  top: calc(100% + 0.4rem); left: 0; right: 0;
   display: flex; flex-direction: column;
-  max-height: min(32rem, 80vh);
+  max-height: min(30rem, 70vh);
   border-radius: var(--radius);
   border: 1px solid var(--border);
   background: var(--surface);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
   overflow: hidden;
 }
-.search-input {
-  font: inherit; font-size: 1rem;
-  padding: 0.9rem 1rem;
-  border: 0; border-bottom: 1px solid var(--border);
-  background: none; color: var(--text);
-  outline: none;
-}
 .search-results { overflow-y: auto; padding: 0.35rem; }
+.search-pager { display: inline-flex; align-items: center; gap: 0.35rem; }
+.search-pager .btn { line-height: 1; }
 .search-group {
   display: flex; align-items: center; gap: 0.35rem;
   margin: 0.5rem 0 0.2rem; padding: 0 0.5rem;
@@ -934,11 +950,21 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 .search-hit-text .muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .search-empty { padding: 1.25rem 0.75rem; text-align: center; }
 .search-footer {
-  display: flex; gap: 1rem; flex-wrap: wrap;
-  padding: 0.5rem 0.9rem; border-top: 1px solid var(--border);
+  display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.7rem; border-top: 1px solid var(--border);
   background: var(--surface-alt);
 }
 .search-footer kbd { margin-right: 0.15rem; }
+/* The key hints are the first thing worth dropping when the bar is narrow —
+   the counts and the pager are doing real work. */
+/* Below this the header can't hold three columns, so the bar drops to a full
+   width row of its own beneath the brand. */
+@media (max-width: 720px) {
+  .search-keys { display: none; }
+  .topbar { grid-template-columns: 1fr auto; }
+  .topbar-search { grid-column: 1 / -1; grid-row: 2; width: auto; }
+}
 
 /* ---------- Keyboard shortcuts ---------- */
 

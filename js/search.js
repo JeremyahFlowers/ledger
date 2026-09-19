@@ -17,94 +17,135 @@ import { loadCatalog, PATTERN_CONFIDENCE, slugify, problemUrl } from "./catalog.
 import { patternIcon, navIcon } from "./icons.js";
 import { isBacklog } from "./logic.js";
 
-const MAX_PER_GROUP = 6;
+// Enough per kind that the ranking still interleaves fairly, but the list is
+// paged rather than shown all at once — see PAGE_SIZE.
+const MAX_PER_GROUP = 24;
 const MIN_QUERY = 2;
-// Typing is faster than rendering 2,500 rows; this keeps keystrokes smooth
-// without a perceptible lag before results appear.
-const DEBOUNCE_MS = 120;
-
-const OVERLAY_ID = "global-search";
+// How many results are on screen at a time. Paging rather than rendering every
+// match keeps arrow-key navigation moving through a fixed, small number of
+// rows however many things matched.
+const PAGE_SIZE = 8;
 
 let deps = null;          // { store, actions }
 let catalog = null;       // lazily loaded, then kept
-let activeIndex = 0;
+let activeIndex = 0;      // within the current page
+let page = 0;
 let results = [];
+let lastQuery = "";
 
 export function installSearch(dependencies) {
   deps = dependencies;
-}
+  const input = document.getElementById("search-input");
+  if (!input) return;
 
-export function isSearchOpen() {
-  return !!document.getElementById(OVERLAY_ID);
-}
-
-export function closeSearch() {
-  const el = document.getElementById(OVERLAY_ID);
-  if (!el) return;
-  const restore = el._restoreFocus;
-  el.remove();
-  if (restore && document.contains(restore)) restore.focus();
-}
-
-export function openSearch() {
-  if (isSearchOpen() || !deps?.store?.state) return;
-  const previouslyFocused = document.activeElement;
-
-  const el = document.createElement("div");
-  el.id = OVERLAY_ID;
-  el.className = "search-overlay";
-  el.setAttribute("role", "dialog");
-  el.setAttribute("aria-modal", "true");
-  el.setAttribute("aria-label", "Search");
-  el.innerHTML = `
-    <div class="search-panel">
-      <input class="search-input" id="search-input" type="search" autocomplete="off"
-             placeholder="Search problems, patterns, topics…"
-             aria-label="Search" aria-controls="search-results" aria-expanded="true" />
-      <div id="search-results" class="search-results" role="listbox"></div>
-      <div class="search-footer muted small">
-        <span><kbd>&uarr;</kbd><kbd>&darr;</kbd> move</span>
-        <span><kbd>Enter</kbd> open</span>
-        <span><kbd>Esc</kbd> close</span>
-      </div>
-    </div>`;
-  el._restoreFocus = previouslyFocused;
-  document.body.appendChild(el);
-
-  el.addEventListener("mousedown", (e) => { if (e.target === el) closeSearch(); });
-
-  const input = el.querySelector("#search-input");
-  let timer = null;
-  input.addEventListener("input", () => {
-    clearTimeout(timer);
-    timer = setTimeout(() => runSearch(input.value), DEBOUNCE_MS);
-  });
+  // No debounce. Scoring the whole catalog is well under a millisecond now
+  // that it doesn't compile a regex per candidate, and a delay between typing
+  // and seeing results is exactly what made this feel sluggish.
+  input.addEventListener("input", () => runSearch(input.value));
   input.addEventListener("keydown", onKeyDown);
-  input.focus();
+  input.addEventListener("focus", () => { if (results.length) showPanel(); });
 
-  // The catalog is the big one and may not be loaded yet; fetch it in the
-  // background so typing works immediately against everything else.
+  // Clicking away closes the results but leaves the query, so coming back to
+  // the bar resumes where you were rather than starting over.
+  document.addEventListener("mousedown", (event) => {
+    if (!event.target.closest(".topbar-search")) hidePanel();
+  });
+
   if (!catalog) {
     loadCatalog()
       .then((c) => { catalog = c; if (isSearchOpen()) runSearch(input.value); })
-      .catch(() => { /* searching your own problems and patterns still works */ });
+      .catch(() => { /* your own problems and the patterns still search */ });
   }
+}
 
-  runSearch("");
+function panel() {
+  return document.getElementById("search-panel");
+}
+
+function showPanel() {
+  const el = panel();
+  if (!el) return;
+  el.hidden = false;
+  document.getElementById("search-input")?.setAttribute("aria-expanded", "true");
+}
+
+function hidePanel() {
+  const el = panel();
+  if (!el) return;
+  el.hidden = true;
+  document.getElementById("search-input")?.setAttribute("aria-expanded", "false");
+}
+
+export function isSearchOpen() {
+  return !panel()?.hidden;
+}
+
+export function closeSearch() {
+  hidePanel();
+}
+
+/** Focus the search bar. The `/` shortcut and the topbar both land here. */
+export function openSearch() {
+  const input = document.getElementById("search-input");
+  if (!input) return;
+  input.focus();
+  input.select();
+  if (results.length) showPanel();
+}
+
+export function pageCount() {
+  return Math.max(1, Math.ceil(results.length / PAGE_SIZE));
+}
+
+function pageItems() {
+  return results.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+}
+
+function turnPage(delta) {
+  const next = page + delta;
+  if (next < 0 || next >= pageCount()) return false;
+  page = next;
+  // Entering a page from above lands on its first row, from below on its last,
+  // so holding an arrow key reads as one continuous list rather than jumping
+  // back to the top at every page boundary.
+  activeIndex = delta > 0 ? 0 : pageItems().length - 1;
+  paint(lastQuery);
+  return true;
 }
 
 function onKeyDown(event) {
-  if (event.key === "Escape") { event.preventDefault(); closeSearch(); return; }
+  if (event.key === "Escape") { event.preventDefault(); hidePanel(); return; }
+
   if (event.key === "ArrowDown" || event.key === "ArrowUp") {
     event.preventDefault();
     if (!results.length) return;
-    activeIndex = (activeIndex + (event.key === "ArrowDown" ? 1 : -1) + results.length) % results.length;
+    const down = event.key === "ArrowDown";
+    const onPage = pageItems().length;
+    const next = activeIndex + (down ? 1 : -1);
+    // Running off either end of a page turns it; only wrap around the whole
+    // result set when there is nowhere further to go.
+    if (next >= onPage || next < 0) {
+      if (turnPage(down ? 1 : -1)) return;
+      activeIndex = down ? 0 : onPage - 1;
+      page = down ? 0 : pageCount() - 1;
+      paint(lastQuery);
+      return;
+    }
+    activeIndex = next;
     paintActive();
     return;
   }
+
+  if (event.key === "PageDown" || (event.key === "ArrowRight" && event.metaKey)) {
+    event.preventDefault(); turnPage(1); return;
+  }
+  if (event.key === "PageUp" || (event.key === "ArrowLeft" && event.metaKey)) {
+    event.preventDefault(); turnPage(-1); return;
+  }
+
   if (event.key === "Enter") {
     event.preventDefault();
-    const hit = results[activeIndex];
+    const hit = pageItems()[activeIndex];
     if (hit) choose(hit);
   }
 }
@@ -144,8 +185,17 @@ function isWordChar(ch) {
 
 function runSearch(rawQuery) {
   const query = rawQuery.trim();
-  const state = deps.store.state;
+  const state = deps?.store?.state;
+  if (!state) return;
+  lastQuery = query;
   results = [];
+
+  // An empty bar shows nothing rather than everything: a panel that springs
+  // open under the header the moment you click it is in the way, not helpful.
+  if (!query) {
+    hidePanel();
+    return;
+  }
 
   // Patterns first: they're few, and "what was sliding window again" is a
   // question this app should answer instantly.
@@ -181,7 +231,9 @@ function runSearch(rawQuery) {
   results.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
   results = capPerGroup(results);
   activeIndex = 0;
+  page = 0;
   paint(query);
+  showPanel();
 }
 
 function topPatternOf(entry) {
@@ -202,7 +254,7 @@ const KIND_LABEL = { pattern: "Pattern", mine: "Your problems", catalog: "Catalo
 const KIND_ICON = { pattern: "topics", mine: "queue", catalog: "bank" };
 
 function paint(query) {
-  const host = document.getElementById("search-results");
+  const host = panel();
   if (!host) return;
 
   if (!results.length) {
@@ -212,8 +264,14 @@ function paint(query) {
     return;
   }
 
+  const items = pageItems();
+  const from = page * PAGE_SIZE;
   let lastKind = null;
-  host.innerHTML = results.map((r, i) => {
+
+  const rows = items.map((r, i) => {
+    // The group header repeats at the top of a page when that page opens
+    // mid-group, so a row is never left unlabelled just because its heading
+    // was on the page before.
     const header = r.kind !== lastKind
       ? `<p class="search-group">${navIcon(KIND_ICON[r.kind], { size: 13 })} ${KIND_LABEL[r.kind]}</p>` : "";
     lastKind = r.kind;
@@ -230,8 +288,36 @@ function paint(query) {
       </button>`;
   }).join("");
 
-  host.querySelectorAll("[data-index]").forEach((btn) => {
-    btn.addEventListener("click", () => choose(results[Number(btn.dataset.index)]));
+  const pages = pageCount();
+  host.innerHTML = `
+    <div id="search-results" class="search-results" role="listbox">${rows}</div>
+    <div class="search-footer muted small">
+      <span>${from + 1}&ndash;${from + items.length} of ${results.length}</span>
+      ${pages > 1 ? `
+      <span class="search-pager">
+        <button type="button" class="btn btn-ghost btn-xs" data-page="-1" ${page === 0 ? "disabled" : ""}
+                aria-label="Previous results">&lsaquo;</button>
+        <span>${page + 1}/${pages}</span>
+        <button type="button" class="btn btn-ghost btn-xs" data-page="1" ${page + 1 >= pages ? "disabled" : ""}
+                aria-label="More results">&rsaquo;</button>
+      </span>` : ""}
+      <span class="search-keys"><kbd>&uarr;</kbd><kbd>&darr;</kbd> move <kbd>&crarr;</kbd> open <kbd>esc</kbd> close</span>
+    </div>`;
+
+  // One listener on the container rather than one per row: the rows are
+  // replaced on every keystroke, and re-binding each of them was work done
+  // over and over for no reason.
+  host.querySelector("#search-results").addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-index]");
+    if (btn) choose(pageItems()[Number(btn.dataset.index)]);
+  });
+  host.querySelectorAll("[data-page]").forEach((btn) => {
+    // mousedown, not click: the input loses focus first on a click, and the
+    // outside-click handler would close the panel before the page turned.
+    btn.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      turnPage(Number(btn.dataset.page));
+    });
   });
 }
 
@@ -247,7 +333,8 @@ function paintActive() {
 }
 
 function choose(hit) {
-  closeSearch();
+  if (!hit) return;
+  hidePanel();
   if (hit.kind === "pattern") {
     deps.actions.openTopic(hit.id);
     return;
