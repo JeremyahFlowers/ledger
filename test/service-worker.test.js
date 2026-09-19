@@ -85,3 +85,31 @@ describe("service worker precache", () => {
     assert.match(SW, /const CACHE = "ledger-shell-v\d+";/);
   });
 });
+
+describe("service worker freshness", () => {
+  // GitHub Pages serves these assets with Cache-Control: max-age=600. A plain
+  // fetch() inside the worker consults the browser's HTTP cache first, so for
+  // ten minutes after a deploy the worker was handed the previous version and
+  // then stored it — the exact stale-module state the network-first strategy
+  // exists to prevent. Observed on a real deploy, not theorised.
+  const sw = read("../sw.js");
+
+  test("test_sw_fetchHandler_bypassesTheHttpCache", () => {
+    assert.match(sw, /fetch\(event\.request,\s*\{\s*cache:\s*"no-cache"\s*\}\)/,
+      "the fetch handler must revalidate, or network-first serves stale files");
+  });
+
+  test("test_sw_installPrecache_bypassesTheHttpCache", () => {
+    assert.doesNotMatch(sw, /\bc\.add\(/,
+      "cache.add() goes through the HTTP cache and can precache the previous deploy");
+    assert.match(sw, /fetch\(path,\s*\{\s*cache:\s*"no-cache"\s*\}\)/);
+  });
+
+  test("test_sw_cacheVersion_isBumpedWheneverTheStrategyChanges", () => {
+    // An old worker keeps serving its own cache until the version string
+    // changes, so a strategy fix that forgets this ships to nobody.
+    const version = sw.match(/ledger-shell-v(\d+)/);
+    assert.ok(version, "cache name must carry a version");
+    assert.ok(Number(version[1]) >= 7, "bump the cache version when the strategy changes");
+  });
+});

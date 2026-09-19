@@ -17,7 +17,7 @@
 // guarantee that is to prefer the network whenever there is one. The app
 // already needs the network to sync, so this costs little; the cache still
 // makes it fully usable offline.
-const CACHE = "ledger-shell-v6";
+const CACHE = "ledger-shell-v7";
 // Deliberately absent: js/diagrams.js and js/diagram-data.js. They're around
 // 70 KB, loaded dynamically by the topic pages only, and precaching them put
 // that back on every first visit — including for someone who never opens a
@@ -55,9 +55,18 @@ const SHELL = [
 self.addEventListener("install", (event) => {
   // One missing file must not abort the whole precache, so each is added
   // individually and failures are tolerated.
+  //
+  // Fetched explicitly rather than with cache.add(), which would go through
+  // the HTTP cache and could precache the previous deploy's files — the same
+  // staleness the fetch handler below guards against, except baked in at
+  // install time where it would survive until the next version bump.
   event.waitUntil(
     caches.open(CACHE).then((c) =>
-      Promise.all(SHELL.map((path) => c.add(path).catch(() => {})))
+      Promise.all(SHELL.map((path) =>
+        fetch(path, { cache: "no-cache" })
+          .then((res) => (res.ok ? c.put(path, res) : null))
+          .catch(() => {})
+      ))
     )
   );
   self.skipWaiting();
@@ -77,7 +86,17 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return; // let GitHub API calls pass straight through
 
   event.respondWith(
-    fetch(event.request)
+    // `cache: "no-cache"` is what makes network-first actually reach the
+    // network. A plain fetch() consults the browser's HTTP cache first, and
+    // GitHub Pages serves these assets with max-age=600 — so for ten minutes
+    // after a deploy the service worker was handed the *old* file and then
+    // dutifully stored it, which is exactly the stale-module state this whole
+    // strategy exists to prevent. Measured on a real deploy: a fresh logic.js
+    // was on the server while every page load still got the previous one.
+    //
+    // This revalidates rather than re-downloads. GitHub Pages sends an ETag,
+    // so an unchanged file costs a conditional request and a 304.
+    fetch(event.request, { cache: "no-cache" })
       .then((res) => {
         // Only a genuinely good response is worth keeping: caching an error
         // page would serve it back the next time the network is gone.
