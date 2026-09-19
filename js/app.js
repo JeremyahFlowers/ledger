@@ -225,9 +225,39 @@ function renderPlantIndicator() {
   const lastStage = localStorage.getItem(PLANT_STAGE_KEY);
   if (lastStage && PLANT_STAGE_ORDER.indexOf(plant.stage) > PLANT_STAGE_ORDER.indexOf(lastStage)) {
     views.toast(`Your plant grew into a ${plant.stageLabel}.`);
+    celebrateGrowth();
   }
   localStorage.setItem(PLANT_STAGE_KEY, plant.stage);
+  applyGrowthAnimation();
 }
+/**
+ * Mark the moment the plant advances a stage.
+ *
+ * Growing a stage takes days of consistent practice and is the one reward here
+ * that volume can't buy, so it shouldn't pass with only a toast that vanishes
+ * in two seconds. Both plants on screen — the topbar one and the Dashboard
+ * card — get a brief grow animation.
+ *
+ * It's tracked as a deadline rather than applied once, because store.init()
+ * emits several times while state loads and every renderAll rebuilds this
+ * markup: a class added once was being thrown away by the next render before
+ * it ever painted. While the window is open, each render re-applies it.
+ */
+const GROWTH_ANIMATION_MS = 1100;
+let growthCelebrationUntil = 0;
+
+function applyGrowthAnimation() {
+  if (Date.now() > growthCelebrationUntil) return;
+  for (const el of document.querySelectorAll(".topbar-plant svg, .plant-card > svg")) {
+    el.classList.add("plant-growing");
+  }
+}
+
+function celebrateGrowth() {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  growthCelebrationUntil = Date.now() + GROWTH_ANIMATION_MS;
+}
+
 plantEl.addEventListener("click", () => actions.switchTab("dashboard"));
 
 function renderAll() {
@@ -256,6 +286,7 @@ function renderAll() {
   // Navigation buttons are markup any view can emit, so they're bound here
   // rather than in each view that happens to have one.
   views.wireNavigationTargets(root, actions);
+  applyGrowthAnimation();
 }
 
 function renderView() {
