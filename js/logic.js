@@ -556,3 +556,52 @@ export function progressSummary(state, weeks = PROGRESS_WEEKS) {
     spike: spike ? { attempts: latest.attempts, typical: Math.round(typical * 10) / 10 } : null,
   };
 }
+
+// ---------- Comparing two versions of the log ----------
+
+/**
+ * What differs between this device's state and the one on the server.
+ *
+ * A sync conflict asks you to discard one side or the other, and until now it
+ * asked blind — "keep mine" or "take theirs" with no indication of what either
+ * one throws away. Attempts carry stable ids, so the two sides can be compared
+ * exactly rather than guessed at, and the answer is usually reassuring: most
+ * conflicts are one device a few minutes stale, not a fork with real work on
+ * both sides.
+ *
+ * Counts attempts rather than problems because attempts are the irreplaceable
+ * part — a problem can be re-added in seconds, a logged rep with its timings
+ * and soul statement cannot be reconstructed.
+ */
+export function compareStates(mine, theirs) {
+  const summarize = (state) => {
+    if (!state) return null;
+    const attempts = allAttempts(state);
+    return {
+      problems: state.problems.length,
+      attempts: attempts.length,
+      soulStatements: attempts.filter((a) => a.soulStatement).length,
+      lastActivity: attempts.length ? attempts[attempts.length - 1].date : null,
+    };
+  };
+
+  const idsOf = (state) => new Set(state ? allAttempts(state).map((a) => a.id) : []);
+  const mineIds = idsOf(mine);
+  const theirIds = idsOf(theirs);
+
+  const onlyMine = [...mineIds].filter((id) => !theirIds.has(id)).length;
+  const onlyTheirs = [...theirIds].filter((id) => !mineIds.has(id)).length;
+
+  return {
+    mine: summarize(mine),
+    theirs: summarize(theirs),
+    attemptsOnlyHere: onlyMine,
+    attemptsOnlyThere: onlyTheirs,
+    // The reassuring case worth naming explicitly: one side is simply ahead,
+    // so choosing it loses nothing at all.
+    identical: onlyMine === 0 && onlyTheirs === 0,
+    safeChoice: onlyMine === 0 && onlyTheirs > 0 ? "theirs"
+      : onlyTheirs === 0 && onlyMine > 0 ? "mine"
+      : null,
+  };
+}

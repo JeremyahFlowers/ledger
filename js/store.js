@@ -143,6 +143,19 @@ class Store {
     this._emit();
   }
 
+  /**
+   * Read the server's version without touching local state.
+   *
+   * Used by the conflict screen to say what each option would discard. It
+   * deliberately doesn't adopt the result or refresh the stored sha — looking
+   * must not change which resolution the user then gets.
+   */
+  async peekRemoteState() {
+    if (!this.gh) throw new Error("Not connected.");
+    const { exists, state } = await this.gh.fetchState();
+    return exists ? state : null;
+  }
+
   async resolveConflictKeepMine() {
     try {
       await this.gh.fetchState(); // refresh sha, discard the fetched body — ours wins

@@ -1,5 +1,5 @@
 import {
-  todayISO, applyOutcome, activateProblem, dueProblems, planToday, allAttempts, patternStats, progressSummary, PLANT_STAGES,
+  todayISO, applyOutcome, activateProblem, dueProblems, planToday, allAttempts, patternStats, progressSummary, PLANT_STAGES, compareStates,
   updateStreak, systemDesignUnlock, uid, MISTAKE_TAGS, MOCK_CHECKLIST, daysBetween,
   activityByDate, patternTrend, pickQuizProblem, quizOptions, addDaysISO, recommendSession,
   computePlantState,
@@ -343,27 +343,109 @@ export function renderSetup(root, store) {
 }
 
 export function renderConflict(root, store, rerender) {
-  root.innerHTML = `
-    <div class="card banner banner-bad">
-      <h2>Sync conflict</h2>
-      <p>The data file changed on GitHub since this device last loaded it — probably a save from
-      another device. Nothing is lost yet: choose how to resolve it.</p>
-      <div class="row gap">
-        <button class="btn btn-primary" id="keep-mine">Keep this device's changes</button>
-        <button class="btn btn-ghost" id="take-theirs">Discard mine, load the latest from GitHub</button>
-      </div>
-    </div>`;
-  root.querySelector("#keep-mine").addEventListener("click", async () => {
-    await store.resolveConflictKeepMine();
-    rerender();
-  });
-  root.querySelector("#take-theirs").addEventListener("click", async () => {
-    await store.resolveConflictTakeTheirs();
-    rerender();
-  });
+  // Both options here permanently discard one side of the user's own practice
+  // history, and the screen used to present that choice blind. Fetching the
+  // other version read-only first turns it into an informed one — and usually
+  // a reassuring one, since most conflicts are a device a few minutes stale
+  // rather than real work on both sides.
+  const render = (diff, error) => {
+    const side = (label, summary) => summary ? `
+      <div class="conflict-side">
+        <h3 class="small-heading">${label}</h3>
+        <p class="small">${summary.attempts} logged attempt${summary.attempts === 1 ? "" : "s"}
+        across ${summary.problems} problem${summary.problems === 1 ? "" : "s"}${summary.soulStatements
+          ? `, ${summary.soulStatements} with a soul statement` : ""}.</p>
+        <p class="muted small">${summary.lastActivity ? `Last activity ${fmtDate(summary.lastActivity)}` : "No activity recorded"}</p>
+      </div>` : `
+      <div class="conflict-side"><h3 class="small-heading">${label}</h3>
+      <p class="muted small">Couldn't be read.</p></div>`;
+
+    root.innerHTML = `
+      <div class="card">
+        <h2>Sync conflict</h2>
+        <p>The file on GitHub changed since this device last loaded it — usually a save from another
+        device. Nothing has been overwritten; pick which version to keep.</p>
+
+        ${diff ? verdictHtml(diff) : `<p class="muted small">${error
+          ? `Couldn't read the other version to compare (${esc(error)}). Both options below still work, but
+             this device can't tell you what they'd discard — export a copy first if it matters.`
+          : "Comparing the two versions…"}</p>`}
+
+        ${diff ? `<div class="two-col conflict-compare">
+          ${side("On this device", diff.mine)}
+          ${side("On GitHub", diff.theirs)}
+        </div>` : ""}
+
+        <div class="row gap" style="margin-top:1rem">
+          <button class="btn btn-primary" id="keep-mine">Keep this device's version</button>
+          <button class="btn btn-ghost" id="take-theirs">Use the version on GitHub</button>
+          <button class="btn btn-ghost" id="conflict-export">Download this device's copy first</button>
+        </div>
+      </div>`;
+
+    root.querySelector("#keep-mine").addEventListener("click", async () => {
+      if (!confirmDiscard(diff, "theirs")) return;
+      await store.resolveConflictKeepMine();
+      rerender();
+    });
+    root.querySelector("#take-theirs").addEventListener("click", async () => {
+      if (!confirmDiscard(diff, "mine")) return;
+      await store.resolveConflictTakeTheirs();
+      rerender();
+    });
+    root.querySelector("#conflict-export").addEventListener("click", () => {
+      downloadState(store.state);
+      toast("Saved a copy of this device's data.");
+    });
+  };
+
+  render(null, null);
+  // Read-only: this never writes, so looking costs nothing even if the user
+  // then picks the other side.
+  store.peekRemoteState()
+    .then((remote) => render(compareStates(store.state, remote), null))
+    .catch((err) => render(null, err.message || String(err)));
 }
 
-// ---------- Dashboard ----------
+/** The headline: what, if anything, is actually at risk. */
+function verdictHtml(diff) {
+  if (diff.identical) {
+    return `<p class="banner banner-good small">Both versions contain the same logged attempts —
+      whichever you pick, nothing is lost.</p>`;
+  }
+  if (diff.safeChoice === "theirs") {
+    return `<p class="banner banner-good small">The GitHub version has
+      ${diff.attemptsOnlyThere} attempt${diff.attemptsOnlyThere === 1 ? "" : "s"} this device doesn't,
+      and this device has none that it's missing. Using the GitHub version loses nothing.</p>`;
+  }
+  if (diff.safeChoice === "mine") {
+    return `<p class="banner banner-good small">This device has
+      ${diff.attemptsOnlyHere} attempt${diff.attemptsOnlyHere === 1 ? "" : "s"} GitHub doesn't,
+      and GitHub has none this device is missing. Keeping this device's version loses nothing.</p>`;
+  }
+  return `<p class="banner banner-warn small">Both versions have work the other doesn't —
+    ${diff.attemptsOnlyHere} attempt${diff.attemptsOnlyHere === 1 ? "" : "s"} only here and
+    ${diff.attemptsOnlyThere} only on GitHub. Whichever you choose, the other side's attempts go.
+    Download a copy first if you'd rather not lose either.</p>`;
+}
+
+function confirmDiscard(diff, losing) {
+  const count = losing === "mine" ? diff?.attemptsOnlyHere : diff?.attemptsOnlyThere;
+  if (!count) return true; // nothing unique on the side being dropped
+  const where = losing === "mine" ? "this device" : "GitHub";
+  const plural = count === 1 ? { s: "", verb: "exists" } : { s: "s", verb: "exist" };
+  return confirm(`This discards ${count} logged attempt${plural.s} that only ${plural.verb} on ${where}. Continue?`);
+}
+
+/** Shared by Settings and the conflict screen. */
+function downloadState(state) {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `ledger-export-${todayISO()}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
 
 export function renderDashboard(root, store, actions) {
   const state = store.state;
@@ -1941,14 +2023,7 @@ export function renderSettings(root, store, actions) {
     }
   });
 
-  root.querySelector("#export-json").addEventListener("click", () => {
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `ledger-export-${todayISO()}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  });
+  root.querySelector("#export-json").addEventListener("click", () => downloadState(state));
 
   root.querySelector("#import-json").addEventListener("change", async (e) => {
     const file = e.target.files[0];
