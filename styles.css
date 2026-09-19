@@ -204,6 +204,11 @@ main {
 .table td.num, .table th:nth-child(n+2) { font-variant-numeric: tabular-nums; }
 
 .form { display: flex; flex-direction: column; gap: 0.85rem; }
+/* A flex column stretches every child, which made each form's submit button
+   span the full card — reading as a far weightier action than "add a note".
+   Fields still fill the width; the button takes the width of its label, like
+   every other button in the app. */
+.form > .btn { align-self: flex-start; }
 .two-col { display: grid; grid-template-columns: 1fr; gap: 0.85rem; }
 @media (min-width: 560px) { .two-col { grid-template-columns: 1fr 1fr; } }
 .field { display: flex; flex-direction: column; gap: 0.3rem; }
