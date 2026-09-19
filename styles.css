@@ -530,11 +530,23 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
    sideways stops making sense, so the splitters go away entirely. */
 @media (max-width: 860px) {
   .ws { height: auto; overflow: visible; }
-  .ws-panes { grid-template-columns: 1fr !important; }
+  /* split-pane.js writes the grid template as an inline style, which only an
+     !important can override. Stacked, there are no columns left to size. */
+  .ws-panes { grid-template-columns: 1fr !important; padding-inline: 0; }
   .ws-splitter { display: none; }
   .ws-pane { margin: 0.4rem var(--page-pad); }
-  .code-editor-fill .CodeMirror { height: 60vh; }
   .ws-pane-body { max-height: 70vh; }
+  /* Both class names, to outrank .code-editor-host.code-editor-fill, which
+     sizes the editor to its pane on a wide screen. Stacked, the pane has no
+     height of its own to fill, so height:100% collapsed the editor to 28px —
+     a code pane you cannot type in. It gets a real height from the viewport
+     here instead. */
+  .code-editor-host.code-editor-fill .CodeMirror { height: 55vh; }
+  /* Once stacked both panes are auto-height, and without a floor the statement
+     takes the column and leaves the editor a sliver. */
+  #ws-pane-code .ws-pane-body { min-height: 55vh; }
+  #ws-pane-statement .ws-pane-body { max-height: 40vh; }
+  #ws-board-host { min-height: 50vh; }
 }
 .session-clock {
   font-family: var(--font-mono); font-size: 2rem; font-weight: 700;
@@ -1023,6 +1035,15 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
    excluded: it doesn't scroll, and padding its panes would shorten the editor
    for no reason. */
 main:not(.page-full) { padding-bottom: calc(var(--plant-size) + 2rem); }
+
+/* In a session on a phone there is no spare corner — the editor runs to both
+   edges, and the panel ends up sitting on the code. It shrinks rather than
+   disappearing, because knowing you're past your budget matters most exactly
+   when you're head-down in a problem. */
+@media (max-width: 719px) {
+  main.page-full ~ .plant-widget { --plant-size: 88px; }
+  main.page-full ~ .plant-widget .plant-widget-note { display: none; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .plant-widget-art { transition: none; }
