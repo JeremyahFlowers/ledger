@@ -80,7 +80,6 @@ let activeTab = localStorage.getItem("ledger.activeTab") || "dashboard";
 const nav = document.getElementById("tab-nav");
 const root = document.getElementById("view-root");
 const statusEl = document.getElementById("sync-status");
-const plantEl = document.getElementById("plant-indicator");
 const announcer = document.getElementById("view-announcer");
 
 /** Human-readable name of whatever is on screen, for the live region. */
@@ -214,15 +213,13 @@ const PLANT_STAGE_KEY = "ledger.plant.lastStage";
 // The plant lives in the topbar too, not just the Dashboard, on purpose —
 // visible on every screen, the same way well-being should be a constant
 // backdrop to studying rather than something you check in on separately.
-function renderPlantIndicator() {
-  if (!store.state) {
-    plantEl.innerHTML = "";
-    return;
-  }
+// Was also drawing a small plant in the header. That went when the plant got a
+// standing place on every page — two copies of the same thing on one screen,
+// and the header one was too small to read a change in anyway. What it was
+// *also* doing, and what stays, is noticing the moment a stage is earned.
+function trackPlantGrowth() {
+  if (!store.state) return;
   const plant = computePlantState(store.state);
-  plantEl.innerHTML = plantSvg(plant.stage, plant.vitality, { size: 30, decorative: true });
-  plantEl.title = `${plant.stageLabel} — ${plant.vitality}`;
-
   const lastStage = localStorage.getItem(PLANT_STAGE_KEY);
   if (lastStage && PLANT_STAGE_ORDER.indexOf(plant.stage) > PLANT_STAGE_ORDER.indexOf(lastStage)) {
     views.toast(`Your plant grew into a ${plant.stageLabel}.`);
@@ -236,8 +233,8 @@ function renderPlantIndicator() {
  *
  * Growing a stage takes days of consistent practice and is the one reward here
  * that volume can't buy, so it shouldn't pass with only a toast that vanishes
- * in two seconds. Both plants on screen — the topbar one and the Dashboard
- * card — get a brief grow animation.
+ * in two seconds. Both plants that can be on screen — the standing one and the
+ * Dashboard card — get a brief grow animation.
  *
  * It's tracked as a deadline rather than applied once, because store.init()
  * emits several times while state loads and every renderAll rebuilds this
@@ -249,7 +246,7 @@ let growthCelebrationUntil = 0;
 
 function applyGrowthAnimation() {
   if (Date.now() > growthCelebrationUntil) return;
-  for (const el of document.querySelectorAll(".topbar-plant svg, .plant-card > svg")) {
+  for (const el of document.querySelectorAll(".plant-widget-art svg, .plant-card > svg")) {
     el.classList.add("plant-growing");
   }
 }
@@ -258,8 +255,6 @@ function celebrateGrowth() {
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   growthCelebrationUntil = Date.now() + GROWTH_ANIMATION_MS;
 }
-
-plantEl.addEventListener("click", () => actions.switchTab("dashboard"));
 
 // How much width a page should get. Absent from this map means the default
 // tier, which suits a page of mixed cards. See the --page-max block in
@@ -346,7 +341,7 @@ function trackChromeHeight() {
 function renderAll() {
   renderNav();
   renderStatus();
-  renderPlantIndicator();
+  trackPlantGrowth();
   announceView();
   applyPageWidth();
 
