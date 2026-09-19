@@ -93,6 +93,21 @@ export const DIAGRAM_SPECS = {
         { pointers: { lo: 4, mid: 4, hi: 4 }, dim: [0, 1, 2, 3, 5, 6], highlight: [4], caption: "lo=hi=mid=4 → value 9. Found — 7 elements searched in 2 comparisons." },
       ],
     },
+    {
+      kind: "array",
+      // The second mental model, and the one people are missing when binary
+      // search "doesn't apply": you aren't searching the array, you're
+      // searching the answers, and the array is only how you test one.
+      title: "Binary search on the answer — find the first value that works",
+      array: ["✗", "✗", "✗", "✗", "✓", "✓", "✓", "✓"],
+      steps: [
+        { pointers: { lo: 0, hi: 7 }, caption: "Each box is a candidate answer, marked with whether it's good enough. The marks are never all computed — you test one at a time." },
+        { pointers: { lo: 0, hi: 7, mid: 3 }, highlight: [3], caption: "Test the middle: index 3 fails. Everything left of it fails too, since the test only flips once. Discard that half." },
+        { pointers: { lo: 4, hi: 7, mid: 5 }, highlight: [5], dim: [0, 1, 2, 3], caption: "Test 5: it works. So the first working answer is 5 or earlier — keep 5 as a candidate and search left." },
+        { pointers: { lo: 4, hi: 5, mid: 4 }, highlight: [4], dim: [0, 1, 2, 3, 6, 7], caption: "Test 4: works. Search left again." },
+        { pointers: { lo: 4, hi: 4 }, highlight: [4], dim: [0, 1, 2, 3, 5, 6, 7], caption: "Range is one wide. Answer: 4 — the first value that works. Four tests instead of eight, and the array was never sorted by value at all." },
+      ],
+    },
   ],
 
   "recursion-dp": [
@@ -346,6 +361,29 @@ export const DIAGRAM_SPECS = {
         { doneNodes: ["n1", "n2", "n3", "n4", "n5", "n6", "n7"], doneEdges: [["n1", "n2"], ["n1", "n3"], ["n2", "n4"], ["n2", "n5"], ["n3", "n6"], ["n3", "n7"]], caption: "Visit each in turn — queue empties. BFS order: 1,2,3,4,5,6,7 — exactly level by level." },
       ],
     },
+    {
+      kind: "graph",
+      title: "In-order on a BST comes out sorted",
+      nodes: [
+        { id: "4", x: 160, y: 28 },
+        { id: "2", x: 90, y: 82 }, { id: "6", x: 230, y: 82 },
+        { id: "1", x: 52, y: 136 }, { id: "3", x: 126, y: 136 },
+        { id: "5", x: 196, y: 136 }, { id: "7", x: 272, y: 136 },
+      ],
+      edges: [
+        { from: "4", to: "2" }, { from: "4", to: "6" },
+        { from: "2", to: "1" }, { from: "2", to: "3" },
+        { from: "6", to: "5" }, { from: "6", to: "7" },
+      ],
+      height: 170,
+      steps: [
+        { activeNodes: ["1"], doneNodes: [], caption: "In-order is left, then self, then right. Go left as far as possible first — that lands on 1, the smallest." },
+        { activeNodes: ["2"], doneNodes: ["1"], caption: "1 has no right child, so return to its parent and visit 2. Output so far: 1, 2." },
+        { activeNodes: ["3"], doneNodes: ["1", "2"], caption: "Now 2's right subtree: 3. Output: 1, 2, 3 — the whole left subtree, in order." },
+        { activeNodes: ["4"], doneNodes: ["1", "2", "3"], caption: "Left subtree finished, so visit the root. Output: 1, 2, 3, 4." },
+        { activeNodes: ["5", "6", "7"], doneNodes: ["1", "2", "3", "4"], caption: "The right subtree repeats the same shape: 5, 6, 7. Final output 1…7 — sorted, without sorting anything." },
+      ],
+    },
   ],
 
   "graphs-bfs-dfs": [
@@ -359,6 +397,26 @@ export const DIAGRAM_SPECS = {
         { values: [[1, 1, 0, 0], [1, 0, 0, 0], [0, 0, 1, 1], [0, 0, 0, 0]], active: [[0, 0], [0, 1], [1, 0]], caption: "Flood fill spreads to every connected land cell: (0,1) and (1,0). All marked visited — this whole blob is one island." },
         { values: [[1, 1, 0, 0], [1, 0, 0, 0], [0, 0, 1, 1], [0, 0, 0, 0]], active: [[2, 2], [2, 3]], highlight: [[0, 0], [0, 1], [1, 0]], caption: "Continue scanning — next unvisited '1' is at (2,2). New flood-fill, islands so far: 2. It spreads to (2,3)." },
         { values: [[1, 1, 0, 0], [1, 0, 0, 0], [0, 0, 1, 1], [0, 0, 0, 0]], highlight: [[0, 0], [0, 1], [1, 0], [2, 2], [2, 3]], caption: "No unvisited land left. Total islands: 2 — the number of separate flood-fills it took, not the number of land cells." },
+      ],
+    },
+    {
+      kind: "graph",
+      title: "BFS explores in rings — which is why it finds shortest paths",
+      nodes: [
+        { id: "A", x: 40, y: 90 },
+        { id: "B", x: 118, y: 42 }, { id: "C", x: 118, y: 138 },
+        { id: "D", x: 205, y: 90 }, { id: "E", x: 285, y: 90 },
+      ],
+      edges: [
+        { from: "A", to: "B" }, { from: "A", to: "C" },
+        { from: "B", to: "D" }, { from: "C", to: "D" }, { from: "D", to: "E" },
+      ],
+      height: 175,
+      steps: [
+        { activeNodes: ["A"], caption: "Start at A. Distance 0. The queue holds everything at the current distance and nothing further." },
+        { activeNodes: ["B", "C"], doneNodes: ["A"], activeEdges: [["A", "B"], ["A", "C"]], caption: "Take everything one edge away before anything two edges away: B and C, both distance 1." },
+        { activeNodes: ["D"], doneNodes: ["A", "B", "C"], activeEdges: [["B", "D"], ["C", "D"]], doneEdges: [["A", "B"], ["A", "C"]], caption: "D is reachable from both, but it's first reached at distance 2 — and that first arrival is the shortest, so it's never revisited." },
+        { activeNodes: ["E"], doneNodes: ["A", "B", "C", "D"], activeEdges: [["D", "E"]], doneEdges: [["A", "B"], ["A", "C"], ["B", "D"], ["C", "D"]], caption: "E at distance 3. Because the rings are finished in order, the first time you see a node is always by a shortest route — no weights, no priority queue, no relaxation." },
       ],
     },
   ],
@@ -383,6 +441,20 @@ export const DIAGRAM_SPECS = {
         { activeNodes: ["root"], caption: "Start with an empty subset. At each element, choose: include it, or don't." },
         { doneNodes: ["root"], activeNodes: ["in1", "ex1"], doneEdges: [["root", "in1"], ["root", "ex1"]], caption: "Element 1: branch into 'include 1' and 'exclude 1'." },
         { doneNodes: ["root", "in1", "ex1"], activeNodes: ["in1in2", "in1ex2", "ex1in2", "ex1ex2"], doneEdges: [["root", "in1"], ["root", "ex1"], ["in1", "in1in2"], ["in1", "in1ex2"], ["ex1", "ex1in2"], ["ex1", "ex1ex2"]], caption: "Element 2: each branch splits again the same way. Four leaves = four complete subsets: {1,2}, {1}, {2}, {}." },
+      ],
+    },
+    {
+      kind: "grid",
+      title: "4-Queens — the undo is the whole technique",
+      rows: 4, cols: 4,
+      cellLabels: { cols: ["a", "b", "c", "d"] },
+      steps: [
+        { active: [[0, 0]], caption: "Place a queen in row 0, leftmost column. One row at a time, so rows can never clash." },
+        { active: [[0, 0], [1, 2]], highlight: [[1, 0], [1, 1]], caption: "Row 1: column a shares a file, column b shares a diagonal. First legal square is c." },
+        { active: [[0, 0], [1, 2]], highlight: [[2, 0], [2, 1], [2, 2], [2, 3]], caption: "Row 2: every square is attacked — a and c by file, b and d by diagonal from c. Dead end." },
+        { active: [[0, 0], [1, 3]], caption: "This is the backtrack: undo row 1 and try the next square instead of starting over. Everything above row 1 is kept." },
+        { active: [[0, 0], [1, 3], [2, 1]], highlight: [[3, 0], [3, 1], [3, 2], [3, 3]], caption: "Row 2 takes b. But now row 3 is fully attacked too — so the whole branch beginning with a queen on a1 has no solution." },
+        { active: [[0, 1], [1, 3], [2, 0], [3, 2]], caption: "Undo all the way and start row 0 at b. That branch works: b1, d2, a3, c4 — no shared row, file or diagonal. Search, fail, undo, continue." },
       ],
     },
   ],
@@ -431,6 +503,18 @@ export const DIAGRAM_SPECS = {
         { values: [[0, 2, 6, 7, 12, null]], active: [[0, 4]], caption: "Each prefix[i] = prefix[i-1] + nums[i-1]. Built up to prefix[4] = 12 — the sum of the first 4 numbers." },
         { values: [[0, 2, 6, 7, 12, 15]], active: [[0, 5]], caption: "prefix[5] = 15 — the full array sum. Prefix array done, in one pass." },
         { values: [[0, 2, 6, 7, 12, 15]], highlight: [[0, 1], [0, 4]], caption: "Sum of indices 1..3 (values 4,1,5)? Just prefix[4] − prefix[1] = 12 − 2 = 10. No loop needed." },
+      ],
+    },
+    {
+      kind: "array",
+      title: "Subarray Sum Equals K — prefix sums in a hash map",
+      array: [3, 4, 7, 2, -3, 1, 4, 2],
+      steps: [
+        { pointers: { i: 0 }, highlight: [0], caption: "Target k=7. Running prefix = 3. Asking \"does a prefix of 3−7 = −4 exist?\" — no. Store prefix 3." },
+        { pointers: { i: 1 }, highlight: [0, 1], caption: "Prefix = 7. Looking for 7−7 = 0, the empty prefix, which we seeded. Found — subarray [3,4] sums to 7. Count 1." },
+        { pointers: { i: 2 }, highlight: [2], caption: "Prefix = 14. Looking for 7 — seen at index 1. The stretch since then is [7]. Count 2." },
+        { pointers: { i: 5 }, highlight: [2, 3, 4, 5], caption: "Prefix = 14 again. Looking for 7 — still there. The stretch [7,2,−3,1] also sums to 7. Count 3." },
+        { pointers: { i: 7 }, highlight: [5, 6, 7], caption: "Prefix = 20. Looking for 13 — seen at index 4. Subarray [1,4,2]. Count 4, in one pass, with negatives in the array." },
       ],
     },
   ],
