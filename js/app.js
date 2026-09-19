@@ -7,6 +7,7 @@ import { renderAnalyze } from "./analyze-view.js";
 import { renderBank } from "./bank-view.js";
 import { installShortcuts, toggleHelp } from "./shortcuts.js";
 import { renderProgress } from "./progress-view.js";
+import { installSearch, openSearch, closeSearch, isSearchOpen } from "./search.js";
 import { recommendSession } from "./logic.js";
 
 // The nav reads like a table of contents, not a junk drawer: Home is the
@@ -318,8 +319,32 @@ function startRecommendedSession() {
 
 document.getElementById("shortcut-hint")?.addEventListener("click", toggleHelp);
 
+const searchButton = document.getElementById("search-button");
+if (searchButton) {
+  searchButton.innerHTML = navIcon("search", { size: 17 });
+  searchButton.addEventListener("click", openSearch);
+}
+
+installSearch({
+  store,
+  actions: {
+    openTopic(patternId) {
+      views.showTopic(patternId);
+      actions.switchTab("topicDetail");
+    },
+    startProblem(problem) {
+      if (views.hasActiveSession()) { actions.switchTab("workspace"); return; }
+      views.startSession(problem);
+      actions.switchTab("workspace");
+    },
+  },
+});
+
 installShortcuts({
   switchTab: actions.switchTab,
+  openSearch,
+  searchOpen: isSearchOpen,
+  closeSearch,
   inSession: views.hasActiveSession,
   exitSession,
   startRecommended: startRecommendedSession,

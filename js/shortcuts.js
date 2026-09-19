@@ -42,7 +42,7 @@ export const GO_TO = {
 /** Single keys, active outside a session. */
 export const DIRECT = {
   "?": "Show this list",
-  "/": "Search (where a page has one)",
+  "/": "Search problems and patterns",
   s: "Start the recommended session",
   Escape: "Close this list",
 };
@@ -60,6 +60,9 @@ function isTypingTarget(el) {
  * @param {() => void}    deps.exitSession app's own confirm-then-leave path
  * @param {() => boolean} deps.startRecommended  returns false if nothing to start
  * @param {() => boolean} deps.isReady     false before state has loaded
+ * @param {() => void}    deps.openSearch  opens the global search overlay
+ * @param {() => boolean} deps.searchOpen  true while it is showing
+ * @param {() => void}    deps.closeSearch dismisses it
  */
 export function installShortcuts(deps) {
   let pendingGo = false;
@@ -75,6 +78,7 @@ export function installShortcuts(deps) {
     if (event.metaKey || event.ctrlKey || event.altKey) return;
 
     if (event.key === "Escape") {
+      if (deps.searchOpen()) { deps.closeSearch(); event.preventDefault(); return; }
       if (isHelpOpen()) { closeHelp(); event.preventDefault(); return; }
       if (deps.inSession()) { deps.exitSession(); event.preventDefault(); }
       clearPending();
@@ -112,12 +116,13 @@ export function installShortcuts(deps) {
         pendingTimer = setTimeout(clearPending, SEQUENCE_TIMEOUT_MS);
         event.preventDefault();
         break;
-      case "/": {
-        // Pages that offer a search own the affordance; this just focuses it.
-        const search = document.querySelector('#view-root input[type="search"]');
-        if (search) { event.preventDefault(); search.focus(); search.select(); }
+      case "/":
+        // Global search, which covers your problems, the catalog and the
+        // patterns at once — more useful from any screen than focusing
+        // whichever filter box the current page happens to have.
+        event.preventDefault();
+        deps.openSearch();
         break;
-      }
       case "s":
         if (deps.startRecommended()) event.preventDefault();
         break;

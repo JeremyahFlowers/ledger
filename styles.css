@@ -728,6 +728,70 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 .empty-state .muted { max-width: 34rem; margin: 0; }
 .empty-state .btn { margin-top: 0.5rem; }
 
+/* Icon-only controls in the topbar: quiet until reached for. */
+.topbar-icon-button {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0;
+  border: 0; border-radius: 7px;
+  background: none; color: var(--text-muted); cursor: pointer;
+}
+.topbar-icon-button:hover { background: var(--surface-alt); color: var(--text); }
+
+/* ---------- Global search ---------- */
+
+.search-overlay {
+  position: fixed; inset: 0; z-index: 210;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 4rem 1rem 1rem;
+  background: rgba(8, 14, 12, 0.55);
+  backdrop-filter: blur(2px);
+}
+.search-panel {
+  width: min(34rem, 100%);
+  display: flex; flex-direction: column;
+  max-height: min(32rem, 80vh);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+.search-input {
+  font: inherit; font-size: 1rem;
+  padding: 0.9rem 1rem;
+  border: 0; border-bottom: 1px solid var(--border);
+  background: none; color: var(--text);
+  outline: none;
+}
+.search-results { overflow-y: auto; padding: 0.35rem; }
+.search-group {
+  display: flex; align-items: center; gap: 0.35rem;
+  margin: 0.5rem 0 0.2rem; padding: 0 0.5rem;
+  font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--text-muted);
+}
+.search-hit {
+  display: flex; align-items: center; gap: 0.55rem;
+  width: 100%; padding: 0.5rem 0.6rem;
+  border: 0; border-radius: 7px; background: none; color: var(--text);
+  font: inherit; text-align: left; cursor: pointer;
+}
+.search-hit:hover { background: var(--surface-alt); }
+/* Selection is driven by the keyboard, so it needs to be obvious without a
+   cursor anywhere near it. */
+.search-hit.active { background: var(--accent); color: var(--accent-contrast); }
+.search-hit.active .muted { color: var(--accent-contrast); opacity: 0.8; }
+.search-hit-text { display: flex; flex-direction: column; min-width: 0; }
+.search-hit-title { font-weight: 600; }
+.search-hit-text .muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-empty { padding: 1.25rem 0.75rem; text-align: center; }
+.search-footer {
+  display: flex; gap: 1rem; flex-wrap: wrap;
+  padding: 0.5rem 0.9rem; border-top: 1px solid var(--border);
+  background: var(--surface-alt);
+}
+.search-footer kbd { margin-right: 0.15rem; }
+
 /* ---------- Keyboard shortcuts ---------- */
 
 .shortcut-overlay {

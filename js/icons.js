@@ -25,6 +25,7 @@ const NAV_ICONS = {
   quiz: `<circle cx="10" cy="10" r="7" ${S}/><path d="M7.8 8a2.2 2.2 0 1 1 3.3 1.9c-.9.5-1.1.9-1.1 1.8" ${S}/><circle cx="10" cy="14" r="0.15" fill="currentColor" stroke="currentColor" stroke-width="1.4"/>`,
   // Stacked cards in a tray: a shelf of problems waiting to be picked up.
   bank: `<rect x="3" y="7.5" width="14" height="8.5" rx="1.2" ${S}/><path d="M5.2 7.5V5.6a1 1 0 0 1 1-1h7.6a1 1 0 0 1 1 1v1.9" ${S}/><path d="M7.4 4.6V3.4a1 1 0 0 1 1-1h3.2a1 1 0 0 1 1 1v1.2" ${S}/><path d="M3 11.2h4.1a1 1 0 0 1 1 1 1 1 0 0 0 1 1h1.8a1 1 0 0 0 1-1 1 1 0 0 1 1-1H17" ${S}/>`,
+  search: `<circle cx="8.8" cy="8.8" r="5.1" ${S}/><path d="M12.6 12.6 16.8 16.8" ${S}/>`,
   // A rising line over an axis: trajectory, not volume.
   progress: `<path d="M3.5 16.5V4" ${S}/><path d="M3.5 16.5H17" ${S}/><path d="M5.8 13.4l3.1-3.4 2.5 2.1 4.2-5.2" ${S}/><circle cx="15.6" cy="6.9" r="1.2" fill="currentColor" stroke="none"/>`,
   // A magnifier over lines of text: reading a problem closely, not solving it.
