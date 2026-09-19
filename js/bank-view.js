@@ -7,7 +7,7 @@
 //
 // The important design rule here is that saving is cheap and scheduling is
 // not. Everything saved from this page lands in the *bank* (backlog), never in
-// the review queue: it is not due, not overdue, and not counted against you.
+// the refresher list: nothing you stockpile is ever counted against you.
 // Saving 300 problems is meant to feel like stocking a shelf, not like falling
 // 300 reviews behind — a problem only enters spaced repetition once you
 // actually work it. See STATUS_BACKLOG in logic.js.
@@ -109,8 +109,8 @@ export async function renderBank(root, store, actions) {
     <div class="card">
       <h2>Problem bank</h2>
       <p class="muted">${state.catalog.count.toLocaleString()} problems, each labelled with the patterns it
-      exercises. Save as many as you like — saved problems wait in your bank and never show up as
-      overdue. One enters the review schedule the first time you actually work it.</p>
+      exercises. Save as many as you like — the bank just holds them, and never asks anything of you.
+      One joins the refresher rotation the first time you actually work it.</p>
       ${roomLeft <= 0 ? `<p class="banner banner-warn small">Your bank is full at ${MAX_BANK_SIZE}. That is
       already far more than a realistic backlog — work through some, or remove a few from
       <strong>My bank</strong>, before adding more. The cap exists because your whole prep log syncs as
@@ -179,7 +179,7 @@ function renderMine(root, store, actions, bank) {
     ${modeTabsHtml(bank.length)}
     ${bank.length === 0 ? `
       <div class="card"><p class="empty">Your bank is empty. Browse the catalog and save whatever
-      looks worth practicing — nothing you save becomes due until you start it.</p></div>` : `
+      looks worth practicing — nothing you save starts asking for attention until you work it.</p></div>` : `
       <div class="card">
         <h2>Waiting in your bank</h2>
         <p class="muted small">${bank.length} problem${bank.length === 1 ? "" : "s"} saved and unscheduled.
@@ -372,7 +372,7 @@ function wire(root, store, actions, matches, saved) {
         return;
       }
       saveToBank(store, batch);
-      toast(`Saved ${batch.length} problems to your bank. They're not due — start one whenever you want.`);
+      toast(`Saved ${batch.length} problems to your bank. Nothing changes until you start one — whenever you feel like it.`);
       actions.rerender();
     });
   }

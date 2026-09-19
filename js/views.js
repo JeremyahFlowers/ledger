@@ -3,7 +3,7 @@ import {
   updateStreak, systemDesignUnlock, uid, MISTAKE_TAGS, MOCK_CHECKLIST, daysBetween,
   activityByDate, patternTrend, pickQuizProblem, quizOptions, addDaysISO, recommendSession,
   computePlantState, normalizeStatement, MAX_STATEMENT_CHARS,
-  budgetProgress, budgetPressure,
+  budgetProgress, budgetPressure, refresherStatus,
 } from "./logic.js";
 import {
   installSplitters, loadSizes, gridTemplate, redistribute,
@@ -50,7 +50,7 @@ const VITALITY_LABEL = { thriving: "Thriving", steady: "Steady", stressed: "Stre
 function plantCardHtml(plant) {
   const { signals } = plant;
   const issues = [];
-  if (signals.overdueCount > 0) issues.push(`${signals.overdueCount} problem${signals.overdueCount === 1 ? "" : "s"} overdue 7+ days — reviews are slipping`);
+  if (signals.overdueCount > 0) issues.push(`${signals.overdueCount} problem${signals.overdueCount === 1 ? "" : "s"} you haven't come back to in a while`);
   if (signals.overloaded) issues.push(`Today's volume is past a healthy single sitting`);
   if (signals.daysSinceActive >= 3) issues.push(`${signals.daysSinceActive} days since last practice`);
   return `
@@ -127,12 +127,13 @@ function fmtDate(iso) {
   const [y, m, d] = iso.split("-");
   return `${m}/${d}/${y.slice(2)}`;
 }
-function overdueLabel(iso) {
-  if (!iso) return "new";
-  const diff = daysBetween(iso, todayISO());
-  if (diff === 0) return "due today";
-  if (diff > 0) return `${diff}d overdue`;
-  return `due in ${-diff}d`;
+/* Was overdueLabel, and said things like "12d overdue". See the refresher
+   block in logic.js for why it doesn't any more. */
+const TONE_PILL = { new: "pill-muted", fresh: "pill-muted", ready: "pill-muted", fading: "pill-warn" };
+
+function recencyPill(problem) {
+  const { tone, text } = refresherStatus(problem);
+  return `<span class="pill ${TONE_PILL[tone]}">${esc(text)}</span>`;
 }
 function patternName(state, id) {
   return state.patterns.find((p) => p.id === id)?.name || id;
@@ -304,9 +305,15 @@ export function plantWidgetHtml(state, now = Date.now()) {
   return `
     <div class="plant-widget-inner" data-vitality="${vitality}">
       <div class="plant-widget-art">${plantSvg(plant.stage, vitality, { size: 96, decorative: true })}</div>
-      <span class="plant-widget-clock"></span>
+      <!-- The button shares the clock's row rather than sitting under it.
+           Stacked, the readout took half the panel's height and left the
+           plant filling barely a third of the box it lives in. -->
+      <div class="plant-widget-readout">
+        <span class="plant-widget-trend" aria-hidden="true"></span>
+        <span class="plant-widget-clock"></span>
+        <button type="button" class="plant-widget-toggle" id="plant-widget-toggle"></button>
+      </div>
       <span class="plant-widget-note"></span>
-      <button type="button" class="plant-widget-toggle" id="plant-widget-toggle"></button>
     </div>`;
 }
 
@@ -352,6 +359,19 @@ export function updatePlantWidget(host, state, now = Date.now()) {
   const note = inner.querySelector(".plant-widget-note");
   const noteText = b.over ? "past today's budget" : `of ${b.budgetMin} min`;
   if (note.textContent !== noteText) note.textContent = noteText;
+
+  // Which way the plant is going right now, said outright. The scale change is
+  // slow by design and easy to miss if you aren't watching for it; an arrow is
+  // readable in the instant you glance over, which is the only time anyone
+  // looks at this.
+  const trend = inner.querySelector(".plant-widget-trend");
+  if (trend) {
+    const dir = b.over ? "down" : b.running ? "up" : "flat";
+    if (trend.dataset.dir !== dir) {
+      trend.dataset.dir = dir;
+      trend.textContent = dir === "down" ? "▼" : dir === "up" ? "▲" : "–";
+    }
+  }
 
   const toggle = inner.querySelector(".plant-widget-toggle");
   if (toggle) {
@@ -625,11 +645,11 @@ export function renderDashboard(root, store, actions) {
 
       <div class="card">
         <h2>Today's plan</h2>
-        ${plan.length === 0 ? `<p class="empty">Nothing due right now.</p>` : `
+        ${plan.length === 0 ? `<p class="empty">Nothing needs a refresher right now.</p>` : `
         <ul class="queue-list">
           ${plan.map((p) => queueItemHtml(state, p)).join("")}
         </ul>`}
-        ${overflow.length ? `<p class="muted small">${overflow.length} more due but over today's ${budgetMin}-min budget — see Review Queue.</p>` : ""}
+        ${overflow.length ? `<p class="muted small">${overflow.length} more could use a refresher, beyond today's ${budgetMin} min — they'll keep.</p>` : ""}
       </div>
 
       <div class="card">
@@ -685,7 +705,7 @@ function queueItemHtml(state, p) {
         <div class="row gap-sm">
           <span class="pill pill-icon"><span class="pattern-icon">${patternIcon(p.patternId, { size: 14 })}</span>${esc(patternName(state, p.patternId))}</span>
           <span class="pill pill-muted">${esc(p.difficulty)}</span>
-          <span class="pill ${overdueLabel(p.nextReviewDate).includes("overdue") ? "pill-warn" : "pill-muted"}">${overdueLabel(p.nextReviewDate)}</span>
+          ${recencyPill(p)}
         </div>
         <div class="queue-name">${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a>` : esc(p.name)}${p.number ? ` <span class="muted">#${p.number}</span>` : ""}</div>
       </div>
@@ -718,30 +738,33 @@ export function renderQueue(root, store, actions) {
   const state = store.state;
   const due = dueProblems(state);
   const today = todayISO();
-  const buckets = { today: 0, mild: 0, stale: 0 }; // due today, 1-6d overdue, 7d+ overdue
+  // Grouped by how long it's been, not by how late anything is. The bands are
+  // the same underlying schedule; only what they're called changed.
+  const buckets = { recent: 0, aWhile: 0, longest: 0 };
   due.forEach((p) => {
-    const d = p.nextReviewDate ? daysBetween(p.nextReviewDate, today) : 0;
-    if (d <= 0) buckets.today++;
-    else if (d < 7) buckets.mild++;
-    else buckets.stale++;
+    const { daysSince } = refresherStatus(p, today);
+    if (daysSince == null || daysSince >= 30) buckets.longest++;
+    else if (daysSince >= 14) buckets.aWhile++;
+    else buckets.recent++;
   });
   const total = due.length || 1;
   root.innerHTML = `
     <div class="card">
-      <h2>Review queue</h2>
-      <p class="muted">Weakest / most-overdue first. Today's budget is ${state.settings.dailyBudgetMin} min.</p>
+      <h2>Ready for a refresher</h2>
+      <p class="muted">Whatever you haven't looked at in a while, the ones you find hardest first.
+      There's no deadline on any of this — it's here when you want it.</p>
       ${due.length > 0 ? `
       <div class="backlog-bar">
-        <div class="backlog-seg" style="width:${(buckets.today / total) * 100}%; background:var(--accent)"></div>
-        <div class="backlog-seg" style="width:${(buckets.mild / total) * 100}%; background:var(--warn)"></div>
-        <div class="backlog-seg" style="width:${(buckets.stale / total) * 100}%; background:var(--bad)"></div>
+        <div class="backlog-seg" style="width:${(buckets.recent / total) * 100}%; background:var(--accent)"></div>
+        <div class="backlog-seg" style="width:${(buckets.aWhile / total) * 100}%; background:var(--warn)"></div>
+        <div class="backlog-seg" style="width:${(buckets.longest / total) * 100}%; background:var(--bad)"></div>
       </div>
       <div class="backlog-legend">
-        <span style="--_c:var(--accent)">${buckets.today} due today</span>
-        <span style="--_c:var(--warn)">${buckets.mild} overdue 1–6d</span>
-        <span style="--_c:var(--bad)">${buckets.stale} overdue 7d+ — slipping</span>
+        <span style="--_c:var(--accent)">${buckets.recent} from the last fortnight</span>
+        <span style="--_c:var(--warn)">${buckets.aWhile} it's been a few weeks</span>
+        <span style="--_c:var(--bad)">${buckets.longest} a month or more</span>
       </div>` : ""}
-      ${due.length === 0 ? `<p class="empty">Queue's clear.</p>` : `
+      ${due.length === 0 ? `<p class="empty">Nothing's gone stale — everything you're tracking is recent.</p>` : `
       <ul class="queue-list">${due.map((p) => queueItemHtml(state, p)).join("")}</ul>`}
     </div>`;
   wireStartButtons(root, store, actions);
@@ -2359,7 +2382,7 @@ export function renderSettings(root, store, actions) {
     <div class="card">
       <h2>Daily budget</h2>
       <p class="muted small">A ceiling, not a target. Today's plan is filled up to this many minutes
-      with the weakest and most overdue problems, and everything beyond it is pushed to the review
+      with whatever you find hardest and haven't seen in longest, and the rest is left for the refresher
       queue rather than onto today. Finishing the plan is a complete day — the app will say so and
       stop asking for more.</p>
       <form id="budget-form" class="settings-form">

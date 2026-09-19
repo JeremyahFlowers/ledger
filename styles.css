@@ -909,20 +909,28 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
   user-select: none;
   display: flex; align-items: center; justify-content: center;
 }
+/* Everything inside the panel is a fraction of --plant-size, so one number per
+   breakpoint scales the whole thing — box, plant, digits and button together.
+   Sizing each part independently drifted: the plant shrank on a phone while
+   the text stayed put and crowded it out. It lives on :root because `main`
+   needs it too, to reserve the height the panel floats over. */
+:root { --plant-size: 116px; }
+@media (min-width: 720px)  { :root { --plant-size: 152px; } }
+@media (min-width: 1100px) { :root { --plant-size: 184px; } }
+
 .plant-widget-inner {
-  /* Square, so it reads as one panel in the corner rather than a label with a
-     picture above it. The plant takes the room it needs and the clock sits
-     under it; the box itself stays the same shape whatever they do. */
   /* Height is stated as well as width. aspect-ratio alone only sets the
      *preferred* box: the plant SVG is 1.2x as tall as it is wide, and once it
-     plus the clock and the caption came to more than the width, the box grew
-     to fit them and stopped being square. A fixed height plus a plant that
-     shrinks to the room left over keeps it square whatever is inside. */
-  width: var(--plant-widget-size, 140px);
-  height: var(--plant-widget-size, 140px);
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 0.1rem;
-  padding: 0.5rem;
+     plus the readout exceeded the width the box grew to fit and stopped being
+     square. A fixed height plus a plant that takes the room left over keeps it
+     square whatever is inside. */
+  width: var(--plant-size);
+  height: var(--plant-size);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center;
+  gap: calc(var(--plant-size) * 0.012);
+  padding: calc(var(--plant-size) * 0.05);
   overflow: hidden;
   border-radius: var(--radius);
   /* Enough of a ground to stay legible over a whiteboard or an editor,
@@ -930,96 +938,94 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
   background: color-mix(in srgb, var(--surface) 78%, transparent);
   border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
   backdrop-filter: blur(3px);
-  /* The box holds still; only the plant inside it grows and shrinks. Scaling
-     the whole panel moved the text and the border around with it, which read
-     as the widget wobbling rather than the plant responding. */
-  transform-origin: bottom right;
 }
+
+/* The plant takes every pixel the readout doesn't, which is what makes it fill
+   the box rather than float in the middle of it. */
 .plant-widget-art {
-  flex: 1; min-height: 0;
-  display: flex; align-items: flex-end; justify-content: center;
-  /* Same pressure the dashboard clock uses, so the two can't disagree about
-     how the day is going. The long duration matters: the value only changes
-     once a second, so a short transition finishes early and the next step is
-     visible as a jump. At 1s each step runs straight into the next and the
-     growth reads as continuous. */
-  transform: scale(calc(1 + var(--pressure, 0) * 0.14));
+  flex: 1; min-height: 0; width: 100%;
+  display: flex; align-items: center; justify-content: center;
+  /* The long duration matters: --pressure only changes once a second, so a
+     short transition finishes early and the next step lands as a visible jump.
+     At 1s each step runs straight into the next and the growth reads as
+     continuous. */
+  transform: scale(calc(1 + var(--pressure, 0) * 0.12));
   transform-origin: bottom center;
   transition: transform 1s linear, filter 1s linear;
   filter: saturate(calc(1 + var(--pressure, 0) * 0.4));
 }
-/* width:auto so the SVG is bound by the height it has been given rather than
-   by the pane's width — it is taller than it is wide, so height is what runs
-   out first. */
+/* width:auto so the SVG is bound by the height it's been given rather than by
+   the box's width — it's taller than it is wide, so height runs out first. */
 .plant-widget-art svg { width: auto; height: 100%; max-width: 100%; }
 
+.plant-widget-readout {
+  display: flex; align-items: center; justify-content: center;
+  gap: calc(var(--plant-size) * 0.04);
+  flex: none;
+}
+.plant-widget-clock {
+  font-family: var(--font-mono); font-weight: 700;
+  font-size: calc(var(--plant-size) * 0.155);
+  font-variant-numeric: tabular-nums; line-height: 1.05;
+  color: var(--text);
+}
+/* Which way the plant is going, stated rather than left to be inferred from a
+   slow scale change nobody is watching closely enough to catch. */
+.plant-widget-trend {
+  font-size: calc(var(--plant-size) * 0.085);
+  line-height: 1;
+}
+.plant-widget-trend[data-dir="up"] { color: var(--good); }
+.plant-widget-trend[data-dir="down"] { color: var(--bad); }
+.plant-widget-trend[data-dir="flat"] { color: var(--text-muted); }
+.plant-widget-note {
+  font-size: calc(var(--plant-size) * 0.072);
+  font-weight: 600; color: var(--text-muted);
+  white-space: nowrap;
+}
+
 /* The panel takes no pointer events; this takes them back. Pausing the day is
-   the one thing worth being able to do from the corner of any page, and unlike
-   everything else here it doesn't navigate anywhere. */
+   the one thing worth doing from the corner of any page, and unlike everything
+   else here it doesn't navigate anywhere. */
 .plant-widget-toggle {
   pointer-events: auto;
-  margin-top: 0.15rem;
-  width: 22px; height: 22px; padding: 0;
+  width: calc(var(--plant-size) * 0.22);
+  height: calc(var(--plant-size) * 0.22);
+  padding: 0; flex: none;
   display: flex; align-items: center; justify-content: center;
   border: 1px solid var(--border); border-radius: 999px;
-  background: var(--surface); color: var(--text-muted);
+  background: var(--surface); color: var(--text);
   cursor: pointer;
 }
 .plant-widget-toggle:hover { color: var(--accent); border-color: var(--accent); }
-/* Play and pause drawn in CSS: two shapes, flipped on every toggle, not worth
-   an icon round-trip. */
+.plant-widget-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Play and pause drawn in CSS: two shapes, flipped on every toggle, and they
+   scale with the button rather than needing a second asset. */
 .plant-widget-toggle::before {
   content: "";
   width: 0; height: 0;
-  border-left: 7px solid currentColor;
-  border-block: 5px solid transparent;
-  margin-left: 2px;                 /* optically centres a triangle */
+  border-left: calc(var(--plant-size) * 0.07) solid currentColor;
+  border-block: calc(var(--plant-size) * 0.05) solid transparent;
+  margin-left: calc(var(--plant-size) * 0.015);   /* optically centres a triangle */
 }
 .plant-widget-toggle[data-running="true"]::before {
-  width: 7px; height: 9px; margin-left: 0;
-  border: none; border-inline: 3px solid currentColor;
+  width: calc(var(--plant-size) * 0.07);
+  height: calc(var(--plant-size) * 0.09);
+  margin-left: 0;
+  border: none;
+  border-inline: calc(var(--plant-size) * 0.026) solid currentColor;
   box-sizing: border-box;
 }
-.plant-widget-clock {
-  font-family: var(--font-mono); font-size: 1.05rem; font-weight: 700;
-  font-variant-numeric: tabular-nums; line-height: 1.1;
-  color: var(--text);
-}
-.plant-widget-note {
-  font-size: 0.66rem; font-weight: 600; color: var(--text-muted);
-  text-align: center; white-space: nowrap;
-}
 
-/* Bigger on a laptop than a tablet — there's more room to spare, and the
-   whole point is that it reads at a glance from across the desk. */
-@media (min-width: 1100px) {
-  .plant-widget-inner { --plant-widget-size: 168px; }
-  .plant-widget-clock { font-size: 1.25rem; }
-  .plant-widget-note { font-size: 0.72rem; }
-}
-
-/* Clicks pass through the widget, but the bottom of a long list would still
+/* Clicks pass through the panel, but the bottom of a long list would still
    come to rest underneath it with no way to scroll further. Reserving the
-   height as page padding means the last row always clears it. The workspace
-   is excluded: it doesn't scroll, and padding its panes would shorten the
-   editor for no reason. */
-main:not(.page-full) { padding-bottom: calc(104px + 2rem); }
-@media (min-width: 720px) {
-  main:not(.page-full) { padding-bottom: calc(140px + 2rem); }
-}
-@media (min-width: 1100px) {
-  main:not(.page-full) { padding-bottom: calc(168px + 2rem); }
-}
+   height as page padding means the last row always clears it. The workspace is
+   excluded: it doesn't scroll, and padding its panes would shorten the editor
+   for no reason. */
+main:not(.page-full) { padding-bottom: calc(var(--plant-size) + 2rem); }
 
 @media (prefers-reduced-motion: reduce) {
   .plant-widget-art { transition: none; }
-}
-/* Smaller on a phone, but still there — it's the only plant now that the
-   header icon is gone, and nothing is lost to it since it can't be tapped. */
-@media (max-width: 719px) {
-  .plant-widget-inner { --plant-widget-size: 104px; padding: 0.35rem; }
-  .plant-widget-clock { font-size: 0.9rem; }
-  .plant-widget-note { font-size: 0.6rem; }
 }
 
 /* ---------- Global search ---------- */

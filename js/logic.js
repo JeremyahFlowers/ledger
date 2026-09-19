@@ -60,13 +60,13 @@ export function applyOutcome(problem, outcome, settings) {
 // A saved problem is in one of two states, and the difference is the whole
 // reason a large problem bank doesn't wreck the review schedule:
 //
-//   active   in the spaced-repetition rotation — it can be due, and it can go
-//            overdue, which is a signal that means something.
-//   backlog  collected but not started. Never due, never overdue, never
-//            counted against you.
+//   active   in the spaced-repetition rotation — the schedule tracks how long
+//            since you worked it, which is a signal that means something.
+//   backlog  collected but not started. Never surfaced as needing anything,
+//            never counted against you.
 //
-// Without this split, saving 300 problems from the bank would show 300 due
-// today, and a week later the plant would read 300 overdue reviews and wilt —
+// Without this split, saving 300 problems from the bank would surface all 300
+// at once, and a week later the plant would read 300 neglected problems and wilt —
 // turning a healthy act (stocking up on practice material) into the exact
 // burnout signal the plant exists to warn about. A problem becomes active the
 // first time you actually work it.
@@ -126,8 +126,10 @@ export function normalizeStatement(text) {
   };
 }
 
-/** Greedily fills today's review budget with the weakest/most-overdue
- * problems first, so a 75-minute day never silently drops what matters most. */
+/** Greedily fills today's budget with the weakest patterns and the problems
+ * left longest first, so a 75-minute day never silently drops what matters
+ * most. Whatever doesn't fit simply waits — see the refresher block above for
+ * why nothing here is framed as late. */
 export function planToday(state) {
   const due = dueProblems(state);
   const budget = state.settings.dailyBudgetMin;
@@ -207,6 +209,72 @@ export function systemDesignUnlock(state) {
     recentSolvedCleanRate: rate,
     minSolvedCleanRate,
   };
+}
+
+// ---------- Refreshers, not deadlines ----------
+//
+// The scheduling underneath is unchanged — Leitner boxes still decide when
+// recall is likely to be fading, and that's a real signal worth acting on.
+// What changed is what gets said about it.
+//
+// This used to be presented as a deadline: "due today", "12d overdue", a red
+// band labelled "slipping". Nobody is owed this work, and a problem you set
+// down three weeks ago isn't a missed obligation — it's just a thing you
+// haven't looked at in three weeks. Deadline language turns an ordinary gap
+// into a debt, and a growing pile of debts is the thing people quit over.
+//
+// So the number on screen is now how long since you last practiced it, which
+// is a fact about what you did rather than a judgment about what you owe, and
+// the suggestion is a refresher rather than a reckoning.
+
+/** The date a problem was last actually worked, or null if it never has been. */
+export function lastPracticedISO(problem) {
+  if (!problem.attempts?.length) return null;
+  return problem.attempts.reduce((latest, a) => (a.date > latest ? a.date : latest), problem.attempts[0].date);
+}
+
+/** Past roughly a week beyond its interval, recall has usually drifted far
+ * enough to be worth saying something about. */
+export const FADING_DAYS = 7;
+
+/**
+ * What to say about a problem's recency.
+ *
+ * `tone` still comes from the schedule, because the schedule is what knows
+ * when recall fades — it just drives emphasis now rather than a scolding.
+ */
+export function refresherStatus(problem, today = todayISO()) {
+  const last = lastPracticedISO(problem);
+  const daysSince = last ? daysBetween(last, today) : null;
+  const pastInterval = problem.nextReviewDate ? daysBetween(problem.nextReviewDate, today) : 0;
+
+  let tone = "fresh";
+  if (!last) tone = "new";
+  else if (pastInterval >= FADING_DAYS) tone = "fading";
+  else if (pastInterval >= 0) tone = "ready";
+
+  return { last, daysSince, pastInterval, tone, text: recencyText(daysSince) };
+}
+
+/**
+ * A gap in words.
+ *
+ * Coarser as it grows, because the difference between 38 and 41 days isn't
+ * information — and an exact day count that far back reads as a tally being
+ * kept against you.
+ */
+export function recencyText(days) {
+  if (days == null) return "not practiced yet";
+  if (days === 0) return "practiced today";
+  if (days === 1) return "practiced yesterday";
+  if (days < 14) return `${days} days ago`;
+  if (days < 60) {
+    const weeks = Math.round(days / 7);
+    return `${weeks} weeks ago`;
+  }
+  // The weeks branch runs to 59 days, so this is only ever reached at two
+  // months or more — no need to special-case a singular "1 month".
+  return `${Math.round(days / 30)} months ago`;
 }
 
 // ---------- The daily budget, as a live clock ----------
@@ -498,7 +566,7 @@ function freshFromBank(state) {
     : `you haven't attempted ${weakest ? weakest.pattern.name : "this pattern"} yet`;
   return {
     type: "fresh-volume", problem, patternId,
-    message: `Nothing's due — good time for something new. ${problem.name} is in your bank, and ${reason}.`,
+    message: `Nothing needs a refresher — good time for something new. ${problem.name} is in your bank, and ${reason}.`,
   };
 }
 
@@ -521,15 +589,15 @@ export function recommendSession(state) {
 
   if (todaysAttempts.length === 0) {
     if (due.length) {
-      return { type: "first-rep", problem: due[0], patternId: due[0].patternId, message: `Haven't practiced yet today — let's do one. ${due[0].name} is due.` };
+      return { type: "first-rep", problem: due[0], patternId: due[0].patternId, message: `Haven't practiced yet today — let's do one. ${due[0].name} is a good place to start.` };
     }
     if (stale) {
       const problem = state.problems.find((p) => p.patternId === stale.pattern.id);
-      return { type: "stale-nudge", problem, patternId: stale.pattern.id, message: `Nothing's due, but ${stale.pattern.name} hasn't come up in ${stale.daysSince} days — worth a refresher before it fades.` };
+      return { type: "stale-nudge", problem, patternId: stale.pattern.id, message: `Nothing is pressing, but ${stale.pattern.name} hasn't come up in ${stale.daysSince} days — worth a refresher before it fades.` };
     }
     const fresh = freshFromBank(state);
     if (fresh) return fresh;
-    return { type: "none", problem: null, patternId: null, message: "Nothing due, nothing gone stale. Free day — browse Topics, or take it." };
+    return { type: "none", problem: null, patternId: null, message: "Nothing has gone stale. Free day — browse Topics, or take it." };
   }
 
   const weak = patternStats(state)
