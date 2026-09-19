@@ -10,7 +10,7 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  lastPracticedISO, refresherStatus, recencyText, FADING_DAYS,
+  lastPracticedISO, refresherStatus, recencyText, FADING_DAYS, computePlantState,
   todayISO, addDaysISO, STATUS_ACTIVE,
 } from "../js/logic.js";
 
@@ -134,5 +134,57 @@ describe("recencyText", () => {
 
   test("test_recencyText_null_saysNotPractisedRatherThanNaN", () => {
     assert.equal(recencyText(null), "not practiced yet");
+  });
+});
+
+describe("a brand new account", () => {
+  // The plant scored 0 and rendered as wilting before its owner had done a
+  // single rep, because every penalty fires on an empty history at once:
+  // never active, no consistency, and every seeded problem counted as a
+  // neglected review. A dying plant on first open is the discouragement the
+  // plant exists to prevent.
+  function freshState(problems = []) {
+    return {
+      meta: { schemaVersion: 4 },
+      settings: { dailyBudgetMin: 75, boxIntervalsDays: [0, 1, 3, 7, 16, 35],
+        estimateMinByDifficulty: { Easy: 20, Medium: 30, Hard: 45, Unrated: 30 },
+        systemDesignUnlockThreshold: { minMocks: 10, minSolvedCleanRate: 0.7 } },
+      patterns: [{ id: "two-pointers", name: "Two Pointers", description: "" }],
+      problems, mocks: [], journal: [],
+      systemDesign: { manualUnlock: false, sessions: [] },
+      streak: { current: 0, longest: 0, lastActiveDate: null },
+      resources: {}, whiteboards: [],
+      quiz: { totalAsked: 0, totalCorrect: 0, recent: [] },
+    };
+  }
+  const seeded = Array.from({ length: 23 }, (_, i) => ({
+    id: `p${i}`, name: `P${i}`, number: i, difficulty: "Medium", patternId: "two-pointers",
+    status: STATUS_ACTIVE, box: 0, nextReviewDate: addDaysISO(todayISO(), -30), attempts: [],
+  }));
+
+  test("test_plant_noPracticeYet_isNotWilting", () => {
+    assert.notEqual(computePlantState(freshState(seeded)).vitality, "wilting");
+  });
+
+  test("test_plant_noPracticeYet_startsAtNeutralHealth", () => {
+    assert.equal(computePlantState(freshState(seeded)).health, 50);
+  });
+
+  test("test_plant_noPracticeYet_countsNothingAsNeglected", () => {
+    // 23 seeded problems dated a month back are not 23 things you neglected.
+    assert.equal(computePlantState(freshState(seeded)).signals.overdueCount, 0);
+  });
+
+  test("test_plant_emptyAccount_doesNotThrow", () => {
+    assert.doesNotThrow(() => computePlantState(freshState()));
+  });
+
+  test("test_plant_onceThereIsHistory_theNormalScoringResumes", () => {
+    // The early return must not swallow real signal the moment one rep exists.
+    const worked = freshState([{ ...seeded[0], attempts: [{
+      id: "a1", date: addDaysISO(todayISO(), -40), outcome: "failed", patternGuess: "incorrect",
+      timeToInsightMin: 30, timeToSolveMin: 60, mistakeTags: [], soulStatement: "" }] }]);
+    const plant = computePlantState(worked);
+    assert.ok(plant.health < 50, "a long lapse after real practice should still register");
   });
 });

@@ -346,12 +346,32 @@ describe("computePlantState", () => {
     assert.equal(withBank.health, withoutBank.health);
   });
 
-  test("test_computePlantState_activeOverdueProblems_reduceHealth", () => {
-    const overdue = Array.from({ length: 10 }, () =>
+  test("test_computePlantState_longNeglectedRealReviews_reduceHealth", () => {
+    // Both sides carry practice history, because neglect only means something
+    // once there is practice to have lapsed from: a problem you have never
+    // opened isn't neglected, it's unstarted. See the totalDaysPracticed early
+    // return in computePlantState.
+    const oldAttempt = (daysAgo) => ({
+      id: `a${daysAgo}`, date: addDaysISO(todayISO(), -daysAgo), outcome: "solved-clean",
+      patternGuess: "correct", timeToInsightMin: 5, timeToSolveMin: 20,
+      mistakeTags: [], soulStatement: "",
+    });
+    const neglected = Array.from({ length: 10 }, () =>
+      makeProblem({ nextReviewDate: addDaysISO(todayISO(), -30), attempts: [oldAttempt(40)] }));
+    const kept = [makeProblem({ nextReviewDate: addDaysISO(todayISO(), 5), attempts: [oldAttempt(40)] })];
+    assert.ok(computePlantState(makeState({ problems: neglected })).health
+            < computePlantState(makeState({ problems: kept })).health,
+      "reviews left long after you actually worked them should show");
+  });
+
+  test("test_computePlantState_unstartedProblems_areNotTreatedAsNeglect", () => {
+    // Seeding an account with problems you have not begun must not read as a
+    // pile of things you are already behind on.
+    const seeded = Array.from({ length: 23 }, () =>
       makeProblem({ nextReviewDate: addDaysISO(todayISO(), -30) }));
-    const stressed = computePlantState(makeState({ problems: overdue }));
-    const clear = computePlantState(makeState({ problems: [] }));
-    assert.ok(stressed.health < clear.health, "neglected real reviews should show");
+    const plant = computePlantState(makeState({ problems: seeded }));
+    assert.equal(plant.signals.overdueCount, 0);
+    assert.notEqual(plant.vitality, "wilting");
   });
 
   test("test_computePlantState_healthAlwaysWithinBounds", () => {

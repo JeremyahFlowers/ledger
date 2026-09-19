@@ -441,6 +441,27 @@ export function computePlantState(state) {
   const budget = state.settings.dailyBudgetMin || 75;
   const overloaded = todaysMin > budget * 1.5 || todaysAttempts.length > 5;
 
+  // Nothing practiced yet means there is nothing to judge. Without this, a new
+  // account scored 0 and rendered as wilting before its owner had done a
+  // single rep: never active (-25), no consistency (-15), and every seeded
+  // problem counted as a neglected review (-20). Opening the app for the first
+  // time and being shown a dying plant is the exact discouragement the plant
+  // exists to prevent, and it is the same reproach in pictures that the
+  // refresher wording removed from the text.
+  if (totalDaysPracticed === 0) {
+    return {
+      stage: stage.key,
+      stageLabel: stage.label,
+      totalDaysPracticed: 0,
+      nextStageLabel: nextStage?.label || null,
+      daysToNextStage: nextStage ? nextStage.min : 0,
+      health: 50,
+      vitality: "steady",
+      signals: { activeDaysInWindow: 0, windowDays: HEALTH_WINDOW_DAYS, daysSinceActive: null,
+        recallRate: null, overdueCount: 0, overloaded: false, todaysMin: 0, budget: state.settings.dailyBudgetMin || 75 },
+    };
+  }
+
   let health = 50;
   health += Math.round((activeDaysInWindow / HEALTH_WINDOW_DAYS) * 30) - 15; // consistency: -15..+15
   health += Math.min(15, state.streak.current * 1.5); // streak: 0..+15
