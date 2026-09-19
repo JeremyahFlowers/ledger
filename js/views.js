@@ -575,7 +575,7 @@ export function renderLog(root, store, actions) {
           </div>
         </div>
 
-        <label class="field"><span class="label">Soul statement</span>
+        <label class="field"><span class="label">Soul statement <span class="muted small" style="font-weight:400">— optional, but this is the part worth having in six months</span></span>
           <textarea class="textarea" name="soulStatement" rows="4" placeholder="What was your confusion, and what clicked?"></textarea></label>
 
         <div class="field">
@@ -952,6 +952,9 @@ export function renderReflect(root, store, actions) {
 
         <div class="field">
           <span class="label">What was the core pattern here?</span>
+          <p class="muted small" style="margin:0 0 0.4rem">Answer before saving, even when you're
+          sure. Retrieving it yourself is what moves a pattern into memory — recognizing it in a
+          list afterwards doesn't.</p>
           <div class="quiz-options">
             ${reflectState.options.map((optId) => {
               const pat = state.patterns.find((x) => x.id === optId);
@@ -968,7 +971,7 @@ export function renderReflect(root, store, actions) {
           </div>
         </div>
 
-        <label class="field"><span class="label">Soul statement</span>
+        <label class="field"><span class="label">Soul statement <span class="muted small" style="font-weight:400">— optional, but this is the part worth having in six months</span></span>
           <textarea class="textarea" name="soulStatement" rows="4" placeholder="What was your confusion, and what clicked?"></textarea></label>
 
         ${session.isMock ? `
