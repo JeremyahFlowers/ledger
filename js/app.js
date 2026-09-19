@@ -253,9 +253,9 @@ function renderAll() {
     return;
   }
   renderView();
-  // Empty-state buttons are markup any view can emit, so they're bound here
+  // Navigation buttons are markup any view can emit, so they're bound here
   // rather than in each view that happens to have one.
-  views.wireEmptyStateActions(root, actions);
+  views.wireNavigationTargets(root, actions);
 }
 
 function renderView() {

@@ -1,5 +1,5 @@
 import {
-  todayISO, applyOutcome, activateProblem, dueProblems, planToday, allAttempts, patternStats,
+  todayISO, applyOutcome, activateProblem, dueProblems, planToday, allAttempts, patternStats, progressSummary,
   updateStreak, systemDesignUnlock, uid, MISTAKE_TAGS, MOCK_CHECKLIST, daysBetween,
   activityByDate, patternTrend, pickQuizProblem, quizOptions, addDaysISO, recommendSession,
   computePlantState,
@@ -137,7 +137,7 @@ function leetcodeCalendarToDateCounts(calendar) {
  * most of the app. Every empty state gets a line explaining what the thing is
  * for and, where there's an obvious next step, a button that takes it.
  *
- * `action` is `{ tab, label }`; wireEmptyStateActions() binds it.
+ * `action` is `{ tab, label }`; wireNavigationTargets() binds it.
  */
 function emptyState(icon, headline, explanation, action = null) {
   return `
@@ -145,17 +145,50 @@ function emptyState(icon, headline, explanation, action = null) {
       <span class="empty-state-icon">${navIcon(icon, { size: 22 })}</span>
       <p class="empty-state-headline">${esc(headline)}</p>
       <p class="muted small">${esc(explanation)}</p>
-      ${action ? `<button class="btn btn-ghost btn-sm" data-empty-go="${esc(action.tab)}">${esc(action.label)}</button>` : ""}
+      ${action ? `<button class="btn btn-ghost btn-sm" data-goto="${esc(action.tab)}">${esc(action.label)}</button>` : ""}
     </div>`;
 }
 
-/** Binds any buttons rendered by emptyState(). Called once centrally from
- * app.js after every render, so a view that adds an empty state later needs no
- * wiring of its own. Safe on a view with none. */
-export function wireEmptyStateActions(root, actions) {
-  root.querySelectorAll("[data-empty-go]").forEach((btn) => {
-    btn.addEventListener("click", () => actions.switchTab(btn.dataset.emptyGo));
+/**
+ * Binds every `data-goto="<tab>"` control in the rendered view.
+ *
+ * Called once centrally from app.js after each render, so any view can emit a
+ * navigation button as plain markup and it simply works — no per-view wiring,
+ * and no second mechanism to remember. Safe on a view with none.
+ */
+export function wireNavigationTargets(root, actions) {
+  root.querySelectorAll("[data-goto]").forEach((btn) => {
+    btn.addEventListener("click", () => actions.switchTab(btn.dataset.goto));
   });
+}
+
+/**
+ * One sentence on the dashboard connecting today's work to the trajectory.
+ *
+ * The streak card answers "did I show up"; without this, nothing on the page
+ * answers "is any of it working" — you had to go looking for that, which means
+ * mostly not seeing it. Silent until there's genuinely a trend, because a
+ * number invented from two attempts would be worse than no number.
+ */
+function trendLineHtml(state) {
+  const summary = progressSummary(state);
+  if (!summary.hasEnoughData || summary.cleanRateDelta == null) return "";
+
+  const points = Math.round(summary.cleanRateDelta * 100);
+  const faster = summary.insightDelta != null && summary.insightDelta <= -1
+    ? `, and you're reaching the approach ${Math.abs(summary.insightDelta).toFixed(0)} min faster`
+    : "";
+  const direction = Math.abs(points) < 3 ? "steady" : points > 0 ? "up" : "down";
+  const phrase = direction === "steady"
+    ? "Clean-solve rate holding steady"
+    : `Clean-solve rate ${direction} ${Math.abs(points)} pts`;
+
+  return `
+    <p class="trend-line ${direction}" style="margin:0.6rem 0 0">
+      <span class="trend-arrow" aria-hidden="true">${direction === "up" ? "&#8599;" : direction === "down" ? "&#8600;" : "&#8594;"}</span>
+      ${esc(phrase)}${esc(faster)} over ${summary.activeWeeks} active week${summary.activeWeeks === 1 ? "" : "s"}.
+      <button type="button" class="link-button" data-goto="progress">See progress</button>
+    </p>`;
 }
 
 function sparklineSvg(points, { width = 80, height = 22 } = {}) {
@@ -335,6 +368,7 @@ export function renderDashboard(root, store, actions) {
         </div>
         <p class="muted small" style="margin:0.6rem 0 0">Last 7 days</p>
         ${weekStripSvg(state)}
+        ${trendLineHtml(state)}
       </div>
 
       <div class="card">

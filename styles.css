@@ -587,6 +587,20 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 .session-steps li { margin-bottom: 0.3rem; }
 .session-steps li:first-child { margin-bottom: 0.5rem; }
 
+/* The dashboard's one line of trajectory. Coloured by direction, but quietly —
+   a bad week is information, not a failure notice. */
+.trend-line { font-size: 0.85rem; color: var(--text-muted); }
+.trend-arrow { font-weight: 700; }
+.trend-line.up .trend-arrow { color: var(--good); }
+.trend-line.down .trend-arrow { color: var(--warn); }
+
+/* A control that belongs inside a sentence. */
+.link-button {
+  padding: 0; border: 0; background: none;
+  font: inherit; color: var(--accent-strong);
+  text-decoration: underline; cursor: pointer;
+}
+
 /* ---------- Loading skeletons ---------- */
 
 /* Placeholders that occupy the same space the real content will, so a slow
