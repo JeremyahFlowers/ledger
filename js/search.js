@@ -124,11 +124,22 @@ export function score(text, query) {
   if (!needle) return 1;
   if (haystack === needle) return 1000;
   if (haystack.startsWith(needle)) return 500;
+
+  // Everything below used to be a regex built per candidate, which meant
+  // compiling a pattern ~2,500 times per keystroke — the entire reason typing
+  // felt choppy. indexOf answers the same question, and the word-boundary test
+  // is just "what character precedes the hit", so no pattern is needed at all.
+  // Dropping the regex also drops the escaping it required, and with it the
+  // possibility of a query like "*.+?" being read as syntax.
+  const at = haystack.indexOf(needle);
+  if (at === -1) return null;
   // A word-start match ("two" in "Add Two Numbers") reads as intentional in a
   // way that a match inside a word does not.
-  if (new RegExp(`\\b${needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`).test(haystack)) return 250;
-  if (haystack.includes(needle)) return 100;
-  return null;
+  return at === 0 || !isWordChar(haystack[at - 1]) ? 250 : 100;
+}
+
+function isWordChar(ch) {
+  return (ch >= "a" && ch <= "z") || (ch >= "0" && ch <= "9") || ch === "_";
 }
 
 function runSearch(rawQuery) {

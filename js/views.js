@@ -12,7 +12,7 @@ import { loadCodeMirror, CODE_MODES } from "./codemirror-loader.js";
 import { createWhiteboard } from "./whiteboard.js";
 import { plantSvg } from "./plant.js";
 import { patternIcon, navIcon } from "./icons.js";
-import { problemUrl } from "./catalog.js";
+import { problemUrl, slugify } from "./catalog.js";
 
 /**
  * The diagram renderer and its worked examples, fetched on first use.
@@ -995,7 +995,9 @@ export function renderWorkspace(root, store, actions) {
           <button type="button" class="btn btn-ghost btn-sm" id="ws-toggle-board"
                   aria-pressed="${session.whiteboardShown}">Whiteboard</button>
           ${readUrl ? `<a class="btn btn-ghost btn-sm" href="${esc(readUrl)}" target="_blank" rel="noopener noreferrer"
-            title="Re-read the problem without losing the timer">Problem &#8599;</a>` : ""}
+            title="Re-read the problem without losing the timer">Problem &#8599;</a>
+          <button type="button" class="btn btn-ghost btn-sm" id="ws-run-on-leetcode"
+            title="Copy your code and open the problem, ready to paste and run">Run on LeetCode &#8599;</button>` : ""}
           <button class="btn btn-primary btn-sm" id="ws-submit">Submit solution</button>
           <button class="btn btn-ghost btn-sm session-exit" id="ws-exit">Exit</button>
         </div>
@@ -1116,6 +1118,31 @@ export function renderWorkspace(root, store, actions) {
     if (session.cm) session.cm.setOption("mode", CODE_MODES[session.codeLang].mode);
   });
 
+  // Getting the code into LeetCode's own editor is as close as a web page can
+  // come: nothing on this origin can write into a page on theirs, and their
+  // run endpoint needs a session and a CSRF token that only their own site
+  // has. So this does the two steps the user would otherwise do by hand —
+  // copy, then open — and leaves them one paste away from hitting Run.
+  const runBtn = root.querySelector("#ws-run-on-leetcode");
+  if (runBtn) {
+    runBtn.addEventListener("click", async () => {
+      const code = session.cm ? session.cm.getValue() : "";
+      if (!code.trim()) {
+        toast("Nothing to copy yet — write some code first.");
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(code);
+        window.open(readUrl, "_blank", "noopener");
+        toast("Code copied. Paste it into LeetCode's editor and run.");
+      } catch (_) {
+        // Clipboard access can be refused outright, and opening the tab
+        // without the code would be the worst of both.
+        toast("Couldn't copy to the clipboard — select the code and copy it manually.");
+      }
+    });
+  }
+
   wireStatementPane(root, store, p);
 
   root.querySelector("#ws-mark-insight").addEventListener("click", (e) => {
@@ -1162,12 +1189,13 @@ export function renderWorkspace(root, store, actions) {
  * a link that throws you into another tab, where the timer isn't, every time
  * you need to re-read a constraint.
  */
-function statementHtml(problem) {
+function statementHtml(problem, { loading = false } = {}) {
+  if (loading) return `<p class="muted small">Looking for a synced copy…</p>`;
   if (!problem.statement) {
     return `
       <div class="ws-statement-empty">
-        <p class="muted small">Paste the problem text here and it stays with this problem —
-        no more switching tabs mid-solve to re-read a constraint.</p>
+        <p class="muted small">No statement synced for this one yet. Paste it here and it stays
+        with the problem — no more switching tabs mid-solve to re-read a constraint.</p>
         <textarea class="textarea ws-statement-input" id="ws-statement-input" rows="10"
           placeholder="Paste the problem statement, constraints and examples…"></textarea>
         <button type="button" class="btn btn-sm btn-primary" id="ws-save-statement">Save statement</button>
@@ -1179,6 +1207,22 @@ function statementHtml(problem) {
 function wireStatementPane(root, store, problem) {
   const body = root.querySelector("#ws-statement-body");
   const editBtn = root.querySelector("#ws-edit-statement");
+
+  // A statement the sync Action already fetched beats asking the user to paste
+  // one. It isn't in state.json — statements are one file per problem so the
+  // synced document stays under the API's size limit — so it's read on demand,
+  // and only when there's nothing stored locally already.
+  if (!problem.statement) {
+    const slug = problem.catalogSlug || slugify(problem.name);
+    body.innerHTML = statementHtml(problem, { loading: true });
+    store.fetchStatement(slug).then((fetched) => {
+      // The session can end while this is in flight, and the pane it was going
+      // to paint would then belong to a different problem or be gone entirely.
+      if (!body.isConnected || session?.problem?.id !== problem.id) return;
+      if (fetched) problem.statement = fetched;
+      repaint();
+    });
+  }
 
   // Only this pane is ever rebuilt. Resetting the workspace root would take
   // the editor and the whiteboard with it.

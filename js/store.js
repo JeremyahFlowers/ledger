@@ -202,6 +202,25 @@ class Store {
     this._emit();
   }
 
+  /**
+   * Reads a problem statement the LeetCode sync Action fetched, or null.
+   *
+   * Statements live as one file per problem rather than inside state.json,
+   * which has to stay under the Contents API's 1 MB limit — see
+   * scripts/fetch_leetcode_statements.py in the data repo. Never throws: a
+   * statement that hasn't been fetched yet just means the workspace offers its
+   * paste box, which is a normal state and not an error.
+   */
+  async fetchStatement(slug) {
+    if (!this.gh || !slug) return null;
+    try {
+      const record = await this.gh.fetchPublicFile(`prep-data/statements/${slug}.json`);
+      return record?.statement || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /** Saves a PNG (as a data URL) as a brand-new file in the repo — used by
    * the whiteboard. Binary assets are stored outside state.json so the main
    * sync document stays small; only a path reference lives in state. */
