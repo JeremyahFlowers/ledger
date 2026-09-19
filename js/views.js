@@ -1464,6 +1464,14 @@ export function renderTopics(root, store, actions) {
   const stats = patternStats(state);
   const statByPattern = Object.fromEntries(stats.map((s) => [s.pattern.id, s]));
 
+  // Reading about a pattern lands better when you're about to practise it, so
+  // the index says which ones have work waiting rather than leaving you to
+  // cross-reference the queue yourself.
+  const dueByPattern = {};
+  for (const p of dueProblems(state)) {
+    dueByPattern[p.patternId] = (dueByPattern[p.patternId] || 0) + 1;
+  }
+
   root.innerHTML = `
     <div class="card">
       <h2>Topics</h2>
@@ -1482,7 +1490,10 @@ export function renderTopics(root, store, actions) {
             <h3 style="margin:0">${esc(pat.name)}</h3>
           </div>
           <p class="muted small">${esc(t?.hook || pat.description)}</p>
-          ${s && s.attempts ? `<span class="pill ${pct(s.solvedCleanRate)[0] === "1" ? "pill-good" : "pill-muted"}">${pct(s.solvedCleanRate)} clean-solve</span>` : `<span class="pill pill-muted">not practiced yet</span>`}
+          <span class="row gap-sm">
+            ${s && s.attempts ? `<span class="pill ${pct(s.solvedCleanRate)[0] === "1" ? "pill-good" : "pill-muted"}">${pct(s.solvedCleanRate)} clean-solve</span>` : `<span class="pill pill-muted">not practiced yet</span>`}
+            ${dueByPattern[pat.id] ? `<span class="pill pill-warn">${dueByPattern[pat.id]} due</span>` : ""}
+          </span>
         </button>`;
       }).join("")}
     </div>`;
