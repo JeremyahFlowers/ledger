@@ -84,7 +84,15 @@ export function installShortcuts(deps) {
     // dialog's own focusable content.
     if (isTypingTarget(event.target)) return;
     if (!deps.isReady()) return;
-    if (deps.inSession()) return; // the workspace stays undisturbed
+
+    // The shortcut list stays reachable everywhere, including mid-session — the
+    // topbar advertises it on every screen, so it should answer on every screen.
+    if (event.key === "?") {
+      event.preventDefault();
+      toggleHelp();
+      return;
+    }
+    if (deps.inSession()) return; // otherwise the workspace stays undisturbed
 
     if (pendingGo) {
       const target = GO_TO[event.key.toLowerCase()];
@@ -102,10 +110,6 @@ export function installShortcuts(deps) {
         pendingGo = true;
         pendingTimer = setTimeout(clearPending, SEQUENCE_TIMEOUT_MS);
         event.preventDefault();
-        break;
-      case "?":
-        event.preventDefault();
-        toggleHelp();
         break;
       case "/": {
         // Pages that offer a search own the affordance; this just focuses it.

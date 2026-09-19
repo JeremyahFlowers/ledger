@@ -96,6 +96,31 @@ describe("problemUrl", () => {
     assert.equal(problemUrl({ catalogSlug: "two-sum" }), "https://leetcode.com/problems/two-sum/");
   });
 
+  test("test_problemUrl_numberedProblem_derivesSlugFromTitle", () => {
+    // LeetCode's own slugs follow the same convention slugify() implements,
+    // which is what makes deriving one safe.
+    assert.equal(problemUrl({ name: "3Sum", number: 15 }),
+      "https://leetcode.com/problems/3sum/");
+    assert.equal(problemUrl({ name: "Implement Trie (Prefix Tree)", number: 208 }),
+      "https://leetcode.com/problems/implement-trie-prefix-tree/");
+    assert.equal(problemUrl({ name: "Container With Most Water", number: 11 }),
+      "https://leetcode.com/problems/container-with-most-water/");
+  });
+
+  test("test_problemUrl_unnumberedProblem_returnsNullRatherThanAGuess", () => {
+    // Hand-written entries aren't LeetCode problems, so a derived link would
+    // point at a page that doesn't exist. A wrong link is worse than none.
+    assert.equal(problemUrl({ name: "0/1 Knapsack (reference)" }), null);
+    assert.equal(problemUrl({ name: "Minimum Cost to Merge Sorted Lists", number: null }), null);
+  });
+
+  test("test_problemUrl_prefersStoredUrlThenSlugThenTitle", () => {
+    const full = { url: "https://example.com/x", catalogSlug: "slug", name: "Name", number: 1 };
+    assert.equal(problemUrl(full), "https://example.com/x");
+    assert.equal(problemUrl({ catalogSlug: "slug", name: "Name", number: 1 }),
+      "https://leetcode.com/problems/slug/");
+  });
+
   test("test_problemUrl_neitherPresent_returnsNull", () => {
     assert.equal(problemUrl({ name: "Hand-written problem" }), null);
   });

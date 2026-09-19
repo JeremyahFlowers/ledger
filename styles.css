@@ -233,7 +233,14 @@ main {
   border-radius: 8px; padding: 0.6rem 1rem; border: 1px solid var(--border);
   background: var(--surface); color: var(--text); cursor: pointer;
   min-height: 40px;
+  /* Some buttons are links — "open the problem" genuinely navigates — and
+     without this they arrive underlined and in link blue, looking like a
+     different kind of control than the buttons beside them. */
+  display: inline-flex; align-items: center; justify-content: center;
+  text-decoration: none;
 }
+a.btn, a.btn:hover { color: var(--text); }
+a.btn-primary { color: var(--accent-contrast); }
 .btn:hover { border-color: var(--accent); }
 .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
@@ -567,6 +574,18 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
   gap: 0.75rem; margin-top: 0.75rem; }
 @media (max-width: 560px) { .bank-filters { grid-template-columns: 1fr; } }
 
+
+/* Opening the problem is literally step one of a session, so it reads as an
+   ordered list with the link as the first action rather than a sentence
+   mentioning a link that may not exist. */
+.session-steps {
+  margin: 0.25rem 0 0.75rem;
+  padding-left: 1.25rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+.session-steps li { margin-bottom: 0.3rem; }
+.session-steps li:first-child { margin-bottom: 0.5rem; }
 
 /* ---------- Empty states ---------- */
 

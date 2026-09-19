@@ -109,10 +109,22 @@ export async function problemsForPattern(patternId, {
 // keeps it around 200 KB.
 export const MAX_BANK_SIZE = 500;
 
+/**
+ * Where to go and read this problem, or null if we can't say.
+ *
+ * Tried in order: a stored url, the catalog slug, then the title. The last one
+ * works because LeetCode's own slugs follow exactly the convention slugify()
+ * implements — "3Sum" is /problems/3sum, "Implement Trie (Prefix Tree)" is
+ * /problems/implement-trie-prefix-tree — and it is gated on the problem having
+ * a LeetCode number, so hand-written entries like "0/1 Knapsack (reference)"
+ * get no link rather than a link to a page that doesn't exist. A wrong link is
+ * worse than none; an absent one is at least honest.
+ */
 export function problemUrl(problem) {
-  return problem.url || (problem.catalogSlug
-    ? `https://leetcode.com/problems/${problem.catalogSlug}/`
-    : null);
+  if (problem.url) return problem.url;
+  if (problem.catalogSlug) return `https://leetcode.com/problems/${problem.catalogSlug}/`;
+  if (problem.number && problem.name) return `https://leetcode.com/problems/${slugify(problem.name)}/`;
+  return null;
 }
 
 /**

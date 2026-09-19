@@ -11,6 +11,7 @@ import { plantSvg } from "./plant.js";
 import { arrayDiagram, stackDiagram, gridDiagram, graphDiagram } from "./diagrams.js";
 import { DIAGRAM_SPECS } from "./diagram-data.js";
 import { patternIcon, navIcon } from "./icons.js";
+import { problemUrl } from "./catalog.js";
 
 const DIAGRAM_MOUNTERS = { array: arrayDiagram, stack: stackDiagram, grid: gridDiagram, graph: graphDiagram };
 
@@ -733,14 +734,22 @@ export function renderWorkspace(root, store, actions) {
       ${p.number ? `<span class="pill pill-muted">#${p.number}</span>` : ""}
       ${session.isMock ? `<span class="pill pill-warn">Mock</span>` : ""}
     </div>
-    <h2 class="session-problem-title">${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a>` : esc(p.name)}</h2>`;
+    <h2 class="session-problem-title">${esc(p.name)}</h2>`;
+  const readUrl = problemUrl(p);
 
   if (!session.startedAt) {
     root.innerHTML = `
       <div class="card session-card">
         ${header}
-        <p class="muted">Open the problem (use the link above if you have one), read it through, then
-        start the clock when you actually begin working it — that's what "time to insight" measures from.</p>
+        <p class="muted">Read it through first, then start the clock when you actually begin working it —
+        that's what "time to insight" measures from.</p>
+        ${readUrl ? `
+        <ol class="session-steps">
+          <li><a class="btn btn-ghost btn-sm" href="${esc(readUrl)}" target="_blank" rel="noopener noreferrer">Open the problem &#8599;</a></li>
+          <li>Read it through.</li>
+          <li>Start the clock when you begin thinking about a solution.</li>
+        </ol>` : `
+        <p class="muted small">No link for this one — open it wherever you keep it.</p>`}
         <label class="field checkbox-field">
           <input type="checkbox" id="ws-mock-toggle" ${session.isMock ? "checked" : ""} />
           Verbalized mock — talk through your approach out loud, strict timer
@@ -768,6 +777,8 @@ export function renderWorkspace(root, store, actions) {
           ${session.insightAt ? `Insight at ${Math.round((session.insightAt - session.startedAt) / 60000)} min` : "I've got my approach"}
         </button>
         <button type="button" class="btn btn-ghost btn-sm" id="ws-toggle-board">${session.whiteboardShown ? "Hide whiteboard" : "Show whiteboard"}</button>
+        ${readUrl ? `<a class="btn btn-ghost btn-sm" href="${esc(readUrl)}" target="_blank" rel="noopener noreferrer"
+          title="Re-read the problem without losing the timer">Problem &#8599;</a>` : ""}
       </div>
       <div id="ws-board-host" ${session.whiteboardShown ? "" : "hidden"}></div>
       <div class="field" style="margin-top:0.6rem">
