@@ -3,7 +3,7 @@ import {
   updateStreak, systemDesignUnlock, uid, MISTAKE_TAGS, MOCK_CHECKLIST, daysBetween,
   activityByDate, patternTrend, pickQuizProblem, quizOptions, addDaysISO, recommendSession,
   computePlantState, normalizeStatement, MAX_STATEMENT_CHARS,
-  budgetProgress, budgetPressure, refresherStatus,
+  budgetProgress, budgetPressure, refresherStatus, STATUS_ACTIVE,
 } from "./logic.js";
 import {
   installSplitters, loadSizes, gridTemplate, redistribute,
@@ -635,7 +635,12 @@ export function renderDashboard(root, store, actions) {
           </div>
           <div class="row gap-sm" style="align-items:center">
             ${ringSvg(budgetMin ? usedMin / budgetMin : 0, { size: 40, stroke: 4 })}
-            <span class="stat-label">${usedMin}/${budgetMin} min<br/>planned today</span>
+            <!-- "lined up", not "today": the standing plant shows minutes
+                 actually spent against the same budget, and two rings both
+                 labelled "today" against the same denominator read as the
+                 same number disagreeing with itself. This one is the size of
+                 the work queued; that one is the clock. -->
+            <span class="stat-label">${usedMin}/${budgetMin} min<br/>of work lined up</span>
           </div>
         </div>
         <p class="muted small" style="margin:0.6rem 0 0">Last 7 days</p>
@@ -917,6 +922,10 @@ export function renderLog(root, store, actions) {
           filePath: "",
           url: f.get("newUrl") || "",
           notes: "",
+          // Stated rather than left to migrateState's "no status means active"
+          // fallback. That rule exists to read state files written before the
+          // field did; new records shouldn't be relying on it.
+          status: STATUS_ACTIVE,
           box: 0,
           nextReviewDate: todayISO(),
           attempts: [],
@@ -2019,7 +2028,7 @@ export function renderQuiz(root, store, actions) {
         <h2>Pattern-recognition drill</h2>
         ${emptyState("quiz", "Nothing to drill yet",
           "This drill shows a problem you've already solved and asks which pattern it used — the recall step that makes a pattern stick. It needs a few logged attempts to draw from.",
-          { tab: "queue", label: "Go to the review queue" })}
+          { tab: "queue", label: "See what is ready for a refresher" })}
       </div>`;
     return;
   }
@@ -2128,7 +2137,7 @@ export function renderWarmup(root, store, actions) {
       <div class="card">
         ${emptyState("quiz", "No warmup available yet",
           "Warmup replays patterns from problems you've already attempted, to get your head in before a session. Log one first.",
-          { tab: "queue", label: "Go to the review queue" })}
+          { tab: "queue", label: "See what is ready for a refresher" })}
         <button class="btn btn-ghost" data-tab="dashboard">Back to dashboard</button>
       </div>`;
     wireTabButtons(root, actions);

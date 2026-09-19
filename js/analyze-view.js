@@ -353,7 +353,7 @@ function practiceHtml(store) {
     <div class="card">
       <h2>Practice this shape</h2>
       <p class="muted small">Recognizing the pattern is step one. These are catalog problems that
-      exercise ${esc(label)} — add one to your review queue and it enters the normal spaced-repetition
+      exercise ${esc(label)} — add one and it joins the normal spaced-repetition
       rotation.</p>
       <div class="row gap-sm" style="margin-bottom:0.75rem">
         <button class="btn btn-ghost btn-sm" id="open-topic" data-testid="analyze-open-topic">Read the ${esc(label)} page</button>
@@ -405,7 +405,7 @@ function wireResults(root, store, actions) {
       // addToQueue re-renders, replacing this button with the "in your queue"
       // pill, so there is nothing to update on the node we were clicked from.
       addToQueue(store, problem, state.selected);
-      toast(`${problem.title} added to your review queue.`);
+      toast(`${problem.title} added — it will come round for a refresher.`);
     });
   });
 }

@@ -28,7 +28,7 @@ export const GO_TO = {
   p: { tab: "practice", label: "Practice" },
   l: { tab: "learn", label: "Learn" },
   t: { tab: "track", label: "Track" },
-  q: { tab: "queue", label: "Review Queue" },
+  q: { tab: "queue", label: "Refreshers" },
   b: { tab: "bank", label: "Problem Bank" },
   a: { tab: "analyze", label: "Analyze a problem" },
   o: { tab: "topics", label: "Topics" },
