@@ -568,6 +568,62 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 @media (max-width: 560px) { .bank-filters { grid-template-columns: 1fr; } }
 
 
+/* ---------- Keyboard shortcuts ---------- */
+
+.shortcut-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 3rem 1rem;
+  background: rgba(8, 14, 12, 0.55);
+  backdrop-filter: blur(2px);
+  overflow-y: auto;
+}
+.shortcut-panel {
+  width: min(30rem, 100%);
+  padding: 1.25rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+.shortcut-row {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  gap: 0.75rem;
+  align-items: baseline;
+  padding: 0.28rem 0;
+  font-size: 0.9rem;
+}
+.shortcut-keys { display: flex; gap: 0.25rem; }
+kbd {
+  display: inline-block;
+  min-width: 1.5rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--surface-alt);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  text-align: center;
+  color: var(--text);
+}
+
+/* A discoverability hint; the shortcut is useless if nobody learns it exists.
+   Hidden where there is no keyboard to press it with. */
+.shortcut-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+@media (pointer: coarse) { .shortcut-hint { display: none; } }
+
 /* ---------- Focus, skip link, screen-reader text ---------- */
 
 /* Focus was styled on buttons and inputs only, which left every other

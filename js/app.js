@@ -5,6 +5,8 @@ import { plantSvg } from "./plant.js";
 import { navIcon } from "./icons.js";
 import { renderAnalyze } from "./analyze-view.js";
 import { renderBank } from "./bank-view.js";
+import { installShortcuts, toggleHelp } from "./shortcuts.js";
+import { recommendSession } from "./logic.js";
 
 // The nav reads like a table of contents, not a junk drawer: Home is the
 // cover page; everything else lives in one of a few named chapters, each
@@ -272,6 +274,30 @@ function renderAll() {
   }
   STANDALONE.dashboard.render(root, store, actions); // unknown/stale tab id — fall back home
 }
+
+/** `s` from anywhere outside a session starts whatever the Dashboard is
+ * recommending — the one action this app exists for shouldn't need navigating
+ * to first. Returns false when there's genuinely nothing to start, so the
+ * keypress falls through instead of appearing to do nothing. */
+function startRecommendedSession() {
+  if (!store.state || views.hasActiveSession()) return false;
+  const rec = recommendSession(store.state);
+  if (!rec || !rec.problem) return false;
+  views.startSession(rec.problem);
+  actions.switchTab("workspace");
+  views.toast(`Started: ${rec.problem.name}`);
+  return true;
+}
+
+document.getElementById("shortcut-hint")?.addEventListener("click", toggleHelp);
+
+installShortcuts({
+  switchTab: actions.switchTab,
+  inSession: views.hasActiveSession,
+  exitSession,
+  startRecommended: startRecommendedSession,
+  isReady: () => store.state != null,
+});
 
 const savedTheme = localStorage.getItem("ledger.theme");
 if (savedTheme && savedTheme !== "system") document.documentElement.dataset.theme = savedTheme;
