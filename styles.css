@@ -891,6 +891,119 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 }
 .topbar-icon-button:hover { background: var(--surface-alt); color: var(--text); }
 
+/* ---------- Daily budget clock ---------- */
+
+.budget-clock {
+  display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+}
+/* The plant scales with --pressure, set per render from budgetPressure():
+   +1 at the budget, falling through 0 and down to -1 as the day overruns. The
+   range is deliberately narrow — 0.82 to 1.15 — because this has to read as
+   the plant responding to the day, not as a growth animation competing with
+   the real stage the user has earned. */
+.budget-plant {
+  display: inline-flex;
+  transform: scale(calc(1 + var(--pressure, 0) * 0.15));
+  transform-origin: bottom center;
+  transition: transform 400ms ease, filter 400ms ease;
+}
+/* Past the budget the pressure goes negative, so this shrinks and desaturates
+   at the same time — one change the eye reads without having to be told. */
+.budget-plant { filter: saturate(calc(1 + var(--pressure, 0) * 0.4)); }
+.budget-warn { color: var(--warn); font-weight: 600; }
+.budget-over { color: var(--bad); font-weight: 700; }
+
+/* ---------- The standing plant ----------
+
+   Bottom-right on every page but Home, so the "how is today going" signal is
+   in view while working instead of a page away.
+
+   pointer-events: none is the important line. The user should never be able to
+   tap their way out of a session by catching this with a thumb — it is a
+   readout, not a control, and nothing about it is clickable or focusable. */
+.plant-widget {
+  position: fixed;
+  right: clamp(0.75rem, 2vw, 1.5rem);
+  bottom: clamp(0.75rem, 2vw, 1.5rem);
+  z-index: 60;
+  pointer-events: none;
+  user-select: none;
+  display: flex; align-items: center; justify-content: center;
+}
+.plant-widget-inner {
+  /* Square, so it reads as one panel in the corner rather than a label with a
+     picture above it. The plant takes the room it needs and the clock sits
+     under it; the box itself stays the same shape whatever they do. */
+  width: var(--plant-widget-size, 140px);
+  aspect-ratio: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0.1rem;
+  padding: 0.5rem;
+  border-radius: var(--radius);
+  /* Enough of a ground to stay legible over a whiteboard or an editor,
+     little enough to stay out of the way of them. */
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  backdrop-filter: blur(3px);
+  /* The box holds still; only the plant inside it grows and shrinks. Scaling
+     the whole panel moved the text and the border around with it, which read
+     as the widget wobbling rather than the plant responding. */
+  transform-origin: bottom right;
+}
+.plant-widget-art {
+  flex: 1; min-height: 0;
+  display: flex; align-items: flex-end; justify-content: center;
+  /* Same pressure the dashboard clock uses, so the two can't disagree about
+     how the day is going. The long duration matters: the value only changes
+     once a second, so a short transition finishes early and the next step is
+     visible as a jump. At 1s each step runs straight into the next and the
+     growth reads as continuous. */
+  transform: scale(calc(1 + var(--pressure, 0) * 0.14));
+  transform-origin: bottom center;
+  transition: transform 1s linear, filter 1s linear;
+  filter: saturate(calc(1 + var(--pressure, 0) * 0.4));
+}
+.plant-widget-art svg { width: 100%; height: auto; max-height: 100%; }
+.plant-widget-clock {
+  font-family: var(--font-mono); font-size: 1.05rem; font-weight: 700;
+  font-variant-numeric: tabular-nums; line-height: 1.1;
+  color: var(--text);
+}
+.plant-widget-note {
+  font-size: 0.66rem; font-weight: 600; color: var(--text-muted);
+  text-align: center; white-space: nowrap;
+}
+
+/* Bigger on a laptop than a tablet — there's more room to spare, and the
+   whole point is that it reads at a glance from across the desk. */
+@media (min-width: 1100px) {
+  .plant-widget-inner { --plant-widget-size: 168px; }
+  .plant-widget-clock { font-size: 1.25rem; }
+  .plant-widget-note { font-size: 0.72rem; }
+}
+
+/* Clicks pass through the widget, but the bottom of a long list would still
+   come to rest underneath it with no way to scroll further. Reserving the
+   height as page padding means the last row always clears it. The workspace
+   is excluded: it doesn't scroll, and padding its panes would shorten the
+   editor for no reason. */
+@media (min-width: 720px) {
+  main:not(.page-full) { padding-bottom: calc(var(--plant-widget-size, 140px) + 2rem); }
+}
+@media (min-width: 1100px) {
+  main:not(.page-full) { padding-bottom: calc(168px + 2rem); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plant-widget-art { transition: none; }
+}
+/* On a phone the corner is where thumbs live and the screen has none to
+   spare, so the floating copy goes away and the topbar indicator — which is
+   always on screen anyway — carries the signal. */
+@media (max-width: 719px) {
+  .plant-widget { display: none; }
+}
+
 /* ---------- Global search ---------- */
 
 /* Search sits in the middle of the header as a real input. It used to be an

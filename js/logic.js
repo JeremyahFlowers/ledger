@@ -209,6 +209,118 @@ export function systemDesignUnlock(state) {
   };
 }
 
+// ---------- The daily budget, as a live clock ----------
+//
+// The budget was only ever used two ways: planToday() stops filling the day's
+// plan once it's spent, and computePlantState() docks health after the fact if
+// a day ran past 1.5x it. Both look at attempts already logged, so the number
+// only meant anything in hindsight — you found out you'd overdone it the next
+// time you opened the app.
+//
+// This makes it a clock you can watch while you work. It is deliberately a
+// separate thing from the session timer in the workspace: that one measures
+// one problem for the record, this one measures the day against the ceiling
+// you set for yourself, and it keeps running between problems.
+
+/** A day's timer, fresh. Kept per-day so yesterday's total never leaks into
+ * today — the date is stored alongside rather than the timer being cleared by
+ * something that has to remember to run at midnight. */
+export function newDayTimer(dateISO = todayISO()) {
+  return { date: dateISO, running: false, startedAt: null, accumulatedMs: 0 };
+}
+
+/**
+ * Milliseconds on the clock today, including the stretch currently running.
+ *
+ * `now` is a parameter rather than read from the clock so this can be tested
+ * and so a render can pass a single consistent instant to everything it draws.
+ */
+export function dayTimerElapsedMs(state, now = Date.now()) {
+  const timer = state.dayTimer;
+  if (!timer || timer.date !== todayISO()) return 0;
+  // `!= null` rather than a truthiness check: a startedAt of 0 is a real
+  // instant, and treating it as "never started" silently reports an empty day.
+  const open = timer.running && timer.startedAt != null ? Math.max(0, now - timer.startedAt) : 0;
+  return timer.accumulatedMs + open;
+}
+
+/** Start today's clock. Rolls over to a new day's timer if the stored one is
+ * stale, so the first start after midnight begins at zero. */
+export function startDayTimer(state, now = Date.now()) {
+  const today = todayISO();
+  if (!state.dayTimer || state.dayTimer.date !== today) state.dayTimer = newDayTimer(today);
+  if (state.dayTimer.running) return;
+  state.dayTimer.running = true;
+  state.dayTimer.startedAt = now;
+}
+
+/** Stop the clock, banking the stretch that was running. */
+export function stopDayTimer(state, now = Date.now()) {
+  const timer = state.dayTimer;
+  if (!timer || !timer.running) return;
+  timer.accumulatedMs += timer.startedAt != null ? Math.max(0, now - timer.startedAt) : 0;
+  timer.running = false;
+  timer.startedAt = null;
+}
+
+export function resetDayTimer(state) {
+  state.dayTimer = newDayTimer();
+}
+
+/** Past this multiple of the budget the day counts as a real overrun — the
+ * same threshold computePlantState() already uses to dock health, kept in one
+ * place so the live warning and the recorded penalty can't disagree. */
+export const OVERRUN_MULTIPLE = 1.5;
+
+/**
+ * Where today stands against the budget.
+ *
+ * `usedMin` counts the live clock *and* time already logged against attempts
+ * today, because both are practice — a day where you logged two problems and
+ * then ran the clock for twenty minutes has used both.
+ */
+export function budgetProgress(state, now = Date.now()) {
+  const budgetMin = state.settings.dailyBudgetMin || 75;
+  const today = todayISO();
+  const loggedMin = allAttempts(state)
+    .filter((a) => a.date === today)
+    .reduce((sum, a) => sum + (a.timeToSolveMin || 0), 0);
+  const clockMin = dayTimerElapsedMs(state, now) / 60000;
+  const usedMin = loggedMin + clockMin;
+  return {
+    budgetMin,
+    usedMin,
+    loggedMin,
+    clockMin,
+    remainingMin: Math.max(0, budgetMin - usedMin),
+    overMin: Math.max(0, usedMin - budgetMin),
+    fraction: budgetMin > 0 ? usedMin / budgetMin : 0,
+    over: usedMin > budgetMin,
+    overrun: usedMin > budgetMin * OVERRUN_MULTIPLE,
+    running: !!(state.dayTimer?.running && state.dayTimer.date === today),
+  };
+}
+
+/**
+ * How the plant should respond to today's clock, from -1 to +1.
+ *
+ * Positive as the day fills toward the budget and the plant grows into it;
+ * back through zero once the budget is spent, and negative from there as it
+ * shrinks. It reaches its full negative at twice the budget.
+ *
+ * This drives the *drawing* only, never the stored health. The plant's two
+ * axes mean something — stage is cumulative and never regresses, health reads
+ * the last fortnight — and a number that swung with a clock running right now
+ * would belong to neither. What the user sees while they work is a preview of
+ * the consequence; the consequence itself is still recorded from the attempts
+ * they actually log.
+ */
+export function budgetPressure(state, now = Date.now()) {
+  const { fraction } = budgetProgress(state, now);
+  if (fraction <= 1) return fraction;           // growing into the day's target
+  return Math.max(-1, 1 - (fraction - 1) * 2);  // and shrinking back past it
+}
+
 export const PLANT_STAGES = [
   { min: 0, key: "seed", label: "Seed" },
   { min: 3, key: "sprout", label: "Sprout" },

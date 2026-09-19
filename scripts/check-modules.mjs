@@ -85,3 +85,9 @@ if (failures.length) {
 }
 
 console.log(`all ${modules.length} modules load cleanly`);
+// app.js starts the clock that drives the plant and the budget ring, and an
+// open interval keeps Node alive indefinitely. This script's question is only
+// "does every module import without throwing", which has been answered by the
+// time we get here, so leave rather than wait for timers that are correct in a
+// browser and meaningless here.
+process.exit(0);

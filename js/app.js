@@ -268,6 +268,8 @@ const PAGE_WIDTH = {
   workspace: "page-full",     // an IDE: statement, editor and board side by side
   dashboard: "page-wide",     // a grid of cards, and the more of them visible the better
   bank: "page-wide",          // ~2,500 rows to scan
+  queue: "page-wide",         // a long list of rows, same as the bank
+  analyze: "page-wide",       // highlighted text beside its explanation
   patterns: "page-wide",      // the nine-column mastery table
   progress: "page-wide",      // charts read better wide than tall
   leetcode: "page-wide",
@@ -281,6 +283,45 @@ function applyPageWidth() {
   root.classList.remove("page-full", "page-wide", "page-read");
   const tier = PAGE_WIDTH[activeTab];
   if (tier) root.classList.add(tier);
+}
+
+// Home gives the plant a whole card of its own, so the floating one would just
+// be a second copy of the same thing on the same screen.
+const PLANT_WIDGET_HIDDEN_ON = new Set(["dashboard"]);
+
+// Built once per view change, then updated in place every tick. Rebuilding it
+// on the tick restarted the CSS transition from scratch each second, which is
+// what made the plant step rather than grow.
+function renderPlantWidget() {
+  const host = document.getElementById("plant-widget");
+  if (!host || !store.state) return;
+  const show = !PLANT_WIDGET_HIDDEN_ON.has(activeTab);
+  host.hidden = !show;
+  if (!show) return;
+  if (!host.querySelector(".plant-widget-inner")) {
+    host.innerHTML = views.plantWidgetHtml(store.state);
+  }
+  views.updatePlantWidget(host, store.state);
+}
+
+// One interval for the whole app rather than one per view. The plant and the
+// budget ring both have to keep moving while the user is doing something else
+// entirely — that's the point of them — and a per-render timer would leave
+// stragglers ticking against cards that had already been replaced.
+let clockTick = null;
+function startClocks() {
+  clearInterval(clockTick);
+  clockTick = setInterval(() => {
+    // Nothing to draw until the state has loaded, and the first seconds of a
+    // cold start are exactly when it hasn't.
+    if (!store.state) return;
+    renderPlantWidget();
+    const clock = document.getElementById("budget-clock");
+    if (clock) {
+      clock.outerHTML = views.budgetClockHtml(store.state);
+      views.wireBudgetToggle(store);
+    }
+  }, 1000);
 }
 
 // The workspace sizes itself against the viewport, so it needs to know how
@@ -329,6 +370,7 @@ function renderAll() {
   // Navigation buttons are markup any view can emit, so they're bound here
   // rather than in each view that happens to have one.
   views.wireNavigationTargets(root, actions);
+  renderPlantWidget();
   applyGrowthAnimation();
 }
 
@@ -394,6 +436,7 @@ store.onChange(renderAll);
 store.init();
 renderAll();
 trackChromeHeight();
+startClocks();
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

@@ -1,7 +1,7 @@
 // The starting state, built fresh on first connect from what's actually in
 // the leetcode repo today. Every problem starts due immediately (box 0) so
 // day one already has a real review queue instead of an empty app.
-import { todayISO } from "./logic.js";
+import { todayISO, newDayTimer } from "./logic.js";
 
 const PATTERNS = [
   ["two-pointers", "Two Pointers", "Converging or fixed-offset pointers over a sorted or linear structure."],
@@ -80,6 +80,7 @@ export function buildSeedState() {
     resources: {}, // { [patternId]: [{ id, title, url, addedAt }] } — user-curated video/article links
     whiteboards: [], // [{ id, date, problemId, path, caption }] — index of saved drawings (images live as separate repo files)
     quiz: { totalAsked: 0, totalCorrect: 0, recent: [] }, // recent: last 20 {correct: bool} for a trend
+    dayTimer: newDayTimer(),
   };
 }
 
@@ -89,6 +90,10 @@ export function migrateState(state) {
   if (!state.resources) state.resources = {};
   if (!state.whiteboards) state.whiteboards = [];
   if (!state.quiz) state.quiz = { totalAsked: 0, totalCorrect: 0, recent: [] };
+  // Deliberately not backfilled with today's date: newDayTimer() stamps the
+  // day it was made, and logic.js treats a timer from another date as an empty
+  // day, so an absent one and a stale one behave identically.
+  if (!state.dayTimer) state.dayTimer = newDayTimer();
   if (!state.meta) state.meta = { schemaVersion: 2, createdAt: new Date().toISOString() };
   // Backfill any patterns added after this state.json was first created —
   // merge by id so nothing already there (and no progress against it) is

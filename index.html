@@ -36,6 +36,12 @@
   </header>
   <nav id="tab-nav" class="tab-nav" aria-label="Sections" hidden></nav>
   <main id="view-root" tabindex="-1"></main>
+  <!-- The plant, standing by on every page except Home so the "am I overdoing
+       it" signal is visible while working rather than a page away. Inert by
+       design: aria-hidden because the dashboard already states all of this in
+       text for a screen reader, and pointer-events:none in the stylesheet so
+       it can never be tapped out of a session by accident. -->
+  <div id="plant-widget" class="plant-widget" aria-hidden="true" hidden></div>
   <div id="toast" role="status" aria-live="polite"></div>
   <!-- Switching view swaps the whole of <main> with no page load, which a
        screen reader is otherwise given no indication of. -->

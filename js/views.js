@@ -3,6 +3,7 @@ import {
   updateStreak, systemDesignUnlock, uid, MISTAKE_TAGS, MOCK_CHECKLIST, daysBetween,
   activityByDate, patternTrend, pickQuizProblem, quizOptions, addDaysISO, recommendSession,
   computePlantState, normalizeStatement, MAX_STATEMENT_CHARS,
+  budgetProgress, budgetPressure, startDayTimer, stopDayTimer,
 } from "./logic.js";
 import {
   installSplitters, loadSizes, gridTemplate, redistribute,
@@ -279,6 +280,142 @@ function ringSvg(fraction, { size = 44, stroke = 5, color = "var(--accent)", lab
     </svg>`;
 }
 
+/**
+ * The daily budget as a clock you can watch, rather than a number you only
+ * meet in hindsight.
+ *
+ * The ring counts down what's left of the budget, and the plant beside it
+ * grows into the day and shrinks once the day runs past it — the point being
+ * that the limit is a target to reach, not a score to beat. Everything here is
+ * derived from state, so the ticking interval only has to re-run this one
+ * function rather than touch the DOM piece by piece.
+ */
+export function budgetClockHtml(state, now = Date.now()) {
+  const b = budgetProgress(state, now);
+  const pressure = budgetPressure(state, now);
+  const plant = computePlantState(state);
+  // Under budget the ring fills; past it, it drains back down as the overrun
+  // grows, so "full" always means "right here" rather than "as much as
+  // possible".
+  const ringFraction = b.over ? Math.max(0, 1 - b.overMin / b.budgetMin) : b.fraction;
+  const color = b.overrun ? "var(--bad)" : b.over ? "var(--warn)" : "var(--accent)";
+  const mins = Math.round(b.usedMin);
+
+  return `
+    <div class="budget-clock" id="budget-clock">
+      <div class="row gap-sm" style="align-items:center">
+        ${ringSvg(ringFraction, { size: 44, stroke: 4, color,
+          label: b.over ? `+${fmtMins(b.overMin)}` : b.running ? fmtCountdown(b.remainingMin) : fmtMins(b.remainingMin) })}
+        <span class="budget-plant" style="--pressure:${pressure.toFixed(3)}"
+              title="Grows toward your daily budget, shrinks once you're past it">
+          ${plantSvg(plant.stage, b.overrun ? "wilting" : plant.vitality, { size: 34, decorative: true })}
+        </span>
+        <span class="stat-label">
+          ${mins}/${b.budgetMin} min today<br/>
+          <span class="${b.over ? (b.overrun ? "budget-over" : "budget-warn") : "muted"}">${budgetCaption(b)}</span>
+        </span>
+      </div>
+      <button type="button" class="btn btn-ghost btn-xs" id="budget-toggle">
+        ${b.running ? "Pause" : "Start"} day clock
+      </button>
+    </div>`;
+}
+
+/**
+ * The plant as a standing presence on every page except Home.
+ *
+ * The point is that the one signal telling you whether today is going well or
+ * has gone too far should be visible *while* you work, not on a page you'd
+ * have to leave your session to visit. Home already gives it a whole card, so
+ * it's left alone there.
+ *
+ * It is deliberately inert — aria-hidden and pointer-events: none in the
+ * stylesheet — because the last thing a session needs is a tappable thing in
+ * the corner that navigates you out of it by accident. It says something; it
+ * doesn't do anything.
+ */
+export function plantWidgetHtml(state, now = Date.now()) {
+  const plant = computePlantState(state);
+  const vitality = widgetVitality(state, now);
+  return `
+    <div class="plant-widget-inner" data-vitality="${vitality}">
+      <div class="plant-widget-art">${plantSvg(plant.stage, vitality, { size: 96, decorative: true })}</div>
+      <span class="plant-widget-clock"></span>
+      <span class="plant-widget-note"></span>
+    </div>`;
+}
+
+function widgetVitality(state, now) {
+  const b = budgetProgress(state, now);
+  return b.overrun ? "wilting" : computePlantState(state).vitality;
+}
+
+/**
+ * Per-tick update for the standing plant.
+ *
+ * Deliberately not a re-render. Replacing the markup every second gave the
+ * element no chance to transition — each new node simply appeared at its
+ * final size — which is what made the plant look like it was stepping rather
+ * than growing. Writing the changed values onto the node that is already
+ * there lets the CSS transition do its job.
+ *
+ * The SVG is the one exception: vitality picks a colour palette baked into the
+ * shapes, so it has to be rebuilt — but only on the rare tick where vitality
+ * actually changed, not on every one.
+ */
+export function updatePlantWidget(host, state, now = Date.now()) {
+  const inner = host.querySelector(".plant-widget-inner");
+  if (!inner) return;
+
+  const b = budgetProgress(state, now);
+  const plant = computePlantState(state);
+  const vitality = widgetVitality(state, now);
+
+  if (inner.dataset.vitality !== vitality) {
+    inner.dataset.vitality = vitality;
+    inner.querySelector(".plant-widget-art").innerHTML =
+      plantSvg(plant.stage, vitality, { size: 96, decorative: true });
+  }
+
+  inner.style.setProperty("--pressure", budgetPressure(state, now).toFixed(3));
+
+  const clock = inner.querySelector(".plant-widget-clock");
+  const clockText = b.over ? `+${fmtCountdown(b.overMin)}` : fmtCountdown(b.remainingMin);
+  if (clock.textContent !== clockText) clock.textContent = clockText;
+  clock.className = `plant-widget-clock ${b.overrun ? "budget-over" : b.over ? "budget-warn" : ""}`;
+
+  const note = inner.querySelector(".plant-widget-note");
+  const noteText = b.over
+    ? "past today's budget"
+    : `of ${b.budgetMin} min${b.running ? "" : " · paused"}`;
+  if (note.textContent !== noteText) note.textContent = noteText;
+}
+
+function fmtMins(minutes) {
+  const m = Math.max(0, Math.round(minutes));
+  return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}` : `${m}m`;
+}
+
+/** Remaining time at second resolution, for while the clock is running.
+ * Rounded to the minute it sat unchanged for a full minute at a time, which
+ * doesn't read as a countdown so much as a number that might be stuck. */
+function fmtCountdown(minutes) {
+  const total = Math.max(0, Math.round(minutes * 60));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return h
+    ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+    : `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function budgetCaption(b) {
+  if (b.overrun) return `${Math.round(b.overMin)} min past — stop`;
+  if (b.over) return `${Math.round(b.overMin)} min over budget`;
+  if (b.running) return `${fmtCountdown(b.remainingMin)} left`;
+  return `${fmtMins(b.remainingMin)} left · paused`;
+}
+
 const OUTCOME_GLYPH = {
   "solved-clean": { symbol: "✓", cls: "outcome-good", title: "Solved clean" },
   "solved-struggled": { symbol: "~", cls: "outcome-warn", title: "Solved, struggled" },
@@ -509,10 +646,7 @@ export function renderDashboard(root, store, actions) {
             <div class="stat"><span class="stat-num">${state.streak.current}</span><span class="stat-label">day streak</span></div>
             <div class="stat"><span class="stat-num">${state.streak.longest}</span><span class="stat-label">longest</span></div>
           </div>
-          <div class="row gap-sm" style="align-items:center">
-            ${ringSvg(budgetMin ? usedMin / budgetMin : 0, { size: 40, stroke: 4 })}
-            <span class="stat-label">${usedMin}/${budgetMin} min<br/>planned today</span>
-          </div>
+          ${budgetClockHtml(state)}
         </div>
         <p class="muted small" style="margin:0.6rem 0 0">Last 7 days</p>
         ${weekStripSvg(state)}
@@ -570,6 +704,25 @@ export function renderDashboard(root, store, actions) {
   root.querySelector("#cta-warmup").addEventListener("click", () => {
     resetWarmup();
     actions.switchTab("warmup");
+  });
+
+  wireBudgetToggle(store);
+}
+
+/**
+ * Bind the day clock's start/pause button.
+ *
+ * Exported and re-callable because app.js repaints this card once a second and
+ * the old button goes with it. Everything the card shows is derived from
+ * state, so a repaint is the whole update — there is nothing to poke by hand
+ * afterwards.
+ */
+export function wireBudgetToggle(store) {
+  document.getElementById("budget-toggle")?.addEventListener("click", () => {
+    store.mutate((s) => {
+      if (s.dayTimer?.running) stopDayTimer(s);
+      else startDayTimer(s);
+    }, "Ledger: day clock");
   });
 }
 
