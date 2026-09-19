@@ -114,6 +114,35 @@ function leetcodeCalendarToDateCounts(calendar) {
   return out;
 }
 
+/**
+ * An empty section that says what goes here and how to fill it.
+ *
+ * "Nothing saved yet" is true and useless — it tells you a place is empty
+ * without telling you what would put something in it, which on a first run is
+ * most of the app. Every empty state gets a line explaining what the thing is
+ * for and, where there's an obvious next step, a button that takes it.
+ *
+ * `action` is `{ tab, label }`; wireEmptyStateActions() binds it.
+ */
+function emptyState(icon, headline, explanation, action = null) {
+  return `
+    <div class="empty-state">
+      <span class="empty-state-icon">${navIcon(icon, { size: 22 })}</span>
+      <p class="empty-state-headline">${esc(headline)}</p>
+      <p class="muted small">${esc(explanation)}</p>
+      ${action ? `<button class="btn btn-ghost btn-sm" data-empty-go="${esc(action.tab)}">${esc(action.label)}</button>` : ""}
+    </div>`;
+}
+
+/** Binds any buttons rendered by emptyState(). Called once centrally from
+ * app.js after every render, so a view that adds an empty state later needs no
+ * wiring of its own. Safe on a view with none. */
+export function wireEmptyStateActions(root, actions) {
+  root.querySelectorAll("[data-empty-go]").forEach((btn) => {
+    btn.addEventListener("click", () => actions.switchTab(btn.dataset.emptyGo));
+  });
+}
+
 function sparklineSvg(points, { width = 80, height = 22 } = {}) {
   if (!points.length) return "";
   const step = points.length > 1 ? width / (points.length - 1) : 0;
@@ -1083,14 +1112,17 @@ export function renderJournal(root, store) {
     </div>
     <div class="card">
       <h2>Notes</h2>
-      ${notes.length === 0 ? `<p class="empty">No freeform notes yet.</p>` : `
+      ${notes.length === 0 ? emptyState("journal", "No notes yet",
+        "A weekly retro here is where patterns across sessions become visible — what keeps tripping you up, and what finally clicked.") : `
       <ul class="journal-list">
         ${notes.map((n) => `<li><div class="row space-between"><strong>${esc(n.type.replace(/-/g, " "))}</strong><span class="muted">${fmtDate(n.date)}</span></div><p>${esc(n.text)}</p></li>`).join("")}
       </ul>`}
     </div>
     <div class="card">
       <h2>Mock interviews</h2>
-      ${mocks.length === 0 ? `<p class="empty">None yet — toggle "Verbalized mock" when starting a session.</p>` : `
+      ${mocks.length === 0 ? emptyState("log", "No mock interviews yet",
+        "Toggle \"Verbalized mock\" when starting a session to practice talking through your approach out loud, on a strict timer. It gets logged here.",
+        { tab: "queue", label: "Start one from the queue" }) : `
       <ul class="queue-list">
         ${mocks.map((m) => `
           <li class="queue-item">
@@ -1109,7 +1141,9 @@ export function renderJournal(root, store) {
     </div>
     <div class="card">
       <h2>Soul statements</h2>
-      ${entries.length === 0 ? `<p class="empty">Log a session to start building this archive.</p>` : `
+      ${entries.length === 0 ? emptyState("journal", "No soul statements yet",
+        "At the end of every session you write one sentence about what actually happened. Months of those become the most useful thing in this app.",
+        { tab: "queue", label: "Start a session" }) : `
       <ul class="journal-list">
         ${entries.map((a) => `
           <li>
@@ -1191,7 +1225,8 @@ export function renderSystemDesign(root, store) {
     </div>
     <div class="card">
       <h2>Past sessions</h2>
-      ${sessions.length === 0 ? `<p class="empty">None yet.</p>` : `
+      ${sessions.length === 0 ? emptyState("systemDesign", "No design sessions logged",
+        "Pick a system, talk through it, then record what you covered and how confident you felt. Confidence over time is the signal worth watching here.") : `
       <ul class="journal-list">
         ${sessions.map((s) => `<li><div class="row space-between"><strong>${esc(s.topic)}</strong><span class="muted">${fmtDate(s.date)} · confidence ${s.confidence ?? "—"}/5</span></div><p>${esc(s.notes)}</p></li>`).join("")}
       </ul>`}
@@ -1321,7 +1356,8 @@ export function renderTopicDetail(root, store, actions) {
     <div class="card">
       <h2>Practice ladder</h2>
       <p class="muted small">Your own logged problems, easiest first.</p>
-      ${problems.length === 0 ? `<p class="empty">None logged yet.</p>` : `
+      ${problems.length === 0 ? emptyState("log", "Nothing logged yet",
+        "Solved something elsewhere — on paper, in a real interview, straight on LeetCode? Record it here and it joins the same review schedule.") : `
       <ul class="queue-list">${problems.map((p) => queueItemHtml(state, p)).join("")}</ul>`}
     </div>
     <div class="card">
@@ -1391,8 +1427,9 @@ export function renderQuiz(root, store, actions) {
     root.innerHTML = `
       <div class="card">
         <h2>Pattern-recognition drill</h2>
-        <p class="empty">Log a few problems first — the quiz draws its questions from problems you've
-        actually attempted.</p>
+        ${emptyState("quiz", "Nothing to drill yet",
+          "This drill shows a problem you've already solved and asks which pattern it used — the recall step that makes a pattern stick. It needs a few logged attempts to draw from.",
+          { tab: "queue", label: "Go to the review queue" })}
       </div>`;
     return;
   }
@@ -1499,7 +1536,9 @@ export function renderWarmup(root, store, actions) {
   if (!warmupState.current) {
     root.innerHTML = `
       <div class="card">
-        <p class="empty">Log a few problems first — warmup draws its questions from ones you've attempted.</p>
+        ${emptyState("quiz", "No warmup available yet",
+          "Warmup replays patterns from problems you've already attempted, to get your head in before a session. Log one first.",
+          { tab: "queue", label: "Go to the review queue" })}
         <button class="btn btn-ghost" data-tab="dashboard">Back to dashboard</button>
       </div>`;
     wireTabButtons(root, actions);
@@ -1593,7 +1632,8 @@ export function renderWhiteboard(root, store, actions) {
     </div>
     <div class="card">
       <h2>Saved boards</h2>
-      ${boards.length === 0 ? `<p class="empty">Nothing saved yet.</p>` : `
+      ${boards.length === 0 ? emptyState("whiteboard", "No boards saved yet",
+        "Sketching the shape of a problem before writing code is most of the work in an interview. Anything you draw here can be saved against a problem.") : `
       <ul class="queue-list">
         ${boards.map((b) => `
           <li class="queue-item">

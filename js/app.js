@@ -250,29 +250,23 @@ function renderAll() {
     views.renderConflict(root, store, renderAll);
     return;
   }
-  if (SESSION_TABS[activeTab]) {
-    SESSION_TABS[activeTab].render(root, store, actions);
-    return;
-  }
-  if (activeTab === "topicDetail") {
-    views.renderTopicDetail(root, store, actions);
-    return;
-  }
-  if (STANDALONE[activeTab]) {
-    STANDALONE[activeTab].render(root, store, actions);
-    return;
-  }
-  if (SECTIONS[activeTab]) {
-    renderSectionIndex(root, SECTIONS[activeTab], actions);
-    return;
-  }
+  renderView();
+  // Empty-state buttons are markup any view can emit, so they're bound here
+  // rather than in each view that happens to have one.
+  views.wireEmptyStateActions(root, actions);
+}
+
+function renderView() {
+  if (SESSION_TABS[activeTab]) return SESSION_TABS[activeTab].render(root, store, actions);
+  if (activeTab === "topicDetail") return views.renderTopicDetail(root, store, actions);
+  if (STANDALONE[activeTab]) return STANDALONE[activeTab].render(root, store, actions);
+  if (SECTIONS[activeTab]) return renderSectionIndex(root, SECTIONS[activeTab], actions);
+
   const owner = PAGE_TO_SECTION[activeTab];
   const page = owner && SECTIONS[owner].pages.find((p) => p.id === activeTab);
-  if (page) {
-    page.render(root, store, actions);
-    return;
-  }
-  STANDALONE.dashboard.render(root, store, actions); // unknown/stale tab id — fall back home
+  if (page) return page.render(root, store, actions);
+
+  return STANDALONE.dashboard.render(root, store, actions); // unknown/stale tab id
 }
 
 /** `s` from anywhere outside a session starts whatever the Dashboard is

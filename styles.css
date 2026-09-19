@@ -568,6 +568,33 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 @media (max-width: 560px) { .bank-filters { grid-template-columns: 1fr; } }
 
 
+/* ---------- Empty states ---------- */
+
+/* An empty section should say what belongs here, not just that nothing does.
+   Centred and quiet — it's an explanation, not an error. */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 1.5rem 1rem;
+  text-align: center;
+}
+.empty-state-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 0.15rem;
+  border-radius: 50%;
+  background: var(--surface-alt);
+  color: var(--text-muted);
+}
+.empty-state-headline { margin: 0; font-weight: 650; }
+.empty-state .muted { max-width: 34rem; margin: 0; }
+.empty-state .btn { margin-top: 0.5rem; }
+
 /* ---------- Keyboard shortcuts ---------- */
 
 .shortcut-overlay {
@@ -619,9 +646,17 @@ kbd {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+  /* A <button> for keyboard and screen-reader reachability, but it should read
+     as a quiet hint rather than a control competing with the nav. */
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
   font-size: 0.78rem;
   color: var(--text-muted);
+  cursor: pointer;
 }
+.shortcut-hint:hover { color: var(--text); }
 @media (pointer: coarse) { .shortcut-hint { display: none; } }
 
 /* ---------- Focus, skip link, screen-reader text ---------- */
