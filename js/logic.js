@@ -155,13 +155,38 @@ export const MOCK_CHECKLIST = [
   "Tested with an example before declaring done",
 ];
 
-/** Leitner-style box scheduling: clean solve advances a box, a struggle holds,
- * a failure resets to box 0. Mutates `problem` in place. */
+// How a session ended, in one table.
+//
+// This used to be five separate lists — two <select>s, a glyph map, a label
+// map and a pair of if-chains in the scheduler — which is four chances for a
+// new outcome to be half-added.
+//
+// "Ran out of time" exists because "failed" was doing too much work. Not
+// finishing a hard problem you understood is not the same as not getting it,
+// and collapsing them made the clean-solve rate say less than it could. It
+// steps back one box rather than resetting: you didn't finish, so you lose
+// ground, but not all of it.
+export const OUTCOMES = [
+  { value: "solved-clean",     label: "Solved clean",      symbol: "✓", cls: "outcome-good", box: "up" },
+  { value: "solved-struggled", label: "Solved, struggled", symbol: "~", cls: "outcome-warn", box: "hold" },
+  { value: "ran-out-of-time",  label: "Ran out of time",   symbol: "⏱", cls: "outcome-warn", box: "back" },
+  { value: "failed",           label: "Didn't solve",      symbol: "✕", cls: "outcome-bad",  box: "reset" },
+];
+
+/** The box after an outcome, given where it was. One place, so the scheduler
+ * and the replay in recomputeSchedule cannot disagree. */
+export function nextBox(box, outcome, intervalCount) {
+  const effect = OUTCOMES.find((o) => o.value === outcome)?.box || "hold";
+  if (effect === "up") return Math.min(box + 1, intervalCount - 1);
+  if (effect === "reset") return 0;
+  if (effect === "back") return Math.max(0, box - 1);
+  return box;
+}
+
+/** Leitner-style box scheduling. Mutates `problem` in place. */
 export function applyOutcome(problem, outcome, settings) {
   const intervals = settings.boxIntervalsDays;
-  let box = problem.box || 0;
-  if (outcome === "solved-clean") box = Math.min(box + 1, intervals.length - 1);
-  else if (outcome === "failed") box = 0;
+  const box = nextBox(problem.box || 0, outcome, intervals.length);
   problem.box = box;
   problem.nextReviewDate = addDaysISO(todayISO(), intervals[box]);
 }
@@ -184,9 +209,7 @@ export function recomputeSchedule(problem, settings) {
 
   let box = 0;
   for (const attempt of history) {
-    if (attempt.outcome === "solved-clean") box = Math.min(box + 1, intervals.length - 1);
-    else if (attempt.outcome === "failed") box = 0;
-    // "solved-struggled" holds the box where it is, same as applyOutcome.
+    box = nextBox(box, attempt.outcome, intervals.length);
   }
   problem.box = box;
 

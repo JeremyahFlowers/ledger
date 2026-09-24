@@ -21,7 +21,7 @@ import { loadCodeMirror, CODE_MODES } from "./codemirror-loader.js";
 import { createWhiteboard } from "./whiteboard.js";
 import { plantSvg } from "./plant.js";
 import { patternIcon, navIcon } from "./icons.js";
-import { esc, richText, pct, mins, fmtDate, patternName, toast, offerUndo, OUTCOME_GLYPH, topicNav, showTopic } from "./ui.js";
+import { esc, richText, pct, mins, fmtDate, patternName, toast, offerUndo, OUTCOME_GLYPH, topicNav, showTopic, outcomeOptions, outcomeLabel } from "./ui.js";
 import {
   startSession, abandonSession, hasActiveSession, restoreSession, checkpointSession,
   currentSessionProblemName, renderWorkspace, renderReflect, renderSessionSummary,
@@ -880,9 +880,7 @@ export function renderLog(root, store, actions) {
           <label class="field"><span class="label">Date</span><input class="input" type="date" name="date" value="${todayISO()}" /></label>
           <label class="field"><span class="label">Outcome</span>
             <select class="select" name="outcome">
-              <option value="solved-clean">Solved clean</option>
-              <option value="solved-struggled">Solved, struggled</option>
-              <option value="failed">Didn't solve</option>
+              ${outcomeOptions()}
             </select></label>
         </div>
 
@@ -2141,11 +2139,7 @@ export function showProblem(problemId) {
 // editor instead of discarding a half-typed correction.
 let editingAttemptId = null;
 
-const OUTCOME_LABEL = {
-  "solved-clean": "Solved clean",
-  "solved-struggled": "Solved, struggled",
-  failed: "Didn't solve",
-};
+
 
 export function renderProblemDetail(root, store, actions) {
   const state = store.state;
@@ -2303,7 +2297,7 @@ function attemptRowHtml(state, problem, a) {
         <div>
           <div class="row gap-sm" style="flex-wrap:wrap">
             <span class="outcome-glyph ${glyph ? glyph.cls : ""}">${glyph ? glyph.symbol : "?"}</span>
-            <strong>${esc(OUTCOME_LABEL[a.outcome] || a.outcome)}</strong>
+            <strong>${esc(outcomeLabel(a.outcome))}</strong>
             <span class="muted small">${fmtDate(a.date)}</span>
             ${a.isMock ? `<span class="pill pill-warn">mock</span>` : ""}
             <span class="pill ${a.patternGuess === "correct" ? "pill-good" : "pill-muted"}">
@@ -2332,8 +2326,7 @@ function attemptEditHtml(a) {
         <p class="label">Correcting the attempt from ${fmtDate(a.date)}</p>
         <label class="field"><span class="label">Outcome</span>
           <select class="select" name="outcome">
-            ${Object.entries(OUTCOME_LABEL).map(([v, l]) =>
-              `<option value="${v}" ${a.outcome === v ? "selected" : ""}>${l}</option>`).join("")}
+            ${outcomeOptions(a.outcome)}
           </select></label>
         <div class="two-col">
           <label class="field"><span class="label">Minutes to the approach</span>

@@ -18,7 +18,7 @@ import {
   quizOptions, updateStreak, computePlantState, recommendSession, allAttempts,
   normalizeStatement, MAX_STATEMENT_CHARS, lastAttemptWithCode, mockPhase, MOCK_MINUTES,
 } from "./logic.js";
-import { esc, richText, fmtDate, patternName, toast, OUTCOME_GLYPH, showTopic } from "./ui.js";
+import { esc, richText, fmtDate, patternName, toast, OUTCOME_GLYPH, showTopic, outcomeOptions } from "./ui.js";
 import { TOPICS } from "./topics-content.js";
 import { loadCodeMirror, CODE_MODES } from "./codemirror-loader.js";
 import { createWhiteboard } from "./whiteboard.js";
@@ -597,9 +597,7 @@ export function renderReflect(root, store, actions) {
       <form id="reflect-form" class="form">
         <label class="field"><span class="label">Outcome</span>
           <select class="select" name="outcome">
-            <option value="solved-clean">Solved clean</option>
-            <option value="solved-struggled">Solved, struggled</option>
-            <option value="failed">Didn't solve</option>
+            ${outcomeOptions()}
           </select></label>
 
         <div class="field" id="pattern-recall">

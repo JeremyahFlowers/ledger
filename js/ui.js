@@ -5,6 +5,8 @@
 // dependency direction one-way and means a view module can be split off
 // without creating a cycle back through views.js.
 //
+import { OUTCOMES } from "./logic.js";
+
 // Why it exists: views.js had grown past 3,000 lines holding the dashboard,
 // queue, session, settings and a dozen shared helpers, and every new feature
 // made it worse. Splitting it needs these primitives to live somewhere both
@@ -95,11 +97,21 @@ export function offerUndo(store, message, undoFn, undoMessage) {
   toast._t = setTimeout(() => el.classList.remove("show"), 10000);
 }
 
-export const OUTCOME_GLYPH = {
-  "solved-clean": { symbol: "✓", cls: "outcome-good", title: "Solved clean" },
-  "solved-struggled": { symbol: "~", cls: "outcome-warn", title: "Solved, struggled" },
-  failed: { symbol: "✕", cls: "outcome-bad", title: "Didn't solve" },
-};
+/** Built from the OUTCOMES table rather than repeating it, so an outcome
+ * cannot exist in the scheduler and be missing a glyph here. */
+export const OUTCOME_GLYPH = Object.fromEntries(
+  OUTCOMES.map((o) => [o.value, { symbol: o.symbol, cls: o.cls, title: o.label }]));
+
+/** The <option> list for any outcome picker. */
+export function outcomeOptions(selected) {
+  return OUTCOMES.map((o) =>
+    `<option value="${o.value}" ${o.value === selected ? "selected" : ""}>${esc(o.label)}</option>`).join("");
+}
+
+/** An outcome's display name. */
+export function outcomeLabel(value) {
+  return OUTCOMES.find((o) => o.value === value)?.label || value;
+}
 
 // Cross-view handoff for "click a pattern card" -> dedicated page, the same
 // pattern used elsewhere (nav.prefillProblemId, reflectState): a module-level

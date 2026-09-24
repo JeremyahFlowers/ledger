@@ -50,7 +50,7 @@ one-line title is not enough to pick the work up again a week later.
 
 ## P2 — reach and polish
 
-- [ ] **29. "Failed" is doing too much work.**
+- [x] **29. "Failed" is doing too much work.** _(1.4.0)_
   The outcomes are solved-clean, solved-struggled and failed. Running out of
   time on a hard problem you understood is not the same as not getting it, and
   collapsing them makes the clean-solve rate say less than it could.

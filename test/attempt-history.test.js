@@ -14,7 +14,7 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  recomputeSchedule, removeAttempt, editAttempt, applyOutcome, lastAttemptWithCode,
+  recomputeSchedule, removeAttempt, editAttempt, applyOutcome, lastAttemptWithCode, OUTCOMES, nextBox,
   todayISO, addDaysISO, STATUS_ACTIVE,
 } from "../js/logic.js";
 
@@ -192,5 +192,72 @@ describe("lastAttemptWithCode", () => {
   test("test_lastAttemptWithCode_missingProblem_doesNotThrow", () => {
     assert.equal(lastAttemptWithCode(null), null);
     assert.equal(lastAttemptWithCode({}), null);
+  });
+});
+
+describe("outcomes", () => {
+  // "Failed" was doing too much work: running out of time on a hard problem
+  // you understood is not the same as not getting it, and collapsing them made
+  // the clean-solve rate say less than it could.
+  //
+  // The table is also the single definition. It used to be five separate
+  // lists — two <select>s, a glyph map, a label map and a pair of if-chains in
+  // the scheduler — which is four chances for a new outcome to be half-added.
+  test("test_outcomes_everyOneIsFullyDescribed", () => {
+    for (const o of OUTCOMES) {
+      assert.ok(o.value && o.label && o.symbol && o.cls, `${o.value} is incomplete`);
+      assert.ok(["up", "hold", "back", "reset"].includes(o.box), `${o.value} has no box effect`);
+    }
+  });
+
+  test("test_nextBox_cleanSolveClimbs", () => {
+    assert.equal(nextBox(2, "solved-clean", 6), 3);
+  });
+
+  test("test_nextBox_struggleHolds", () => {
+    assert.equal(nextBox(2, "solved-struggled", 6), 2);
+  });
+
+  test("test_nextBox_ranOutOfTime_stepsBackOneRatherThanResetting", () => {
+    // You didn't finish, so you lose ground — but not all of it, which is
+    // what separates this from not getting it at all.
+    assert.equal(nextBox(3, "ran-out-of-time", 6), 2);
+  });
+
+  test("test_nextBox_ranOutOfTimeAtTheBottom_staysThere", () => {
+    assert.equal(nextBox(0, "ran-out-of-time", 6), 0);
+  });
+
+  test("test_nextBox_failureResets", () => {
+    assert.equal(nextBox(5, "failed", 6), 0);
+  });
+
+  test("test_nextBox_neverExceedsTheTable", () => {
+    assert.equal(nextBox(5, "solved-clean", 6), 5);
+  });
+
+  test("test_nextBox_unknownOutcome_holdsRatherThanThrowing", () => {
+    // An attempt written by an older or newer version must not break the
+    // replay of a whole history.
+    assert.equal(nextBox(3, "something-else", 6), 3);
+  });
+
+  test("test_recompute_handlesRanOutOfTimeInAReplay", () => {
+    const p = makeProblem([
+      attempt("solved-clean", 30), attempt("solved-clean", 20), attempt("ran-out-of-time", 10),
+    ]);
+    // Two clean solves to box 2, then a step back to 1.
+    assert.equal(recomputeSchedule(p, SETTINGS).box, 1);
+  });
+
+  test("test_applyOutcome_andReplay_agreeOnRanOutOfTime", () => {
+    // The scheduler and the replay read the same table, so correcting an
+    // attempt can't silently reschedule an untouched problem.
+    const incremental = makeProblem();
+    ["solved-clean", "solved-clean", "ran-out-of-time"].forEach((o) => applyOutcome(incremental, o, SETTINGS));
+    const replayed = makeProblem([
+      attempt("solved-clean", 12), attempt("solved-clean", 11), attempt("ran-out-of-time", 10)]);
+    recomputeSchedule(replayed, SETTINGS);
+    assert.equal(replayed.box, incremental.box);
   });
 });
