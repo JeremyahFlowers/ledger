@@ -28,6 +28,45 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 1.3.0 — 2026-09-24
+
+Cycle 2 of TODO.md — drawn from what came up while building cycle 1.
+
+### Safety
+
+- **The sync payload is watched.** The whole log goes to GitHub as one file
+  with a 1 MB limit, and crossing it fails every save at once. Settings now
+  shows the footprint past 70%, broken down by what's taking the room, and a
+  save that would exceed the limit is refused with an explanation rather than
+  a raw API error.
+- **Failed saves retry themselves** on a backoff, and immediately on
+  reconnecting. Previously a failure sat until your next edit happened to
+  trigger a save — close the tab in between and the only copy was local.
+
+### The loop keeps more of what you do
+
+- **Your previous code** is offered in the workspace, behind a reveal, so
+  coming back to a problem after a month can show what you did last time
+  without spoiling the attempt.
+- **Whiteboards from a session** appear on that problem's page.
+- **Heatmap days open**, showing what you worked, wrote and drew.
+- **The quiz is weighted** by what's fading and what you've misidentified
+  before, instead of picking uniformly at random inside an app built on a
+  spacing algorithm.
+
+### Practice feels like practice
+
+- **A mock interview counts down from 45 minutes** and walks its phases —
+  clarify, state the approach, narrate, state complexity, test — arriving when
+  they'd matter rather than sitting in a list. Running over shows as a
+  negative rather than quietly stopping.
+- **The bank works from the keyboard**: arrows move, Enter starts.
+
+### Inside
+
+- **views.js split** from 3,300 lines into `ui.js` (shared primitives) and
+  `session-view.js` (the guided path, 843 lines). No behaviour change.
+
 ## 1.2.0 — 2026-09-24
 
 The rest of TODO.md: expanding what was already there.
