@@ -28,6 +28,41 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 1.1.0 — 2026-09-23
+
+Working through TODO.md, starting with everything that could cost you work.
+
+### Nothing you've done gets thrown away
+
+- **A session survives a reload.** `session` was module state and nothing
+  else, so a refresh, a followed link, or a phone evicting a background tab
+  discarded the timer, the typed code, the whiteboard and the pasted
+  statement. It is now checkpointed and restored, including the drawing
+  replayed onto the canvas. The clock excludes time the tab was closed, so
+  reopening tomorrow doesn't record a nine-hour session.
+- **Import is validated before it replaces anything.** It used to accept any
+  JSON that parsed and apply it with `Object.assign`, so a truncated download
+  or an unrelated file destroyed the whole log — and the merge left whatever
+  the file omitted in place, producing a state half from each. Bad files are
+  now refused with a reason, and the confirmation says what the file holds
+  against what you currently have.
+- **Attempts can be corrected or deleted.** They were write-once, so a wrong
+  outcome skewed every statistic permanently. Editing replays the whole
+  history to rebuild the box and the next date, because a box advanced one
+  attempt at a time stops following from a record that can change.
+- **Deleting offers an undo.** For practice history and bank entries.
+  `confirm()` asks before you know what you're losing; an undo is still there
+  once you've noticed.
+
+### New
+
+- **Each problem has its own page.** Its attempts, timings, mistake tags,
+  notes and the code you wrote, reachable by clicking any problem's name.
+  Previously the record the app kept was the one thing you couldn't read.
+- **Sync on demand.** Settings shows when the last successful sync happened,
+  with controls to pull changes from another device or retry a failed push.
+- **Cmd/Ctrl+Enter** finishes a session from Reflect.
+
 ## 1.0.1 — 2026-09-23
 
 **Fixes a session that could not be saved.**
