@@ -9,6 +9,64 @@ one-line title is not enough to pick the work up again a week later.
 
 ---
 
+# Cycle 3
+
+## P0 — the app can't answer its own best question
+
+- [ ] **24. Your own notes are unsearchable.**
+  Soul statements are the thing this app works hardest to collect — "the window
+  only shrinks from the left" — and there is no way to find one again. Search
+  covers problem titles, patterns and the catalog, and skips every word you
+  wrote yourself.
+  *Done:* search finds your notes and shows which session each came from.
+
+- [ ] **25. Nothing explains itself on first run.**
+  A new account lands on a dashboard with a plant, a budget ring, a
+  recommendation and a 23-pattern taxonomy, and no indication what any of it
+  is for. The reasoning behind every one of those exists — it's in the source
+  comments and the changelog, where users don't look.
+  *Done:* a first run says what the app is doing and why, once, skippable, and
+  never again.
+
+## P1 — the same rot, one file along
+
+- [ ] **26. logic.js is 1,254 lines.**
+  It now holds scheduling, the plant, planning, stats, progress, the day
+  clock, refresher framing, import validation, the size guard, mock phases and
+  quiz weighting. It is becoming what views.js was.
+  *Done:* split along the same kind of seams, no behaviour change.
+
+- [ ] **27. "Offline" doesn't say what it means for you.**
+  The status chip reads "Offline — showing cached data". It doesn't say
+  whether your last session made it, or what happens if you keep working.
+  *Done:* offline states say what is and isn't safe, and what will happen when
+  the connection returns.
+
+- [ ] **28. The plant's reasoning is buried.**
+  It says "stressed" and lists signals, but the mapping from signals to that
+  word is only in the source. The plant is the app's headline judgment and the
+  least explained thing in it.
+  *Done:* the plant can show what specifically moved it, in its own terms.
+
+## P2 — reach and polish
+
+- [ ] **29. "Failed" is doing too much work.**
+  The outcomes are solved-clean, solved-struggled and failed. Running out of
+  time on a hard problem you understood is not the same as not getting it, and
+  collapsing them makes the clean-solve rate say less than it could.
+  *Done:* an outcome that distinguishes them, with the schedule treating them
+  sensibly and old attempts unaffected.
+
+- [ ] **30. Charts are readable only if you can see them.**
+  The line charts carry a sentence summary; the volume bars and the mastery
+  rings carry `title` attributes, which most screen readers ignore.
+  *Done:* every chart states its own content the way the line charts do.
+
+- [ ] **31. Export is all-or-nothing.**
+  You can export the whole log. There is no way to take one problem's history
+  somewhere, or to share what you did this week.
+  *Done:* a single problem's history can be exported on its own.
+
 # Cycle 2
 
 Drawn from what actually came up while building cycle 1 — the things I noticed
