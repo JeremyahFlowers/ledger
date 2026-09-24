@@ -315,6 +315,72 @@ export function systemDesignUnlock(state) {
   };
 }
 
+// ---------- Sync payload size ----------
+//
+// The whole log syncs as one file through the GitHub Contents API, which
+// refuses anything over 1 MB. That is a cliff, not a slope: the save that
+// crosses it fails, and so does every save after it, with a raw API error.
+//
+// It was comfortable while a problem cost ~640 bytes. Analyze now writes
+// pasted statements into state at 1-3 KB each, which is the first thing here
+// that grows without bound, so the distance to the wall is worth measuring
+// before it is worth explaining.
+
+/** GitHub's hard limit on a file written through the Contents API. */
+export const SYNC_LIMIT_BYTES = 1024 * 1024;
+
+/** Start saying something at this fraction of the limit — far enough out that
+ * shedding weight is still a choice rather than an emergency. */
+export const SYNC_WARN_FRACTION = 0.7;
+
+/**
+ * Measure the synced document and say what is taking the room.
+ *
+ * Sizes are of the JSON actually sent, not of the objects in memory, because
+ * that is what the limit applies to. Reported per category so the advice can
+ * be specific: "your statements are 400 KB" is actionable, "your data is
+ * large" is not.
+ */
+export function syncFootprint(state) {
+  const encoder = typeof TextEncoder === "function" ? new TextEncoder() : null;
+  const bytes = (value) => {
+    const json = JSON.stringify(value ?? null);
+    return encoder ? encoder.encode(json).length : json.length;
+  };
+
+  const total = bytes(state);
+  const problems = state?.problems || [];
+  const statements = problems.reduce((n, p) => n + (p.statement ? bytes(p.statement) : 0), 0);
+  const code = problems.reduce(
+    (n, p) => n + (p.attempts || []).reduce((m, a) => m + (a.code ? bytes(a.code) : 0), 0), 0);
+
+  return {
+    total,
+    limit: SYNC_LIMIT_BYTES,
+    fraction: total / SYNC_LIMIT_BYTES,
+    warn: total >= SYNC_LIMIT_BYTES * SYNC_WARN_FRACTION,
+    over: total >= SYNC_LIMIT_BYTES,
+    breakdown: {
+      statements,
+      code,
+      // Everything that isn't one of the two unbounded contributors.
+      rest: Math.max(0, total - statements - code),
+    },
+    counts: {
+      problems: problems.length,
+      withStatement: problems.filter((p) => p.statement).length,
+      attempts: problems.reduce((n, p) => n + (p.attempts || []).length, 0),
+    },
+  };
+}
+
+/** Human size, for a sentence rather than a table. */
+export function formatBytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+}
+
 // ---------- Box intervals ----------
 //
 // boxIntervalsDays decides when each box comes back round, and was honoured

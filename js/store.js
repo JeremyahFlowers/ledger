@@ -3,6 +3,7 @@
 // nothing else touches persistence directly.
 import { GitHubStore } from "./github-client.js";
 import { buildSeedState, migrateState } from "./seed.js";
+import { syncFootprint, formatBytes } from "./logic.js";
 
 const CONFIG_KEY = "ledger.config";
 const CACHE_KEY = "ledger.cache.state";
@@ -134,6 +135,21 @@ class Store {
 
   async flush(message) {
     if (!this.dirty || !this.gh) return;
+
+    // Checked here rather than left to the API. Crossing the limit fails the
+    // save and every save after it, and a raw "422 too large" gives no way to
+    // work out what to do about it. The work stays in localStorage either way;
+    // the difference is whether the user is told something they can act on.
+    const footprint = syncFootprint(this.state);
+    if (footprint.over) {
+      this.status = "error";
+      this.error = `Your prep log is ${formatBytes(footprint.total)}, past GitHub's `
+        + `${formatBytes(footprint.limit)} limit for a single file, so it can't be saved. `
+        + `See Settings for what's taking the room.`;
+      this._emit();
+      return;
+    }
+
     this.status = "saving";
     this._emit();
     try {

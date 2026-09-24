@@ -3,7 +3,7 @@ import {
   updateStreak, systemDesignUnlock, uid, MISTAKE_TAGS, MOCK_CHECKLIST, daysBetween,
   activityByDate, patternTrend, pickQuizProblem, quizOptions, addDaysISO, recommendSession,
   computePlantState, normalizeStatement, MAX_STATEMENT_CHARS, inspectImport, describeState,
-  parseBoxIntervals, validateBoxIntervals,
+  parseBoxIntervals, validateBoxIntervals, syncFootprint, formatBytes,
   recomputeSchedule, removeAttempt, editAttempt, isBacklog, streakGraceInfo,
   budgetProgress, budgetPressure, refresherStatus, STATUS_ACTIVE,
 } from "./logic.js";
@@ -2633,6 +2633,35 @@ export function renderLeetCode(root, store, actions) {
  * install. It exists because the console is not reachable on a phone, and
  * "something went wrong" with no detail leaves nobody able to act.
  */
+/**
+ * How close the synced log is to the size GitHub will accept.
+ *
+ * Hidden until it matters. A storage meter on an otherwise healthy install is
+ * an anxiety with nothing attached to it — but crossing the limit fails every
+ * save at once, so the warning has to arrive while shedding weight is still a
+ * choice.
+ */
+function footprintCardHtml(state) {
+  const f = syncFootprint(state);
+  if (!f.warn) return "";
+  const pct = Math.round(f.fraction * 100);
+  return `
+    <div class="card ${f.over ? "banner banner-bad" : "banner banner-warn"}">
+      <h2 style="margin-top:0">${f.over ? "Your log is too large to sync" : "Your log is getting large"}</h2>
+      <p class="small">${esc(formatBytes(f.total))} of ${esc(formatBytes(f.limit))} used (${pct}%).
+      ${f.over
+        ? "Saves are failing until this comes down. Nothing is lost — it's all still on this device."
+        : "Everything still saves normally; this is a heads-up while there's room to act."}</p>
+      <p class="muted small">
+        Problem statements: ${esc(formatBytes(f.breakdown.statements))} across ${f.counts.withStatement} problems ·
+        Saved code: ${esc(formatBytes(f.breakdown.code))} across ${f.counts.attempts} attempts ·
+        Everything else: ${esc(formatBytes(f.breakdown.rest))}
+      </p>
+      <p class="muted small">Statements and old code are the two that grow without limit. Removing a
+      problem you've finished with, or an attempt you don't need, takes its statement and code with it.</p>
+    </div>`;
+}
+
 /** How long ago, in words. Coarse on purpose: the useful distinction is
  * "just now" against "before you shut the laptop", not the exact minute. */
 function agoText(ms) {
@@ -2709,6 +2738,8 @@ export function renderSettings(root, store, actions) {
     </div>
 
     ${syncCardHtml(store)}
+
+    ${footprintCardHtml(store.state)}
 
     ${faultLogHtml()}
 

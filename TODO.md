@@ -16,7 +16,7 @@ in passing and didn't stop for.
 
 ## P0 — heads for a cliff
 
-- [ ] **15. Nothing watches the sync payload size.**
+- [x] **15. Nothing watches the sync payload size.** _(1.3.0)_
   The whole log syncs as one file and GitHub refuses anything over 1 MB. It's
   at 15 KB now, and ~640 bytes per problem projects to ~320 KB at the 500-problem
   cap — but Analyze now writes pasted statements *into* state, at 1–3 KB each,
