@@ -4,7 +4,7 @@ import {
   activityByDate, patternTrend, pickQuizProblem, quizOptions, addDaysISO, recommendSession,
   computePlantState, normalizeStatement, MAX_STATEMENT_CHARS, inspectImport, describeState,
   parseBoxIntervals, validateBoxIntervals, syncFootprint, formatBytes,
-  recomputeSchedule, removeAttempt, editAttempt, isBacklog, streakGraceInfo,
+  recomputeSchedule, removeAttempt, editAttempt, isBacklog, streakGraceInfo, lastAttemptWithCode,
   budgetProgress, budgetPressure, refresherStatus, STATUS_ACTIVE,
 } from "./logic.js";
 import {
@@ -1313,6 +1313,21 @@ export function renderWorkspace(root, store, actions) {
           </header>
           <div class="ws-pane-body ws-pane-body-flush">
             <div id="ws-code-editor" class="code-editor-host code-editor-fill"></div>
+            ${(() => {
+              // Behind a <details> on purpose. Coming back to a problem you
+              // solved a month ago is when your old solution is worth the
+              // most, and showing it up front would hand you the answer
+              // before you'd tried — which is the one thing this whole app
+              // exists to prevent.
+              const prior = lastAttemptWithCode(p);
+              if (!prior) return "";
+              return `
+                <details class="ws-prior-code">
+                  <summary class="muted small">Show what you wrote on ${fmtDate(prior.date)}
+                    — only worth opening once you've had a go</summary>
+                  <pre class="code-view-pre">${esc(prior.code)}</pre>
+                </details>`;
+            })()}
             ${session.isMock ? `
             <div class="ws-checklist">
               <p class="label">Verbalization checklist</p>
@@ -2515,10 +2530,24 @@ export function renderWhiteboard(root, store, actions) {
     }
   });
 
+  wireBoardViewers(root, store, boards);
+}
+
+/**
+ * Wire "show this drawing" buttons against a list of boards.
+ *
+ * Boards are PNGs in the repo rather than in state, so each one is a fetch —
+ * hence lazily, on click, rather than loading every thumbnail on render.
+ * Shared by the Whiteboard page and a problem's own page, which would
+ * otherwise be two copies of the same fetch-decode-insert.
+ */
+export function wireBoardViewers(root, store, boards) {
   root.querySelectorAll("[data-view-board]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const board = boards.find((b) => b.id === btn.dataset.viewBoard);
+      if (!board) return;
       const host = root.querySelector(`#wb-thumb-${CSS.escape(board.id)}`);
+      if (!host) return;
       if (host.childElementCount) {
         host.replaceChildren();
         return;
@@ -2531,7 +2560,8 @@ export function renderWhiteboard(root, store, actions) {
         img.alt = board.caption || "Whiteboard drawing";
         host.replaceChildren(img);
       } catch (err) {
-        toast("Couldn't load that drawing.");
+        report(new AppError("That drawing couldn't be loaded from your repo.",
+          { code: "board_fetch", cause: err }), "opening a whiteboard");
       }
       btn.disabled = false;
     });
@@ -2946,6 +2976,8 @@ export function renderProblemDetail(root, store, actions) {
   }
 
   const history = [...(p.attempts || [])].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  const boards = (state.whiteboards || []).filter((b) => b.problemId === p.id)
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
   const status = refresherStatus(p, todayISO());
   const url = problemUrl(p);
 
@@ -2986,6 +3018,25 @@ export function renderProblemDetail(root, store, actions) {
       </ul>
     </div>` : ""}
 
+    ${boards.length ? `
+    <!-- Boards are indexed by problem id and were only ever visible in the
+         Whiteboard page's flat list, which is the one place you would not
+         look for the drawing you made while solving this. -->
+    <div class="card">
+      <h2>What you drew</h2>
+      <p class="muted small">${boards.length} board${boards.length === 1 ? "" : "s"} from working this problem.</p>
+      <ul class="board-list">
+        ${boards.map((b) => `
+          <li>
+            <div class="row space-between" style="align-items:center;gap:0.5rem">
+              <span class="muted small">${fmtDate(b.date)}${b.caption ? ` · ${esc(b.caption)}` : ""}</span>
+              <button class="btn btn-ghost btn-xs" data-view-board="${esc(b.id)}">Show</button>
+            </div>
+            <div class="whiteboard-thumb-host" id="wb-thumb-${esc(b.id)}"></div>
+          </li>`).join("")}
+      </ul>
+    </div>` : ""}
+
     <div class="card">
       <h2>History</h2>
       ${history.length === 0
@@ -2994,6 +3045,7 @@ export function renderProblemDetail(root, store, actions) {
     </div>`;
 
   root.querySelector("#problem-back").addEventListener("click", () => actions.switchTab("queue"));
+  wireBoardViewers(root, store, boards);
   wireStartButtons(root, store, actions);
   root.querySelector("[data-goto-topic]")?.addEventListener("click", (e) => {
     showTopic(e.currentTarget.dataset.gotoTopic);

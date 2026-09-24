@@ -315,6 +315,20 @@ export function systemDesignUnlock(state) {
   };
 }
 
+/**
+ * The most recent attempt on a problem that recorded code, or null.
+ *
+ * Used by the workspace to offer your last solution *after* you've had your
+ * own attempt. Spaced repetition on something you solved a month ago is
+ * exactly when seeing what you did last time is worth the most — and exactly
+ * when showing it up front would destroy the rep.
+ */
+export function lastAttemptWithCode(problem) {
+  const withCode = (problem?.attempts || []).filter((a) => a.code && a.code.trim());
+  if (!withCode.length) return null;
+  return withCode.reduce((latest, a) => ((a.date || "") >= (latest.date || "") ? a : latest), withCode[0]);
+}
+
 // ---------- Sync payload size ----------
 //
 // The whole log syncs as one file through the GitHub Contents API, which

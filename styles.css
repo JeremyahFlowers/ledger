@@ -511,6 +511,11 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
    would win on source order and the editor would keep its short default height
    inside a full-height pane, so this deliberately qualifies with both. */
 .code-editor-host.code-editor-fill .CodeMirror { height: 100%; }
+.ws-prior-code {
+  flex: 0 0 auto; max-height: 40%; overflow: auto;
+  border-top: 1px solid var(--border); padding: 0.5rem 0.8rem;
+}
+.ws-prior-code summary { cursor: pointer; }
 .ws-checklist { flex: 0 0 auto; border-top: 1px solid var(--border); padding: 0.6rem 0.8rem; }
 
 .ws-statement { white-space: pre-wrap; font-size: 0.9rem; line-height: 1.55; }
@@ -966,6 +971,10 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
   text-underline-offset: 3px;
 }
 .link-button:hover { text-decoration-color: var(--accent); }
+
+.board-list { list-style: none; margin: 0; padding: 0; }
+.board-list li { padding: 0.4rem 0; border-bottom: 1px solid var(--border); }
+.board-list li:last-child { border-bottom: none; }
 
 .attempt-list { list-style: none; margin: 0; padding: 0; }
 .attempt-row { padding: 0.75rem 0; border-bottom: 1px solid var(--border); }

@@ -14,7 +14,7 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  recomputeSchedule, removeAttempt, editAttempt, applyOutcome,
+  recomputeSchedule, removeAttempt, editAttempt, applyOutcome, lastAttemptWithCode,
   todayISO, addDaysISO, STATUS_ACTIVE,
 } from "../js/logic.js";
 
@@ -156,5 +156,41 @@ describe("editAttempt", () => {
   test("test_editAttempt_unknownId_isNull", () => {
     const p = makeProblem([attempt("solved-clean", 1)]);
     assert.equal(editAttempt(p, "nope", { outcome: "failed" }, SETTINGS), null);
+  });
+});
+
+describe("lastAttemptWithCode", () => {
+  // Coming back to a problem you solved a month ago is exactly when your old
+  // solution is worth the most — and exactly when showing it unprompted would
+  // hand you the answer before you had tried. The workspace puts it behind a
+  // reveal; this picks which one to offer.
+  test("test_lastAttemptWithCode_noAttempts_isNull", () => {
+    assert.equal(lastAttemptWithCode(makeProblem([])), null);
+  });
+
+  test("test_lastAttemptWithCode_attemptsWithoutCode_isNull", () => {
+    // Manually logged reps record no code.
+    assert.equal(lastAttemptWithCode(makeProblem([attempt("solved-clean", 5)])), null);
+  });
+
+  test("test_lastAttemptWithCode_picksTheMostRecentOne", () => {
+    const old = { ...attempt("solved-clean", 40), code: "old" };
+    const recent = { ...attempt("failed", 3), code: "recent" };
+    assert.equal(lastAttemptWithCode(makeProblem([old, recent])).code, "recent");
+  });
+
+  test("test_lastAttemptWithCode_ignoresLaterAttemptsThatHaveNoCode", () => {
+    // A later manual log must not hide the last real solution.
+    const withCode = { ...attempt("solved-clean", 20), code: "the good one" };
+    assert.equal(lastAttemptWithCode(makeProblem([withCode, attempt("solved-clean", 1)])).code, "the good one");
+  });
+
+  test("test_lastAttemptWithCode_whitespaceOnlyCode_doesNotCount", () => {
+    assert.equal(lastAttemptWithCode(makeProblem([{ ...attempt("solved-clean", 2), code: "   \n " }])), null);
+  });
+
+  test("test_lastAttemptWithCode_missingProblem_doesNotThrow", () => {
+    assert.equal(lastAttemptWithCode(null), null);
+    assert.equal(lastAttemptWithCode({}), null);
   });
 });

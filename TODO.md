@@ -34,14 +34,14 @@ in passing and didn't stop for.
 
 ## P1 — the loop leaves value on the table
 
-- [ ] **17. Your previous code for a problem isn't there when you return.**
+- [x] **17. Your previous code for a problem isn't there when you return.** _(1.3.0)_
   Every attempt stores the code you wrote, and the workspace opens empty on a
   repeat. Spaced repetition on a problem you solved a month ago is exactly when
   you'd want to see what you did last time — after you've had your attempt.
   *Done:* a previous attempt's code is available in the workspace, deliberately
   behind a reveal so it can't spoil the rep.
 
-- [ ] **18. Saved whiteboards aren't attached to anything.**
+- [x] **18. Saved whiteboards aren't attached to anything.** _(1.3.0)_
   A session's drawing is uploaded and indexed by problem id, and the only place
   to see one is the Whiteboard page's flat list.
   *Done:* a problem's page shows the boards drawn while solving it.
