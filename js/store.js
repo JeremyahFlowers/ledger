@@ -3,10 +3,19 @@
 // nothing else touches persistence directly.
 import { GitHubStore } from "./github-client.js";
 import { buildSeedState, migrateState } from "./seed.js";
-import { syncFootprint, formatBytes } from "./logic.js";
+import { syncFootprint, formatBytes, compareStates } from "./logic.js";
 
 const CONFIG_KEY = "ledger.config";
 const CACHE_KEY = "ledger.cache.state";
+// Whether the cached copy holds changes that never reached GitHub.
+//
+// `dirty` lives in memory, so closing the tab forgot it. That made the whole
+// offline story a lie: work on a train, the save fails, the work goes to the
+// cache, you close the tab — and on the next open init() fetched the remote,
+// adopted it, and overwrote the cache with it. The cached copy was read only
+// when the fetch *failed*. An hour of practice, discarded without a word, by
+// the app working correctly.
+const PENDING_KEY = "ledger.cache.unsynced";
 const SAVE_DEBOUNCE_MS = 1200;
 
 // Retry schedule for a save that failed for a reason that might pass —
@@ -56,6 +65,9 @@ class Store {
     this.lastSyncedAt = null;
     this.retryTimer = null;
     this.retryAttempt = 0;
+    // Set when a reopen found work that had never reached GitHub. Read once
+    // by the UI, which says so, and cleared.
+    this.recovered = false;
   }
 
   onChange(fn) {
@@ -80,6 +92,7 @@ class Store {
   disconnect() {
     clearConfig();
     localStorage.removeItem(CACHE_KEY);
+    localStorage.removeItem(PENDING_KEY);
     this.gh = null;
     this.state = null;
     this.status = "unconfigured";
@@ -98,13 +111,17 @@ class Store {
     this._emit();
     try {
       const { exists, state } = await this.gh.fetchState();
-      if (exists) {
-        this.state = migrateState(state);
-      } else {
+      if (!exists) {
         this.state = buildSeedState();
         await this.gh.saveState(this.state, "Ledger: initialize prep-data/state.json");
+        this._cacheLocally();
+      } else if (this._hasPendingWork() && this._readCache()) {
+        this._recoverPendingWork(migrateState(state));
+        return;                       // _recoverPendingWork emits and flushes
+      } else {
+        this.state = migrateState(state);
+        this._cacheLocally();
       }
-      this._cacheLocally();
       this.status = "synced";
       this.lastSyncedAt = Date.now();
       this.error = null;
@@ -125,9 +142,65 @@ class Store {
   _cacheLocally() {
     try {
       localStorage.setItem(CACHE_KEY, JSON.stringify(this.state));
+      // Written together, so the flag can never outlive or lag the copy it
+      // describes.
+      localStorage.setItem(PENDING_KEY, this.dirty ? "1" : "");
     } catch (_) {
       /* storage full or unavailable — sync still works, just no offline fallback */
     }
+  }
+
+  /** Did this browser close with work that never reached GitHub? */
+  _hasPendingWork() {
+    try {
+      return localStorage.getItem(PENDING_KEY) === "1";
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /**
+   * Reconcile a cache that closed with unsaved changes against the remote.
+   *
+   * Two outcomes, and which one depends on whether the *remote* has attempts
+   * this device has never seen:
+   *
+   *  - It doesn't. This device is simply ahead, so its copy is adopted and
+   *    pushed. Nothing is lost and nothing needs deciding.
+   *  - It does. Both sides have real work, which is the conflict screen's
+   *    entire job — it can fetch both and say what each choice discards.
+   *
+   * The comparison is over attempts, which means an unsynced journal note on
+   * one side and a newer one on the other will be resolved in this device's
+   * favour without asking. That is deliberate: attempts are the substantive
+   * record, and routing every ordinary offline edit through a conflict screen
+   * would train people to click past it, which is how the real conflicts get
+   * lost too.
+   */
+  _recoverPendingWork(remote) {
+    const cached = migrateState(this._readCache());
+    const diff = compareStates(cached, remote);
+
+    this.state = cached;
+    if (diff.attemptsOnlyThere > 0 && diff.attemptsOnlyHere > 0) {
+      this.status = "conflict";
+      this.error = "This device has work that never reached GitHub, and GitHub has work "
+        + "this device hasn't seen. Nothing is lost yet — pick which to keep.";
+      this.dirty = true;
+      this._cacheLocally();
+      this._emit();
+      this.loadLeetCodeStats();
+      return;
+    }
+
+    // Strictly ahead: push it, and say so rather than letting a silent save
+    // be the only evidence that anything was at stake.
+    this.dirty = true;
+    this._cacheLocally();
+    this.recovered = true;
+    this._emit();
+    this.flush("Ledger: upload work saved while offline");
+    this.loadLeetCodeStats();
   }
 
   _readCache() {

@@ -9,6 +9,79 @@ one-line title is not enough to pick the work up again a week later.
 
 ---
 
+# Cycle 5
+
+Found by probing the app rather than reading it — the first item is a real
+data-loss path that was reproduced in a browser before a line was changed.
+
+## P0 — losing work
+
+- [x] **40. Work done offline was discarded on the next open.** _(1.6.0)_
+  The scenario this app is built for: a phone with no signal, a problem
+  worked, the save fails, the work goes to localStorage, the tab closes. On
+  the next open `init()` fetched the remote, adopted it, and overwrote the
+  cache with it — the cached copy was read only when the fetch *failed*.
+  `dirty` lived in memory and did not survive the reload, so nothing even knew
+  there had been anything to keep. An hour of practice, gone, with the app
+  working exactly as written.
+  *Done:* a reopen finds that work, keeps it, sends it, and says so — and asks
+  only when both sides genuinely have work the other hasn't seen.
+
+- [ ] **41. The sync path trusts what it loads; the import path doesn't.**
+  `inspectImport` validates a file you pick and refuses one that isn't a
+  Ledger log. `migrateState` runs on whatever GitHub returns and only backfills
+  missing keys, so a truncated or hand-edited state.json goes straight into the
+  renderer. Two paths load the same document and only the rarer one checks it.
+  *Done:* one validation on both paths, failing with something you can act on
+  rather than a blank page.
+
+## P1 — things you wrote that you can't find
+
+- [ ] **42. Journal entries aren't searchable.**
+  Cycle 4 made soul statements findable because they are what the app works
+  hardest to collect. Weekly retros — which the Journal page itself calls the
+  place "where patterns across sessions become visible" — are not in the index,
+  and neither are mock notes. Search covers patterns, your problems, your soul
+  statements and the catalog, and stops there.
+  *Done:* everything you wrote is findable, wherever you wrote it.
+
+- [ ] **43. A problem's statement is write-once.**
+  Statements arrive from the LeetCode sync or get pasted in, and the workspace
+  can edit one. Nothing says where the one you're reading came from, or when,
+  and a statement fetched against the wrong problem can only be fixed by
+  noticing and retyping it.
+  *Done:* a statement says where it came from, and can be replaced from either
+  source.
+
+## P2 — the parts that only show up in use
+
+- [ ] **44. The day clock can't be corrected.**
+  It runs, it pauses, and it is the input to the budget ring and the plant's
+  health. Leave it running over lunch and the day is spent, with no way to say
+  so. A number you can't correct is a number you stop trusting, and then stop
+  looking at.
+  *Done:* today's time can be adjusted, with the correction visible as one.
+
+- [ ] **45. Nothing carries between a session and the next one on the same
+  problem.**
+  Reopening a problem you failed last week gives you the statement and an
+  empty editor. Your last attempt's code is reachable from the detail page and
+  your note from the Journal, but neither is where you are about to need them.
+  *Done:* starting a session on a problem you've attempted shows what you did
+  last time.
+
+- [ ] **46. The topic pages don't know what you've done.**
+  A topic explains the pattern, lists pitfalls, draws a diagram and shows a
+  practice ladder — and says nothing about how you actually do on it, which is
+  recorded three clicks away on the mastery table.
+  *Done:* a topic page leads with your own record on that pattern.
+
+- [ ] **47. Keyboard support stops at the door of every list.**
+  `g`-shortcuts reach any page and `?` explains them. Once you are on the
+  queue, the bank or the journal, there is no way to move through the list or
+  act on a row without a mouse.
+  *Done:* the lists you actually work from are navigable from the keyboard.
+
 # Cycle 4
 
 ## P0 — the app collects answers it never reads

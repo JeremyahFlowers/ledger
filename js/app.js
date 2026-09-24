@@ -232,6 +232,15 @@ const STATUS_MAP = {
 };
 
 function renderStatus() {
+  // Said once, the first time a render happens after a recovery. A silent
+  // save is indistinguishable from nothing having been at stake, and this is
+  // the user's only way to learn that the hour they worked on a train was
+  // sitting in one browser and has now been uploaded.
+  if (store.recovered) {
+    store.recovered = false;
+    toast("Work you did offline has been uploaded.");
+  }
+
   const [text, cls, explanation] = STATUS_MAP[store.status] || ["", "", ""];
   statusEl.textContent = text;
   statusEl.className = `status status-${cls}`;
