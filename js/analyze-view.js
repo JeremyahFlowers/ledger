@@ -16,10 +16,11 @@
 // shown next to it. Where nothing stands out, it says so.
 
 import { esc, toast, startSession, showTopic } from "./views.js";
+import { pct, patternName } from "./ui.js";
 import { analyze, explain, readableFeature, BOUND_IMPLICATIONS } from "./pattern-model.js";
 import { problemsForPattern, problemFromCatalog, savedSlugs } from "./catalog.js";
 import { patternIcon } from "./icons.js";
-import { uid, todayISO, STATUS_ACTIVE, normalizeStatement } from "./logic.js";
+import { uid, todayISO, STATUS_ACTIVE, normalizeStatement, modelScorecard, SCORECARD_MIN } from "./logic.js";
 
 const HIGHLIGHT_LEVELS = 4;        // intensity buckets for supporting evidence
 const TOP_PREDICTIONS_SHOWN = 8;
@@ -59,7 +60,8 @@ export function renderAnalyze(root, store, actions) {
       </div>
       ${state.error ? `<p class="banner banner-bad" style="margin-top:0.75rem">${esc(state.error)}</p>` : ""}
     </div>
-    <div id="analyze-results">${state.result ? resultsHtml(store) : ""}</div>`;
+    <div id="analyze-results">${state.result ? resultsHtml(store) : ""}</div>
+    ${scorecardHtml(store.state)}`;
 
   const input = root.querySelector("#analyze-input");
   root.querySelector("#analyze-run").addEventListener("click", async () => {
@@ -76,6 +78,76 @@ export function renderAnalyze(root, store, actions) {
   });
 
   if (state.result) wireResults(root, store, actions);
+  wireScorecard(root, actions);
+}
+
+// ---------- How it has done on your problems ----------
+//
+// The model ships with numbers from a held-out split of a public corpus. Those
+// say how it does on problems in general; they say nothing about how it does
+// on the ones you actually paste in, which is the only question that decides
+// whether you should trust it tomorrow morning.
+//
+// Called agreement rather than accuracy, deliberately and visibly. You choose
+// the pattern on the same form that just showed you the prediction, so a match
+// is either the model being right or you being anchored, and there is no way
+// to tell which from here. A disagreement carries no such doubt — you read its
+// answer and picked something else — so those are named individually and the
+// matches are only ever reported as a rate.
+
+function scorecardHtml(state) {
+  const card = modelScorecard(state);
+  if (card.n === 0) {
+    return `
+      <div class="card">
+        <h2>How it has done on your problems</h2>
+        <p class="muted">Nothing to report yet. Analysing a problem and then tracking it
+        records what the model said, so this can start answering whether it was any use to you.</p>
+      </div>`;
+  }
+
+  const body = card.enough
+    ? `<div class="stat-row">
+         <div class="stat"><span class="stat-num">${pct(card.top1Rate)}</span>
+           <span class="stat-label">first guess</span></div>
+         <div class="stat"><span class="stat-num">${pct(card.top3Rate)}</span>
+           <span class="stat-label">in its top three</span></div>
+       </div>
+       <p class="muted small">How often its ranking held the pattern you settled on, across
+       ${card.n} problems you analysed and then tracked.</p>`
+    : `<p class="muted">${card.n} problem${card.n === 1 ? "" : "s"} so far — ${card.needed} more
+       before a percentage here would mean anything. A rate over ${card.n} is noise with a
+       decimal point on it.</p>`;
+
+  return `
+    <div class="card">
+      <h2>How it has done on your problems</h2>
+      ${body}
+      <p class="muted small scorecard-caveat">Read this as agreement, not accuracy. You pick the
+      pattern on the same form that just showed you the guess, so a match might be the model being
+      right or you being swayed by it. The disagreements below are the honest half: you saw its
+      answer and chose differently.</p>
+      ${card.disagreements.length ? `
+        <h3 class="scorecard-heading">Where you overruled it</h3>
+        <ul class="scorecard-list">
+          ${card.disagreements.slice(0, SCORECARD_MIN).map((d) => `
+            <li>
+              <button type="button" class="link-button" data-open-problem="${esc(d.problemId)}">${esc(d.problemName)}</button>
+              <span class="muted small">— it said ${esc(patternName(state, d.said))}
+              (${Math.round(d.saidProbability * 100)}%), you recorded
+              ${esc(patternName(state, d.actual))}</span>
+            </li>`).join("")}
+        </ul>
+        ${card.disagreements.length > SCORECARD_MIN
+          ? `<p class="muted small">and ${card.disagreements.length - SCORECARD_MIN} more.</p>` : ""}`
+        : `<p class="muted small">You have agreed with its first guess every time so far.</p>`}
+    </div>`;
+}
+
+function wireScorecard(root, actions) {
+  root.querySelectorAll(".scorecard-list [data-open-problem]").forEach((btn) => {
+    btn.addEventListener("click", () => actions.openProblem(btn.dataset.openProblem));
+  });
 }
 
 async function runAnalysis(root, store, actions) {

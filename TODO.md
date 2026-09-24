@@ -13,7 +13,7 @@ one-line title is not enough to pick the work up again a week later.
 
 ## P0 — the app collects answers it never reads
 
-- [ ] **32. The model never finds out whether it was right.**
+- [x] **32. The model never finds out whether it was right.** _(1.5.0)_
   Analyze stores its ranked predictions on the problem. The problem then
   records which pattern it actually turned out to be. Nothing has ever
   compared the two. The most elaborate thing in this app has been graded on a

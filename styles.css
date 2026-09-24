@@ -808,13 +808,6 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 .trend-line.up .trend-arrow { color: var(--good); }
 .trend-line.down .trend-arrow { color: var(--warn); }
 
-/* A control that belongs inside a sentence. */
-.link-button {
-  padding: 0; border: 0; background: none;
-  font: inherit; color: var(--accent-strong);
-  text-decoration: underline; cursor: pointer;
-}
-
 /* Settings forms are a field and a button, not a stacked column — the shared
    .form class made a single Save button span the full card width, which read
    as a much more significant action than changing one number. */
@@ -1516,3 +1509,15 @@ input[type="checkbox"]:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* The model's own report card. The caveat is not fine print here — it is the
+   reason the number above it is called agreement, so it gets a rule and the
+   text colour of something you are meant to read, not of something being
+   disclaimed. */
+.scorecard-caveat {
+  border-top: 1px solid var(--border);
+  margin-top: 0.9rem; padding-top: 0.7rem;
+}
+.scorecard-heading { font-size: 0.95rem; margin: 1rem 0 0.4rem; }
+.scorecard-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.45rem; }
+.scorecard-list li { line-height: 1.45; }

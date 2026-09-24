@@ -171,3 +171,67 @@ export function progressSummary(state, weeks = PROGRESS_WEEKS, patternId = null)
   };
 }
 
+
+// ---------- Has the model been right, on your problems? ----------
+//
+// Analyze has written its ranked guesses onto every problem tracked from it
+// since the feature shipped, and the problem then records which pattern it
+// settled on. Nothing ever compared the two. The model's published numbers
+// come from a held-out split of a public corpus, which says how it does on
+// problems in general and nothing about how it does on yours.
+//
+// The honest caveat, and the reason this is called agreement rather than
+// accuracy: on the Analyze form you pick the pattern in the same breath as
+// reading the prediction, so a match may be the model being right or you
+// being anchored. A *disagreement* has no such doubt — you saw its answer and
+// chose a different one — which is why those are reported separately and by
+// name. The view is required to carry the caveat; see renderAnalyze.
+
+/** Below this there is nothing to say, and a percentage over four problems
+ * reads as precision that isn't there. */
+export const SCORECARD_MIN = 8;
+
+/**
+ * How often the model's ranking contained the pattern you settled on.
+ *
+ * Returns `{ n, top1, top3, top1Rate, top3Rate, enough, needed, disagreements }`.
+ * Rates are null below the minimum rather than a number nobody should read.
+ */
+export function modelScorecard(state) {
+  const judged = (state.problems || []).filter(
+    (p) => p.analysis?.predictions?.length && p.patternId,
+  );
+
+  let top1 = 0;
+  let top3 = 0;
+  const disagreements = [];
+  for (const p of judged) {
+    const ranked = p.analysis.predictions.map((pred) => pred.pattern);
+    if (ranked[0] === p.patternId) top1 += 1;
+    else {
+      disagreements.push({
+        problemId: p.id,
+        problemName: p.name,
+        said: ranked[0],
+        saidProbability: p.analysis.predictions[0].probability,
+        actual: p.patternId,
+        at: p.analysis.at,
+      });
+    }
+    if (ranked.includes(p.patternId)) top3 += 1;
+  }
+
+  const n = judged.length;
+  const enough = n >= SCORECARD_MIN;
+  return {
+    n,
+    top1,
+    top3,
+    top1Rate: enough ? top1 / n : null,
+    top3Rate: enough ? top3 / n : null,
+    enough,
+    needed: Math.max(0, SCORECARD_MIN - n),
+    // Newest first: the recent ones are the ones you can still remember.
+    disagreements: disagreements.sort((a, b) => (b.at || "").localeCompare(a.at || "")),
+  };
+}

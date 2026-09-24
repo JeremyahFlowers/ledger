@@ -83,6 +83,7 @@ export function patternStats(state) {
 export {
   patternTrend,
   PROGRESS_WEEKS, weeklyProgress, patternMovement, progressSummary,
+  SCORECARD_MIN, modelScorecard,
 } from "./stats.js";
 
 // Re-exported from state-health.js, where these now live. Everything already
