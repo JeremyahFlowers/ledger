@@ -1637,13 +1637,23 @@ export function renderReflect(root, store, actions) {
                A control that looks pressable and silently ignores you is worse
                than one that explains itself, so the requirement is enforced on
                submit instead, where it can say what it wants and point at it. -->
-          <button class="btn btn-primary" type="submit" id="reflect-save">Save &amp; finish</button>
+          <button class="btn btn-primary" type="submit" id="reflect-save">Save &amp; finish
+            <kbd class="btn-kbd">&#8984;&crarr;</kbd></button>
           <button class="btn btn-ghost" type="button" id="reflect-discard">Discard this session</button>
         </div>
       </form>
     </div>`;
 
   const form = root.querySelector("#reflect-form");
+
+  // The form is entirely keyboard-reachable, but finishing meant a trip to the
+  // mouse. Cmd/Ctrl+Enter is the convention for "submit this text form".
+  form.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      form.requestSubmit();
+    }
+  });
 
   root.querySelectorAll("[data-pattern-answer]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -2565,6 +2575,51 @@ export function renderLeetCode(root, store, actions) {
  * install. It exists because the console is not reachable on a phone, and
  * "something went wrong" with no detail leaves nobody able to act.
  */
+/** How long ago, in words. Coarse on purpose: the useful distinction is
+ * "just now" against "before you shut the laptop", not the exact minute. */
+function agoText(ms) {
+  if (!ms) return "not yet this session";
+  const mins = Math.floor((Date.now() - ms) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"} ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+
+/**
+ * Sync state, and the controls for it.
+ *
+ * "Synced" in the header says the last attempt worked, not when — and there
+ * was no way to pull a change made on another device short of reloading, or to
+ * retry a failed push without making another change first.
+ */
+function syncCardHtml(store) {
+  const unsaved = store.dirty;
+  return `
+    <div class="card">
+      <h2>Sync</h2>
+      <p class="muted small">
+        Last synced ${esc(agoText(store.lastSyncedAt))}.
+        ${unsaved
+          ? "You have changes that haven't reached GitHub yet."
+          // Only claimed when a sync has actually succeeded. It read
+          // "Everything here is on GitHub" beside a 401, which is the kind of
+          // confident wrong answer that stops people trusting the rest.
+          : store.lastSyncedAt ? "Everything here is on GitHub."
+          : "Nothing has reached GitHub yet."}
+        ${store.error ? `<br/><span class="budget-warn">${esc(store.error)}</span>` : ""}
+      </p>
+      <div class="row gap-sm" style="margin-top:0.6rem;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" id="sync-pull" ${unsaved ? "disabled" : ""}
+          title="${unsaved ? "Save your changes first" : "Fetch changes made on another device"}">Check for changes</button>
+        <button class="btn btn-ghost btn-sm" id="sync-push" ${unsaved ? "" : "disabled"}
+          title="${unsaved ? "Send your unsaved changes now" : "Nothing waiting to send"}">Save now</button>
+      </div>
+    </div>`;
+}
+
 function faultLogHtml() {
   const faults = recentFaults();
   if (!faults.length) return "";
@@ -2594,6 +2649,8 @@ export function renderSettings(root, store, actions) {
       before it, is in <a href="https://github.com/JeremyahFlowers/ledger/blob/main/CHANGELOG.md"
       target="_blank" rel="noopener noreferrer">the changelog</a>.</p>
     </div>
+
+    ${syncCardHtml(store)}
 
     ${faultLogHtml()}
 
@@ -2636,6 +2693,20 @@ export function renderSettings(root, store, actions) {
         <option value="dark">Dark</option>
       </select>
     </div>`;
+
+  root.querySelector("#sync-pull")?.addEventListener("click", async () => {
+    try {
+      await store.refreshFromRemote();
+      toast("Up to date.");
+    } catch (err) {
+      report(new AppError(err.message || "Couldn't reach GitHub.", { code: err.code || "sync_pull", cause: err }),
+        "checking for changes");
+    }
+  });
+  root.querySelector("#sync-push")?.addEventListener("click", async () => {
+    await store.flush("Ledger: manual save");
+    toast(store.dirty ? "Still unsaved — see the message above." : "Saved to GitHub.");
+  });
 
   root.querySelector("#clear-faults")?.addEventListener("click", () => {
     clearFaults();

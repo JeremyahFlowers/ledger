@@ -931,6 +931,19 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 .budget-warn { color: var(--warn); font-weight: 600; }
 .budget-over { color: var(--bad); font-weight: 700; }
 
+/* A shortcut hint inside a button. Quiet enough not to compete with the label,
+   present enough to be discovered — a shortcut nobody knows about may as well
+   not exist. */
+.btn-kbd {
+  margin-left: 0.45rem;
+  font-family: var(--font-mono); font-size: 0.75em;
+  opacity: 0.7;
+}
+@media (pointer: coarse) {
+  /* No keyboard to press it with. */
+  .btn-kbd { display: none; }
+}
+
 /* ---------- Problem history ---------- */
 
 /* A button that reads as a link: it navigates, so it should look like it does,

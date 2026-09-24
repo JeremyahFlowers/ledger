@@ -34,6 +34,10 @@ class Store {
     this.dirty = false;
     this.gh = null;
     this.leetcode = null; // { status: 'idle'|'loading'|'ready'|'error', data, error }
+    // When the last successful exchange with GitHub happened. Shown in
+    // Settings: "Synced" alone says the last attempt worked, not whether it
+    // was a minute ago or before you shut the laptop on Friday.
+    this.lastSyncedAt = null;
   }
 
   onChange(fn) {
@@ -84,6 +88,7 @@ class Store {
       }
       this._cacheLocally();
       this.status = "synced";
+      this.lastSyncedAt = Date.now();
       this.error = null;
     } catch (err) {
       const cached = this._readCache();
@@ -135,6 +140,7 @@ class Store {
       await this.gh.saveState(this.state, message);
       this.dirty = false;
       this.status = "synced";
+      this.lastSyncedAt = Date.now();
       this.error = null;
     } catch (err) {
       this.status = err.code === "conflict" ? "conflict" : "offline";
@@ -175,6 +181,7 @@ class Store {
       this.dirty = false;
       this._cacheLocally();
       this.status = "synced";
+      this.lastSyncedAt = Date.now();
       this.error = null;
     } catch (err) {
       this.status = "error";
@@ -218,6 +225,40 @@ class Store {
       return record?.statement || null;
     } catch (_) {
       return null;
+    }
+  }
+
+  /**
+   * Re-read the remote and adopt it.
+   *
+   * The only way to pick up a change made on another device was to reload the
+   * page, and there was no way to retry after a failed push without making
+   * another change first. Refuses while there are unsaved local changes rather
+   * than choosing for the user which side to keep — that decision belongs to
+   * the conflict screen, which can show what each option discards.
+   */
+  async refreshFromRemote() {
+    if (!this.gh) throw new Error("Not connected.");
+    if (this.dirty) {
+      const err = new Error("You have unsaved changes — they'd be lost. Let them sync first.");
+      err.code = "dirty";
+      throw err;
+    }
+    this.status = "loading";
+    this._emit();
+    try {
+      const { exists, state } = await this.gh.fetchState();
+      if (exists && state) this.state = migrateState(state);
+      this.status = "synced";
+      this.lastSyncedAt = Date.now();
+      this.error = null;
+      this._cacheLocally();
+    } catch (err) {
+      this.status = "offline";
+      this.error = err.message || String(err);
+      throw err;
+    } finally {
+      this._emit();
     }
   }
 

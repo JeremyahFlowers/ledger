@@ -45,14 +45,14 @@ quietly fails to keep it.
 
 ## P1 — the core loop's rough edges
 
-- [ ] **5. Sync on demand.**
+- [x] **5. Sync on demand.** _(1.1.0)_
   The only way to pull changes made on another device is to reload, and there
   is no way to retry a failed push without making another change. "Synced" is
   shown but not when it last happened.
   *Done:* a sync control in Settings showing last-synced time, with refresh
   and retry.
 
-- [ ] **6. Save from the keyboard in Reflect.**
+- [x] **6. Save from the keyboard in Reflect.** _(1.1.0)_
   The form is entirely keyboard-reachable but finishing needs a mouse trip to
   the button.
   *Done:* Cmd/Ctrl+Enter saves, and the hint says so.
