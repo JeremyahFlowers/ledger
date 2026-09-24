@@ -99,7 +99,7 @@ quietly fails to keep it.
   *Done:* measured improvement on a held-out set without loosening precision
   below the 0.65 floor.
 
-- [ ] **14. Box intervals are editable.**
+- [x] **14. Box intervals are editable.** _(1.2.0)_
   `boxIntervalsDays` is in state and honoured everywhere but only changeable
   by hand-editing JSON.
   *Done:* editable in Settings with the effect explained and sane bounds.

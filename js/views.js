@@ -3,6 +3,7 @@ import {
   updateStreak, systemDesignUnlock, uid, MISTAKE_TAGS, MOCK_CHECKLIST, daysBetween,
   activityByDate, patternTrend, pickQuizProblem, quizOptions, addDaysISO, recommendSession,
   computePlantState, normalizeStatement, MAX_STATEMENT_CHARS, inspectImport, describeState,
+  parseBoxIntervals, validateBoxIntervals,
   recomputeSchedule, removeAttempt, editAttempt, isBacklog, streakGraceInfo,
   budgetProgress, budgetPressure, refresherStatus, STATUS_ACTIVE,
 } from "./logic.js";
@@ -2702,6 +2703,23 @@ export function renderSettings(root, store, actions) {
       </div>
     </div>
     <div class="card">
+      <h2>Review intervals</h2>
+      <p class="muted small">How long each box waits before a problem comes round again. A clean
+      solve moves up a box, a struggle holds, a failure drops back to the first. The defaults are
+      a standard Leitner ladder; shorten them if things are fading before they come back, lengthen
+      them if refreshers feel unnecessary.</p>
+      <form id="intervals-form" class="settings-form">
+        <label class="field"><span class="label">Days per box, in order</span>
+          <input class="input" name="boxIntervalsDays" style="max-width:18rem"
+            value="${esc(state.settings.boxIntervalsDays.join(", "))}" /></label>
+        <button class="btn btn-primary btn-sm" type="submit">Save intervals</button>
+      </form>
+      <p class="muted small" style="margin-top:0.5rem">Currently ${state.settings.boxIntervalsDays.length}
+      boxes: ${state.settings.boxIntervalsDays.map((d, i) => `box ${i} after ${d} day${d === 1 ? "" : "s"}`).join(", ")}.
+      Changing these affects when problems next come up; nothing already recorded is altered.</p>
+    </div>
+
+    <div class="card">
       <h2>Theme</h2>
       <select class="select" id="theme-select" style="max-width:12rem">
         <option value="system">System</option>
@@ -2727,6 +2745,25 @@ export function renderSettings(root, store, actions) {
   root.querySelector("#clear-faults")?.addEventListener("click", () => {
     clearFaults();
     actions.rerender();
+  });
+
+  root.querySelector("#intervals-form")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const raw = new FormData(e.target).get("boxIntervalsDays");
+    const values = parseBoxIntervals(raw);
+    const check = validateBoxIntervals(values);
+    if (!check.ok) {
+      // Refused with the reason, not silently ignored: a bad table here is
+      // not a bad preference, it is a schedule that stops working.
+      report(new AppError(check.errors.join(" "), { code: "bad_intervals" }), "saving your intervals");
+      return;
+    }
+    store.mutate((s) => {
+      s.settings.boxIntervalsDays = values;
+      // Existing problems may now sit in a box the new table no longer has.
+      for (const p of s.problems) p.box = Math.min(p.box || 0, values.length - 1);
+    }, "Ledger: update review intervals");
+    toast("Saved — this affects when problems next come up.");
   });
 
   root.querySelector("#budget-form").addEventListener("submit", (e) => {

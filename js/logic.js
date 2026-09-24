@@ -315,6 +315,60 @@ export function systemDesignUnlock(state) {
   };
 }
 
+// ---------- Box intervals ----------
+//
+// boxIntervalsDays decides when each box comes back round, and was honoured
+// everywhere while being changeable only by hand-editing JSON. It is the one
+// number that defines what this app *is*, so it should be adjustable — and
+// guarded, because a bad table is not a bad setting, it is a schedule that
+// stops working.
+
+export const MIN_BOX_INTERVALS = 3;
+export const MAX_BOX_INTERVALS = 8;
+export const MAX_BOX_INTERVAL_DAYS = 365;
+
+/**
+ * Check a proposed interval table.
+ *
+ * Must be non-decreasing: the whole premise is that each box waits longer than
+ * the last, and a table that dips would send a problem you just solved cleanly
+ * back sooner than one you struggled with.
+ */
+export function validateBoxIntervals(values) {
+  const errors = [];
+  if (!Array.isArray(values) || values.length < MIN_BOX_INTERVALS) {
+    return { ok: false, errors: [`Needs at least ${MIN_BOX_INTERVALS} boxes.`], values: [] };
+  }
+  if (values.length > MAX_BOX_INTERVALS) {
+    errors.push(`More than ${MAX_BOX_INTERVALS} boxes is more schedule than anyone needs.`);
+  }
+  if (values.some((n) => !Number.isInteger(n) || n < 0)) {
+    errors.push("Every interval must be a whole number of days, zero or more.");
+  }
+  if (values.some((n) => n > MAX_BOX_INTERVAL_DAYS)) {
+    errors.push(`Nothing should wait longer than ${MAX_BOX_INTERVAL_DAYS} days.`);
+  }
+  if (values[0] !== 0) {
+    errors.push("The first box must be 0 days — a problem you just failed comes back today.");
+  }
+  for (let i = 1; i < values.length; i++) {
+    if (values[i] < values[i - 1]) {
+      errors.push("Each box must wait at least as long as the one before it.");
+      break;
+    }
+  }
+  return { ok: errors.length === 0, errors, values };
+}
+
+/** Parse a comma-separated interval list from a text field. */
+export function parseBoxIntervals(text) {
+  return String(text ?? "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part !== "")
+    .map((part) => (/^\d+$/.test(part) ? Number(part) : NaN));
+}
+
 // ---------- Validating an imported state file ----------
 //
 // Import replaces the entire prep log, and it used to accept anything that
