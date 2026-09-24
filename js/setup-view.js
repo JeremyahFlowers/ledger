@@ -9,7 +9,7 @@
 // it admits that owning a file in a repo means two copies can diverge.
 
 import { compareStates } from "./logic.js";
-import { esc, fmtDate, toast, downloadState } from "./ui.js";
+import { esc, fmtDate, toast, downloadState, confirmLoss } from "./ui.js";
 
 // ---------- Setup / connect ----------
 
@@ -155,5 +155,10 @@ function confirmDiscard(diff, losing) {
   if (!count) return true; // nothing unique on the side being dropped
   const where = losing === "mine" ? "this device" : "GitHub";
   const plural = count === 1 ? { s: "", verb: "exists" } : { s: "s", verb: "exist" };
-  return confirm(`This discards ${count} logged attempt${plural.s} that only ${plural.verb} on ${where}. Continue?`);
+  const surviving = losing === "mine" ? "GitHub" : "this device";
+  return confirmLoss({
+    action: `Keep the version on ${surviving}?`,
+    lost: `${count} logged attempt${plural.s} that only ${plural.verb} on ${where}`,
+    kept: `everything on ${surviving}`,
+  });
 }

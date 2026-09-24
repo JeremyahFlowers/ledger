@@ -39,7 +39,7 @@ one-line title is not enough to pick the work up again a week later.
   exact state logic.js was in at the start of cycle 3.
   *Done:* split along the same kind of seams, no behaviour change.
 
-- [ ] **35. Destructive actions don't behave alike.**
+- [x] **35. Destructive actions don't behave alike.** _(1.5.0)_
   Removing an attempt offers undo. Removing a problem from the bank offers
   undo. Removing a resource link deletes it silently — no confirmation, no
   undo, no toast. Disconnecting asks with a browser `confirm()`. Three

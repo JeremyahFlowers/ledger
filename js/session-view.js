@@ -18,7 +18,10 @@ import {
   quizOptions, updateStreak, computePlantState, recommendSession, allAttempts,
   normalizeStatement, MAX_STATEMENT_CHARS, lastAttemptWithCode, mockPhase, MOCK_MINUTES,
 } from "./logic.js";
-import { esc, richText, fmtDate, patternName, toast, OUTCOME_GLYPH, showTopic, outcomeOptions } from "./ui.js";
+import {
+  esc, richText, fmtDate, patternName, toast, OUTCOME_GLYPH, showTopic, outcomeOptions,
+  confirmLoss,
+} from "./ui.js";
 import { TOPICS } from "./topics-content.js";
 import { loadCodeMirror, CODE_MODES } from "./codemirror-loader.js";
 import { createWhiteboard } from "./whiteboard.js";
@@ -114,6 +117,25 @@ export function startSession(problem, { isMock = false } = {}) {
     capturedCode: "", capturedWhiteboardDataUrl: null,
     mounted: false, teardownSplitters: null,
   };
+}
+
+/**
+ * Leaving a session without saving it, asked the same way everywhere.
+ *
+ * There were three ways out of a session — the workspace's exit, Reflect's
+ * discard, and the nav's own escape — and three different questions, one of
+ * which ("Leave without saving this session?") did not mention that the code
+ * goes with it.
+ */
+export function discardSession(actions) {
+  if (!confirmLoss({
+    action: "Discard this session?",
+    lost: "the code, notes and timer from this one sitting",
+    kept: "every rep you have logged before now",
+  })) return false;
+  abandonSession();
+  actions.switchTab("dashboard");
+  return true;
 }
 
 /** Called when the user exits Workspace or Reflect without saving. */
@@ -443,11 +465,7 @@ export function renderWorkspace(root, store, actions) {
     actions.switchTab("reflect");
   });
 
-  root.querySelector("#ws-exit").addEventListener("click", () => {
-    if (!confirm("Discard this session? Nothing will be saved.")) return;
-    abandonSession();
-    actions.switchTab("dashboard");
-  });
+  root.querySelector("#ws-exit").addEventListener("click", () => discardSession(actions));
 }
 
 /**
@@ -690,11 +708,7 @@ export function renderReflect(root, store, actions) {
     });
   });
 
-  root.querySelector("#reflect-discard").addEventListener("click", () => {
-    if (!confirm("Discard this session? Nothing will be saved.")) return;
-    abandonSession();
-    actions.switchTab("dashboard");
-  });
+  root.querySelector("#reflect-discard").addEventListener("click", () => discardSession(actions));
 
   form.addEventListener("submit", (e) => {
     e.preventDefault();

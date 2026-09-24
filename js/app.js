@@ -7,7 +7,7 @@ import { renderProblemDetail, renderDayDetail, showProblem } from "./detail-view
 import { plantWidgetHtml, updatePlantWidget, wireNavigationTargets } from "./chrome.js";
 import { toast, showTopic } from "./ui.js";
 import {
-  startSession, abandonSession, hasActiveSession, restoreSession, checkpointSession,
+  startSession, discardSession, hasActiveSession, restoreSession, checkpointSession,
   renderWorkspace, renderReflect, renderSessionSummary,
 } from "./session-view.js";
 import {
@@ -138,8 +138,8 @@ const actions = {
 
 function exitSession() {
   if (hasActiveSession()) {
-    if (!confirm("Leave without saving this session?")) return;
-    abandonSession();
+    discardSession(actions);   // asks, and switches tabs itself if answered yes
+    return;
   }
   actions.switchTab("dashboard");
 }

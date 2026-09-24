@@ -35,6 +35,7 @@ import { resetWarmup } from "./drill-view.js";
 import { showProblem, showDay } from "./detail-view.js";
 import {
   esc, richText, pct, mins, fmtDate, patternName, toast, topicNav, showTopic, outcomeOptions,
+  offerUndo,
 } from "./ui.js";
 import {
   startSession, hasActiveSession, currentSessionProblemName, wireStartButtons,
@@ -865,12 +866,23 @@ export function renderTopicDetail(root, store, actions) {
       toast("Added.");
     });
   });
+  // Removing one thing from a list: it happens, and it can be taken back.
+  // This was the one destructive action in the app with neither a question
+  // nor an undo — the quietest of the three, on the only one with no way back.
   root.querySelectorAll("[data-remove-resource]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const [patternId, resourceId] = btn.dataset.removeResource.split("::");
+      const removed = (store.state.resources[patternId] || []).find((r) => r.id === resourceId);
+      if (!removed) return;
+      const at = (store.state.resources[patternId] || []).indexOf(removed);
       store.mutate((s) => {
         s.resources[patternId] = (s.resources[patternId] || []).filter((r) => r.id !== resourceId);
       }, "Ledger: remove resource link");
+      offerUndo(store, `Removed ${removed.title || removed.url}.`, (s) => {
+        // Back where it was, not appended: the order is the user's.
+        const list = s.resources[patternId] || (s.resources[patternId] = []);
+        list.splice(Math.min(at, list.length), 0, removed);
+      }, "Ledger: restore resource link");
     });
   });
 }

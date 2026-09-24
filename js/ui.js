@@ -97,6 +97,28 @@ export function offerUndo(store, message, undoFn, undoMessage) {
   toast._t = setTimeout(() => el.classList.remove("show"), 10000);
 }
 
+/**
+ * Ask before something this app cannot take back.
+ *
+ * The counterpart to offerUndo, and the line between them is the whole rule:
+ * removing one thing from a list happens immediately and offers an undo,
+ * because that is recoverable and a dialog would only be in the way. This is
+ * for the rest — replacing the whole log, forgetting the credentials,
+ * discarding the copy on the other device — where there is nothing to undo
+ * with afterwards.
+ *
+ * All three parts are required, because the failure they prevent is the same
+ * every time: a dialog that says what is about to happen but not what it
+ * costs, answered by someone who decided to click yes before reading it.
+ * `lost` has to be specific — "2 attempts that exist only on this device",
+ * never "your data" — and `kept` exists because most of these are far less
+ * frightening than they sound, and saying so is what stops the dialog from
+ * being clicked through on reflex.
+ */
+export function confirmLoss({ action, lost, kept }) {
+  return window.confirm(`${action}\n\nThis discards: ${lost}\nThis keeps: ${kept}`);
+}
+
 /** Built from the OUTCOMES table rather than repeating it, so an outcome
  * cannot exist in the scheduler and be missing a glyph here. */
 export const OUTCOME_GLYPH = Object.fromEntries(

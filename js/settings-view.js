@@ -14,7 +14,7 @@ import { APP_VERSION, RELEASED } from "./version.js";
 import { migrateState } from "./seed.js";
 import { resetWelcome } from "./welcome.js";
 import { recentFaults, clearFaults, report, AppError } from "./errors.js";
-import { esc, toast, downloadState } from "./ui.js";
+import { esc, toast, downloadState, confirmLoss } from "./ui.js";
 
 
 // ---------- Settings ----------
@@ -253,7 +253,11 @@ export function renderSettings(root, store, actions) {
   });
 
   root.querySelector("#disconnect").addEventListener("click", () => {
-    if (confirm("Disconnect this device? Your data stays safe on GitHub — you'll just need to reconnect here to see it again.")) {
+    if (confirmLoss({
+      action: "Disconnect this device?",
+      lost: "the token and the cached copy stored in this browser",
+      kept: "everything in your repo — reconnect here and it all comes back",
+    })) {
       store.disconnect();
     }
   });
@@ -288,16 +292,14 @@ export function renderSettings(root, store, actions) {
 
     // Confirmed against what it holds and what it would replace, rather than
     // against the word "everything".
-    const summary = [
-      `Replace your prep log with ${file.name}?`,
-      "",
-      `That file holds ${found.problems} problem${found.problems === 1 ? "" : "s"} and ${found.attempts} attempt${found.attempts === 1 ? "" : "s"}` +
-        (found.appVersion ? `, last written by Ledger ${found.appVersion}.` : "."),
-      `You currently have ${describeState(state)}.`,
-      "",
-      "This cannot be undone.",
-    ].join("\n");
-    if (!confirm(summary)) return;
+    const incoming = `${found.problems} problem${found.problems === 1 ? "" : "s"} and `
+      + `${found.attempts} attempt${found.attempts === 1 ? "" : "s"}`
+      + (found.appVersion ? `, last written by Ledger ${found.appVersion}` : "");
+    if (!confirmLoss({
+      action: `Replace your prep log with ${file.name}?`,
+      lost: `${describeState(state)} — everything currently on this device`,
+      kept: `nothing from before; the file's ${incoming} replaces all of it`,
+    })) return;
 
     store.mutate((s) => {
       // Replaced, not merged. Object.assign left any key the file omitted in
