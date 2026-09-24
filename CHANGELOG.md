@@ -28,6 +28,43 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 1.0.1 — 2026-09-23
+
+**Fixes a session that could not be saved.**
+
+The Reflect screen requires you to answer the pattern-recall question before
+saving — retrieving it yourself is the rep, and it is the reason the step
+exists. That requirement was enforced by disabling the save button and
+swapping its label to an instruction.
+
+Nothing in the stylesheet distinguished a disabled button. It rendered as a
+bright, fully opaque primary button with a normal cursor, and clicking it did
+nothing whatsoever: no message, no movement, no sound. A finished session with
+code, timings and notes could not be saved, and there was no way to find out
+why.
+
+- The save button is never disabled now. Pressing it without an answer scrolls
+  the question into view, flashes it, focuses the first option and says what it
+  needs. The requirement is unchanged; it just explains itself.
+- Disabled controls are visibly disabled, app-wide. That rule was simply
+  missing.
+
+**And the general case, because this was never really about one button.**
+
+A refusal that produces no output is the same defect as an uncaught throw or
+an unhandled rejection: work is lost and the interface looks fine.
+
+- `js/errors.js` is now the one place a failure becomes something you can see.
+  Uncaught errors and unhandled rejections raise a banner that stays until
+  dismissed, rather than reaching only the console.
+- A view that throws no longer blanks the page — the rest of the app keeps
+  working and says what happened.
+- Settings grows a **Recent problems** list, because on a phone there is no
+  console and "something went wrong" with no detail helps nobody.
+- Three other silent refusals now speak: logging a problem with no name,
+  saving an empty statement, and removing a bank entry that has practice
+  history.
+
 ## 1.0.0 — 2026-09-19
 
 First version worth numbering. Everything before this was the app becoming

@@ -58,6 +58,7 @@ const SHELL = [
   "./js/shortcuts.js",
   "./js/split-pane.js",
   "./js/version.js",
+  "./js/errors.js",
 ];
 
 self.addEventListener("install", (event) => {

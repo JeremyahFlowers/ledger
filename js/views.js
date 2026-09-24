@@ -9,6 +9,7 @@ import {
   installSplitters, loadSizes, gridTemplate, redistribute,
 } from "./split-pane.js";
 import { APP_VERSION, RELEASED } from "./version.js";
+import { recentFaults, clearFaults, report, AppError } from "./errors.js";
 import { TOPICS } from "./topics-content.js";
 import { loadCodeMirror, CODE_MODES } from "./codemirror-loader.js";
 import { createWhiteboard } from "./whiteboard.js";
@@ -908,13 +909,27 @@ export function renderLog(root, store, actions) {
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     const f = new FormData(form);
+    // Checked before the mutate, not inside it: a new problem with no name
+    // used to abandon the whole submission from within store.mutate, so the
+    // form sat there looking untouched and the rep was gone.
+    if (f.get("problemId") === "__new__" && !(f.get("newName") || "").trim()) {
+      const nameField = form.querySelector('[name="newName"]');
+      nameField?.focus();
+      toast("Give the problem a name first.");
+      return;
+    }
     const code = cm ? cm.getValue().trim() : "";
     const codeLang = langSelect.value;
     store.mutate((s) => {
       let problemId = f.get("problemId");
       if (problemId === "__new__") {
         const name = (f.get("newName") || "").trim();
-        if (!name) return;
+        if (!name) {
+          // Inside store.mutate, so this cannot toast from here without the
+          // message being lost to the re-render; the submit handler checks
+          // first and never reaches this. Kept as a guard, not a refusal.
+          return;
+        }
         problemId = uid();
         s.problems.push({
           id: problemId,
@@ -1379,7 +1394,11 @@ function wireStatementPane(root, store, problem) {
     saveBtn.addEventListener("click", () => {
       const input = body.querySelector("#ws-statement-input");
       const { text, truncated } = normalizeStatement(input.value);
-      if (!text) return;
+      if (!text) {
+        toast("Paste the problem text first, then save.");
+        input.focus();
+        return;
+      }
       store.mutate((s) => {
         const stored = s.problems.find((x) => x.id === problem.id);
         if (stored) stored.statement = text;
@@ -1444,7 +1463,7 @@ export function renderReflect(root, store, actions) {
             <option value="failed">Didn't solve</option>
           </select></label>
 
-        <div class="field">
+        <div class="field" id="pattern-recall">
           <span class="label">What was the core pattern here?</span>
           <p class="muted small" style="margin:0 0 0.4rem">Answer before saving, even when you're
           sure. Retrieving it yourself is what moves a pattern into memory — recognizing it in a
@@ -1483,7 +1502,14 @@ export function renderReflect(root, store, actions) {
           <input class="input" type="number" min="1" max="5" name="communicationRating" /></label>` : ""}
 
         <div class="row gap">
-          <button class="btn btn-primary" type="submit" id="reflect-save" ${answered ? "" : "disabled"}>${answered ? "Save &amp; finish" : "Pick a pattern above first"}</button>
+          <!-- Deliberately never disabled. It used to be, with its label
+               swapped for an instruction — but nothing in the stylesheet
+               made a disabled button look disabled, so it rendered as a bright,
+               fully-opaque primary button that did nothing at all when pressed.
+               A control that looks pressable and silently ignores you is worse
+               than one that explains itself, so the requirement is enforced on
+               submit instead, where it can say what it wants and point at it. -->
+          <button class="btn btn-primary" type="submit" id="reflect-save">Save &amp; finish</button>
           <button class="btn btn-ghost" type="button" id="reflect-discard">Discard this session</button>
         </div>
       </form>
@@ -1513,9 +1539,7 @@ export function renderReflect(root, store, actions) {
         ? "Correct — that's the core pattern."
         : `The core pattern is <strong>${esc(patternName(state, p.patternId))}</strong>.`}</p>${patternRevealHtml(state, p, p.patternId)}`;
       revealHost.hidden = false;
-      const saveBtn = root.querySelector("#reflect-save");
-      saveBtn.disabled = false;
-      saveBtn.textContent = "Save & finish";
+      root.querySelector("#pattern-recall")?.classList.remove("needs-answer");
     });
   });
 
@@ -1527,7 +1551,19 @@ export function renderReflect(root, store, actions) {
 
   form.addEventListener("submit", (e) => {
     e.preventDefault();
-    if (!reflectState.patternAnswered) return;
+    if (!reflectState.patternAnswered) {
+      // Answering first is the point of the step, not red tape: retrieving the
+      // pattern yourself is the rep. So this refuses, but never silently —
+      // it says why and puts the question back in front of you.
+      const recall = root.querySelector("#pattern-recall");
+      recall.classList.remove("needs-answer");
+      void recall.offsetWidth;            // restart the flash if it is already on
+      recall.classList.add("needs-answer");
+      recall.scrollIntoView({ block: "center", behavior: "smooth" });
+      root.querySelector("[data-pattern-answer]")?.focus();
+      toast("Answer the pattern question first — that recall is the rep.");
+      return;
+    }
     const f = new FormData(form);
     const outcome = f.get("outcome");
     const patternCorrect = reflectState.patternAnswered === p.patternId;
@@ -1541,7 +1577,14 @@ export function renderReflect(root, store, actions) {
     const finish = () => {
       store.mutate((s) => {
         const problem = s.problems.find((x) => x.id === p.id);
-        if (!problem) return;
+        if (!problem) {
+          // Should not happen: the problem is looked up from this same state
+          // when the session starts. If it ever does, the session is about to
+          // be thrown away, which the user must not discover by its absence.
+          report(new AppError("This problem is no longer in your list, so the session couldn't be saved."),
+            "saving your session");
+          return;
+        }
         const attempt = {
           id: uid(),
           date,
@@ -2387,6 +2430,28 @@ export function renderLeetCode(root, store, actions) {
 
 // ---------- Settings ----------
 
+/**
+ * Anything that has gone wrong this session.
+ *
+ * Hidden when there is nothing to report, so it is never a worry on a healthy
+ * install. It exists because the console is not reachable on a phone, and
+ * "something went wrong" with no detail leaves nobody able to act.
+ */
+function faultLogHtml() {
+  const faults = recentFaults();
+  if (!faults.length) return "";
+  return `
+    <div class="card">
+      <h2>Recent problems</h2>
+      <p class="muted small">${faults.length} this session. These are already handled — the app
+      kept working — but they are worth reporting if something looks wrong.</p>
+      <ul class="fault-list">
+        ${faults.map((f) => `<li>${esc(f.at.slice(11, 19))} · ${esc(f.code)}${f.context ? ` · ${esc(f.context)}` : ""} — ${esc(f.message)}</li>`).join("")}
+      </ul>
+      <button class="btn btn-ghost btn-sm" id="clear-faults" style="margin-top:0.6rem">Clear</button>
+    </div>`;
+}
+
 export function renderSettings(root, store, actions) {
   const state = store.state;
   const cfg = JSON.parse(localStorage.getItem("ledger.config") || "{}");
@@ -2401,6 +2466,8 @@ export function renderSettings(root, store, actions) {
       before it, is in <a href="https://github.com/JeremyahFlowers/ledger/blob/main/CHANGELOG.md"
       target="_blank" rel="noopener noreferrer">the changelog</a>.</p>
     </div>
+
+    ${faultLogHtml()}
 
     <div class="card">
       <h2>Daily budget</h2>
@@ -2441,6 +2508,11 @@ export function renderSettings(root, store, actions) {
         <option value="dark">Dark</option>
       </select>
     </div>`;
+
+  root.querySelector("#clear-faults")?.addEventListener("click", () => {
+    clearFaults();
+    actions.rerender();
+  });
 
   root.querySelector("#budget-form").addEventListener("submit", (e) => {
     e.preventDefault();

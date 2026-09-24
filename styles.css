@@ -637,6 +637,33 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
   background: var(--surface); color: var(--text); cursor: pointer; text-align: left;
   display: flex; align-items: center; gap: 0.5rem;
 }
+/* Nothing in here styled a disabled button, so one rendered identically to a
+   live one — full opacity, normal cursor, and no response to a click. That is
+   how the Reflect screen's save button became a bright teal control that
+   silently did nothing. Any disabled control now says so. */
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.btn:disabled:hover { filter: none; }
+
+/* Flashed when a submit is refused because this step still needs an answer.
+   Twice, then it settles — enough to catch the eye without nagging. */
+@keyframes needs-answer-flash {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50%      { box-shadow: 0 0 0 3px var(--warn); }
+}
+.needs-answer {
+  border-radius: var(--radius);
+  animation: needs-answer-flash 700ms ease-in-out 2;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* A steady outline instead of a flash — the point is to be noticed, not to move. */
+  .needs-answer { animation: none; box-shadow: 0 0 0 2px var(--warn); }
+}
+
 .quiz-option:hover:not(:disabled) { border-color: var(--accent); }
 .quiz-option:disabled { cursor: default; }
 .quiz-option.correct { border-color: var(--good); background: var(--good-bg); color: var(--good); }
@@ -903,6 +930,40 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 
 .budget-warn { color: var(--warn); font-weight: 600; }
 .budget-over { color: var(--bad); font-weight: 700; }
+
+/* ---------- Errors ----------
+
+   A banner rather than a toast, and it stays until dismissed. A message that
+   vanishes after two seconds is barely better than no message when the thing
+   it is explaining is why your work did not save. */
+.error-banner {
+  position: fixed;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem);
+  z-index: 300;
+  display: flex; align-items: flex-start; gap: 0.75rem;
+  max-width: min(36rem, calc(100vw - 2rem));
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--bad);
+  background: var(--bad-bg);
+  color: var(--bad);
+  font-size: 0.85rem; font-weight: 600;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+}
+.error-banner-dismiss {
+  flex: none;
+  border: 0; background: none; color: inherit;
+  font-size: 1.1rem; line-height: 1; cursor: pointer;
+  padding: 0 0.15rem;
+}
+.fault-list { list-style: none; margin: 0.5rem 0 0; padding: 0; font-size: 0.78rem; }
+.fault-list li {
+  padding: 0.4rem 0; border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono); color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.fault-list li:last-child { border-bottom: none; }
 
 /* ---------- Version ---------- */
 

@@ -224,9 +224,14 @@ function renderMine(root, store, actions, bank) {
     btn.addEventListener("click", () => {
       const id = btn.dataset.remove;
       const problem = store.state.problems.find((p) => p.id === id);
+      if (!problem) return;
       // Only ever removes an untouched bank entry, so there's no attempt
-      // history to lose and nothing to confirm.
-      if (!problem || problem.attempts.length) return;
+      // history to lose and nothing to confirm — but a button that declines
+      // without a word is indistinguishable from one that is broken.
+      if (problem.attempts.length) {
+        toast(`${problem.name} has practice history, so it stays in your rotation.`);
+        return;
+      }
       store.mutate((s) => { s.problems = s.problems.filter((p) => p.id !== id); }, "Ledger: remove problem from bank");
       toast(`Removed ${problem.name} from your bank.`);
     });

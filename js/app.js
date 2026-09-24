@@ -10,6 +10,7 @@ import { renderProgress } from "./progress-view.js";
 import { installSearch, openSearch, closeSearch, isSearchOpen } from "./search.js";
 import { recommendSession } from "./logic.js";
 import { APP_VERSION } from "./version.js";
+import { installErrorHandling, report, guard } from "./errors.js";
 
 // The nav reads like a table of contents, not a junk drawer: Home is the
 // cover page; everything else lives in one of a few named chapters, each
@@ -320,12 +321,12 @@ function renderPlantWidget() {
 let clockTick = null;
 function startClocks() {
   clearInterval(clockTick);
-  clockTick = setInterval(() => {
+  clockTick = setInterval(guard(() => {
     // Nothing to draw until the state has loaded, and the first seconds of a
     // cold start are exactly when it hasn't.
     if (!store.state) return;
     renderPlantWidget();
-  }, 1000);
+  }, "updating the day clock"), 1000);
 }
 
 // The workspace sizes itself against the viewport, so it needs to know how
@@ -378,7 +379,25 @@ function renderAll() {
   applyGrowthAnimation();
 }
 
+// A throw inside one view used to empty <main> and stop there, which looks
+// exactly like a broken app and says nothing. The failure is now shown and the
+// rest of the chrome — nav, search, the plant — keeps working, so there is
+// always a way out of a broken page.
 function renderView() {
+  try {
+    return renderViewInner();
+  } catch (err) {
+    report(err, `showing ${currentViewName()}`);
+    root.innerHTML = `<div class="card banner banner-bad">
+      <p><strong>This page couldn't be shown.</strong></p>
+      <p class="muted small">Everything you've saved is fine. Try another page from the
+      menu above, and see Settings if it keeps happening.</p>
+    </div>`;
+    return undefined;
+  }
+}
+
+function renderViewInner() {
   if (SESSION_TABS[activeTab]) return SESSION_TABS[activeTab].render(root, store, actions);
   if (activeTab === "topicDetail") return views.renderTopicDetail(root, store, actions);
   if (STANDALONE[activeTab]) return STANDALONE[activeTab].render(root, store, actions);
@@ -436,6 +455,7 @@ installShortcuts({
 const savedTheme = localStorage.getItem("ledger.theme");
 if (savedTheme && savedTheme !== "system") document.documentElement.dataset.theme = savedTheme;
 
+installErrorHandling();
 store.onChange(renderAll);
 store.init();
 renderAll();
