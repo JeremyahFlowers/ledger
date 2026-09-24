@@ -1539,3 +1539,12 @@ input[type="checkbox"]:focus-visible {
   border-left: 2px solid var(--border); color: var(--text);
 }
 .week-also { margin-top: 1rem; }
+
+/* The quiz's confusion list. The pair is the content, so it leads; the count
+   and the way out are secondary and sit to the right. */
+.confusion-list { list-style: none; margin: 0.6rem 0 0; padding: 0; display: grid; gap: 0.5rem; }
+.confusion-list li {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.6rem; flex-wrap: wrap;
+}
+.confusion-pair { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }

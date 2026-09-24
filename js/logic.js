@@ -84,7 +84,7 @@ export {
   patternTrend,
   PROGRESS_WEEKS, weeklyProgress, patternMovement, progressSummary,
   SCORECARD_MIN, modelScorecard,
-  REVIEW_DAYS, weekInReview,
+  REVIEW_DAYS, weekInReview, CONFUSION_MIN, quizConfusions,
 } from "./stats.js";
 
 // Re-exported from state-health.js, where these now live. Everything already

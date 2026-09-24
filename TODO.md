@@ -49,7 +49,7 @@ one-line title is not enough to pick the work up again a week later.
 
 ## P2 — features that stop one step short
 
-- [ ] **36. The quiz counts but doesn't teach.**
+- [x] **36. The quiz counts but doesn't teach.** _(1.5.0)_
   It keeps a lifetime score and reveals the right answer. It never says which
   patterns you keep swapping for each other — which is the only part of it
   that would change what you study next.

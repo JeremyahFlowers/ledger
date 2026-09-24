@@ -333,3 +333,45 @@ function countOnly(state, endISO, days) {
     cleanCount: sessions.filter((a) => a.outcome === "solved-clean").length,
   };
 }
+
+// ---------- What you keep swapping ----------
+//
+// The quiz kept a lifetime score and revealed the right answer, and threw away
+// the one thing worth knowing: which pattern you reached for instead. A score
+// tells you that recall is at 62%. It cannot tell you that four of the last
+// six misses were Sliding Window answered as Two Pointers, which is a specific
+// thing to go and read about.
+//
+// Only pairs seen more than once are reported. Once is a slip — you misread
+// the problem, or clicked the wrong button — and calling that a confusion
+// would send people off to study a mistake they did not make twice.
+
+/** Twice is a habit. Once is a slip. */
+export const CONFUSION_MIN = 2;
+
+/**
+ * Pattern pairs you have mixed up, most-confused first.
+ *
+ * Returns `{ pairs, graded, ungraded }`. `ungraded` counts answers recorded
+ * before the app started keeping which pattern was chosen — they still count
+ * toward your score and can never appear here, and the view says so rather
+ * than letting the list look shorter than your history.
+ */
+export function quizConfusions(state) {
+  const recent = state.quiz?.recent || [];
+  const detailed = recent.filter((r) => r.actual && r.said);
+  const counts = new Map();
+  for (const r of detailed) {
+    if (r.correct) continue;
+    counts.set(`${r.actual}>${r.said}`, (counts.get(`${r.actual}>${r.said}`) || 0) + 1);
+  }
+  const pairs = [...counts]
+    .map(([key, times]) => {
+      const [actual, said] = key.split(">");
+      return { actual, said, times };
+    })
+    .filter((p) => p.times >= CONFUSION_MIN)
+    .sort((a, b) => b.times - a.times);
+
+  return { pairs, graded: detailed.length, ungraded: recent.length - detailed.length };
+}

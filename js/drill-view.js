@@ -9,13 +9,18 @@
 // weighted pick that avoids repeating what it just asked, and a reveal that
 // shows the real approach rather than only marking you wrong.
 
-import { pickQuizProblem, quizOptions, recommendSession } from "./logic.js";
+import { pickQuizProblem, quizOptions, recommendSession, quizConfusions } from "./logic.js";
 import { patternIcon } from "./icons.js";
-import { esc, pct, patternName } from "./ui.js";
+import { esc, pct, patternName, showTopic } from "./ui.js";
 import { emptyState, ringSvg } from "./chrome.js";
 import { startSession } from "./session-view.js";
 
 // ---------- Quiz ----------
+
+// How many answers are kept. Twenty was enough for a trend line and too few
+// to see a pattern pair twice; fifty of these is about three kilobytes, which
+// the sync budget does not notice.
+const QUIZ_MEMORY = 50;
 
 let quizState = { current: null, options: [], answered: null, recentIds: [] };
 
@@ -65,7 +70,8 @@ export function renderQuiz(root, store, actions) {
         <p class="quiz-feedback">${quizState.answered === p.patternId ? "Correct." : `Actual approach: <strong>${esc(patternName(state, p.patternId))}</strong> — ${esc(p.approach)}`}</p>
         <button class="btn btn-primary" id="quiz-next">Next question</button>
       ` : ""}
-    </div>`;
+    </div>
+    ${confusionsHtml(state)}`;
 
   root.querySelectorAll("[data-answer]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -74,10 +80,25 @@ export function renderQuiz(root, store, actions) {
       store.mutate((s) => {
         s.quiz.totalAsked += 1;
         if (isCorrect) s.quiz.totalCorrect += 1;
-        s.quiz.recent.push({ correct: isCorrect });
-        if (s.quiz.recent.length > 20) s.quiz.recent.shift();
+        // Which pattern you reached for instead is the whole signal, and it
+        // used to be discarded the moment the answer was scored. A rate can
+        // say recall is at 62%; only this can say that most of the misses are
+        // one particular pair.
+        s.quiz.recent.push({
+          correct: isCorrect,
+          actual: p.patternId,
+          said: quizState.answered,
+          problemId: p.id,
+        });
+        if (s.quiz.recent.length > QUIZ_MEMORY) s.quiz.recent.shift();
       }, "Ledger: quiz answer");
       actions.rerender();
+    });
+  });
+  root.querySelectorAll("[data-goto-topic]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      showTopic(btn.dataset.gotoTopic);
+      actions.switchTab("topicDetail");
     });
   });
   const nextBtn = root.querySelector("#quiz-next");
@@ -87,6 +108,45 @@ export function renderQuiz(root, store, actions) {
       actions.rerender();
     });
   }
+}
+
+/**
+ * The pairs you keep mixing up.
+ *
+ * Shown under the drill rather than after each answer: the point is what to
+ * study next, which is a question about the last fifty answers and not about
+ * the one you just got wrong. Silent until there is something to say — an
+ * empty "your confusions" heading implies you have none, when what you have
+ * is not enough answers yet.
+ */
+function confusionsHtml(state) {
+  const { pairs, ungraded } = quizConfusions(state);
+  if (!pairs.length) return "";
+  return `
+    <div class="card">
+      <h2>What you keep swapping</h2>
+      <p class="muted small">Pairs you have mixed up more than once in your last
+      ${QUIZ_MEMORY} answers. One mix-up is a slip; twice is worth reading about.</p>
+      <ul class="confusion-list">
+        ${pairs.map((c) => `
+          <li>
+            <span class="confusion-pair">
+              <span class="pattern-icon">${patternIcon(c.actual, { size: 15 })}</span>
+              ${esc(patternName(state, c.actual))}
+              <span class="muted small">answered as</span>
+              <span class="pattern-icon">${patternIcon(c.said, { size: 15 })}</span>
+              ${esc(patternName(state, c.said))}
+            </span>
+            <span class="row gap-sm" style="align-items:center">
+              <span class="muted small">${c.times}&times;</span>
+              <button type="button" class="btn btn-ghost btn-xs" data-goto-topic="${esc(c.actual)}">Read it</button>
+            </span>
+          </li>`).join("")}
+      </ul>
+      ${ungraded ? `<p class="muted small">${ungraded} older answer${ungraded === 1 ? "" : "s"}
+        ${ungraded === 1 ? "is" : "are"} counted in your score but recorded before the app kept
+        which pattern you chose, so ${ungraded === 1 ? "it" : "they"} can't appear here.</p>` : ""}
+    </div>`;
 }
 
 function nextQuizQuestion(state) {
