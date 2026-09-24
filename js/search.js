@@ -183,19 +183,18 @@ function isWordChar(ch) {
   return (ch >= "a" && ch <= "z") || (ch >= "0" && ch <= "9") || ch === "_";
 }
 
-function runSearch(rawQuery) {
-  const query = rawQuery.trim();
-  const state = deps?.store?.state;
-  if (!state) return;
-  lastQuery = query;
-  results = [];
-
-  // An empty bar shows nothing rather than everything: a panel that springs
-  // open under the header the moment you click it is in the way, not helpful.
-  if (!query) {
-    hidePanel();
-    return;
-  }
+/**
+ * Everything the query matches, ranked, grouped, and capped per kind.
+ *
+ * Pure, and exported for that reason: this is where the decisions about what
+ * is findable and what outranks what actually live, and until it was split out
+ * of runSearch none of them could be tested — the only way to ask "is a weekly
+ * retro findable" was to open a browser and type.
+ */
+export function collectResults(state, catalog, rawQuery) {
+  const query = (rawQuery || "").trim();
+  const results = [];
+  if (!query || !state) return results;
 
   // Patterns first: they're few, and "what was sliding window again" is a
   // question this app should answer instantly.
@@ -217,10 +216,15 @@ function runSearch(rawQuery) {
     });
   }
 
-  // Your own notes. These are the thing the app works hardest to collect —
-  // "the window only shrinks from the left" — and until now the one thing it
-  // could not find again. Ranked below your problems but above the catalog:
-  // a note you wrote is more yours than a problem you have never opened.
+  // Everything you wrote, wherever you wrote it. Ranked below your problems
+  // but above the catalog: a sentence you wrote is more yours than a problem
+  // you have never opened.
+  //
+  // Soul statements were made findable first, because they are what the app
+  // works hardest to collect. Weekly retros were left out and are arguably the
+  // harder thing to find again — a soul statement is one line attached to a
+  // problem you can navigate to, and a retro is loose prose in a list that
+  // only grows.
   if (query.length >= MIN_QUERY) {
     for (const problem of state.problems) {
       for (const attempt of problem.attempts || []) {
@@ -231,9 +235,20 @@ function runSearch(rawQuery) {
         results.push({
           kind: "note", score: s + 15, id: attempt.id, title: note,
           subtitle: `${problem.name} · ${attempt.date}`,
-          problem,
+          source: "attempt", problem,
         });
       }
+    }
+
+    for (const entry of state.journal || []) {
+      if (!entry.text) continue;
+      const s = score(entry.text, query);
+      if (s == null) continue;
+      results.push({
+        kind: "note", score: s + 15, id: entry.id, title: entry.text,
+        subtitle: `${(entry.type || "note").replace(/-/g, " ")} · ${entry.date}`,
+        source: "journal",
+      });
     }
   }
 
@@ -249,7 +264,24 @@ function runSearch(rawQuery) {
   }
 
   results.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
-  results = groupByKind(capPerGroup(results));
+  return groupByKind(capPerGroup(results));
+}
+
+function runSearch(rawQuery) {
+  const query = rawQuery.trim();
+  const state = deps?.store?.state;
+  if (!state) return;
+  lastQuery = query;
+
+  // An empty bar shows nothing rather than everything: a panel that springs
+  // open under the header the moment you click it is in the way, not helpful.
+  if (!query) {
+    results = [];
+    hidePanel();
+    return;
+  }
+
+  results = collectResults(state, catalog, query);
   activeIndex = 0;
   page = 0;
   paint(query);
@@ -386,9 +418,10 @@ function choose(hit) {
     return;
   }
   if (hit.kind === "note") {
-    // The note's own page is the problem's history, where it sits in context
-    // with the attempt that produced it.
-    deps.actions.openProblem(hit.problem.id);
+    // A note's own page is wherever it sits in context: a soul statement
+    // beside the attempt that produced it, a retro among the others.
+    if (hit.source === "journal") deps.actions.openJournal();
+    else deps.actions.openProblem(hit.problem.id);
     return;
   }
   // A catalog problem isn't yours yet, so the useful move is to read it.

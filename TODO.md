@@ -37,7 +37,7 @@ data-loss path that was reproduced in a browser before a line was changed.
 
 ## P1 — things you wrote that you can't find
 
-- [ ] **42. Journal entries aren't searchable.**
+- [x] **42. Journal entries aren't searchable.** _(1.6.0)_
   Cycle 4 made soul statements findable because they are what the app works
   hardest to collect. Weekly retros — which the Journal page itself calls the
   place "where patterns across sessions become visible" — are not in the index,

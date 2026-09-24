@@ -538,6 +538,9 @@ installSearch({
       showProblem(problemId);
       actions.switchTab("problemDetail");
     },
+    openJournal() {
+      actions.switchTab("journal");
+    },
   },
 });
 

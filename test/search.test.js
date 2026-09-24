@@ -8,7 +8,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { score, groupByKind } from "../js/search.js";
+import { score, groupByKind, collectResults } from "../js/search.js";
 
 describe("score", () => {
   test("test_score_exactTitle_outranksEverythingElse", () => {
@@ -83,5 +83,112 @@ describe("groupByKind", () => {
 
   test("test_groupByKind_emptyList_returnsEmpty", () => {
     assert.deepEqual(groupByKind([]), []);
+  });
+});
+
+describe("what is findable", () => {
+  // Cycle 4 made soul statements findable, because they are what the app
+  // works hardest to collect. Weekly retros were left out, and are arguably
+  // the harder thing to find again: a soul statement is one line attached to
+  // a problem you can navigate to, and a retro is loose prose in a list that
+  // only grows.
+
+  const state = (over = {}) => ({
+    patterns: [{ id: "sliding-window", name: "Sliding Window", description: "A moving range." }],
+    problems: [], journal: [], ...over,
+  });
+
+  const problemWith = (notes) => ({
+    id: "p1", name: "3Sum", number: 15, difficulty: "Medium", patternId: "sliding-window",
+    status: "active", box: 1, nextReviewDate: "2026-09-24",
+    attempts: notes.map((soulStatement, i) => ({
+      id: `a${i}`, date: "2026-09-20", outcome: "solved-clean", patternGuess: "correct",
+      timeToInsightMin: 5, timeToSolveMin: 20, mistakeTags: [], soulStatement,
+    })),
+  });
+
+  const kinds = (hits) => hits.map((h) => h.kind);
+  const titles = (hits) => hits.map((h) => h.title);
+
+  test("test_search_findsASoulStatement", () => {
+    const hits = collectResults(state({ problems: [problemWith(["the window only shrinks from the left"])] }), null, "shrinks");
+    assert.ok(titles(hits).includes("the window only shrinks from the left"));
+  });
+
+  test("test_search_findsAJournalEntry", () => {
+    const hits = collectResults(state({
+      journal: [{ id: "j1", date: "2026-09-20", type: "weekly-retro", text: "kept rushing into code" }],
+    }), null, "rushing");
+    assert.deepEqual(titles(hits), ["kept rushing into code"]);
+  });
+
+  test("test_search_aJournalEntryIsAThingYouWrote", () => {
+    // Grouped with soul statements rather than given a heading of its own:
+    // the question is "where did I write that", not "which feature holds it".
+    const hits = collectResults(state({
+      journal: [{ id: "j1", date: "2026-09-20", type: "weekly-retro", text: "kept rushing" }],
+    }), null, "rushing");
+    assert.deepEqual(kinds(hits), ["note"]);
+  });
+
+  test("test_search_aJournalHitKnowsItGoesToTheJournal", () => {
+    // A soul statement opens its problem; a retro has no problem to open.
+    const hits = collectResults(state({
+      journal: [{ id: "j1", date: "2026-09-20", type: "weekly-retro", text: "kept rushing" }],
+    }), null, "rushing");
+    assert.equal(hits[0].source, "journal");
+  });
+
+  test("test_search_aSoulStatementHitStillCarriesItsProblem", () => {
+    const hits = collectResults(state({ problems: [problemWith(["kept rushing"])] }), null, "rushing");
+    assert.equal(hits[0].source, "attempt");
+    assert.equal(hits[0].problem.id, "p1");
+  });
+
+  test("test_search_aJournalEntrySaysWhatKindItWas", () => {
+    const hits = collectResults(state({
+      journal: [{ id: "j1", date: "2026-09-20", type: "weekly-retro", text: "kept rushing" }],
+    }), null, "rushing");
+    assert.match(hits[0].subtitle, /weekly retro · 2026-09-20/);
+  });
+
+  test("test_search_anEmptyJournalEntry_isNotAResult", () => {
+    const hits = collectResults(state({
+      journal: [{ id: "j1", date: "2026-09-20", type: "note", text: "" }],
+    }), null, "a");
+    assert.deepEqual(hits, []);
+  });
+
+  test("test_search_missingJournal_doesNotThrow", () => {
+    assert.doesNotThrow(() => collectResults({ patterns: [], problems: [] }, null, "anything"));
+  });
+
+  test("test_search_yourOwnProblemsOutrankWhatYouWrote", () => {
+    // Both match; the problem is the thing you were probably looking for.
+    const hits = collectResults(state({
+      problems: [problemWith(["3Sum was hard"])],
+      journal: [{ id: "j1", date: "2026-09-20", type: "note", text: "3Sum again" }],
+    }), null, "3sum");
+    assert.equal(kinds(hits)[0], "mine");
+  });
+
+  test("test_search_aSingleLetter_doesNotSearchProse", () => {
+    // One letter against every sentence you have ever written returns the
+    // whole journal, which is the same as returning nothing. Titles are still
+    // searched at one letter, because a title is short enough for the ranking
+    // to mean something.
+    const withBoth = state({
+      problems: [problemWith([])],
+      journal: [{ id: "j1", date: "2026-09-20", type: "note", text: "an entry" }],
+    });
+    assert.deepEqual(collectResults(withBoth, null, "n").filter((h) => h.kind === "note"), []);
+  });
+
+  test("test_search_twoLetters_doesSearchProse", () => {
+    // "dp" and "bfs" are real queries, so the floor is two and not three.
+    const hits = collectResults(state({
+      journal: [{ id: "j1", date: "2026-09-20", type: "note", text: "dp is still the weak one" }],
+    }), null, "dp");
+    assert.equal(hits.length, 1);
   });
 });
