@@ -154,7 +154,14 @@ export function plantSvg(stageKey, vitality, { size = 220, decorative = false } 
   const body = draw(p);
   const fallen = p.fallen > 0 && stageKey !== "seed" ? fallenLeaves(p.fallen, p) : "";
   return `
-<svg viewBox="0 0 200 240" width="${size}" height="${size * 1.2}" class="plant-illustration plant-vitality-${vitality}" role="img" aria-label="${decorative ? "" : `Practice plant, ${stageKey}, ${vitality}`}">
+<svg viewBox="0 0 200 240" width="${size}" height="${size * 1.2}" class="plant-illustration plant-vitality-${vitality}"
+  ${decorative
+    // Genuinely removed from the tree rather than given an empty name. An
+    // <svg role="img"> with aria-label="" is still announced — as an image
+    // with no description, which is worse than not being announced at all.
+    // Every decorative use sits beside text that already says this.
+    ? 'aria-hidden="true" focusable="false"'
+    : `role="img" aria-label="Practice plant, ${stageKey}, ${vitality}"`}>
   <g class="plant-sway" style="--plant-sway-duration:${p.sway}; transform-origin: 100px 182px;">
     ${body}
     ${fallen}

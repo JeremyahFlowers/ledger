@@ -281,13 +281,14 @@ function sparklineSvg(points, { width = 80, height = 22 } = {}) {
 /** A small circular progress ring — the recurring visual for "how much of
  * X" (budget used, mastery, unlock progress, accuracy) so those numbers
  * read as a shape before they read as digits. */
-function ringSvg(fraction, { size = 44, stroke = 5, color = "var(--accent)", label = "" } = {}) {
+function ringSvg(fraction, { size = 44, stroke = 5, color = "var(--accent)", label = "", description = "" } = {}) {
   const r = (size - stroke) / 2;
   const c = size / 2;
   const circ = 2 * Math.PI * r;
   const f = Math.max(0, Math.min(1, fraction ?? 0));
   return `
-    <svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" class="ring">
+    <svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" class="ring"
+         role="img" aria-label="${esc(description || `${Math.round(f * 100)}% complete`)}">
       <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="var(--border)" stroke-width="${stroke}"/>
       <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}"
         stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${circ * (1 - f)}"
@@ -661,7 +662,8 @@ export function renderDashboard(root, store, actions) {
             <div class="stat"><span class="stat-num">${state.streak.longest}</span><span class="stat-label">longest</span></div>
           </div>
           <div class="row gap-sm" style="align-items:center">
-            ${ringSvg(budgetMin ? usedMin / budgetMin : 0, { size: 40, stroke: 4 })}
+            ${ringSvg(budgetMin ? usedMin / budgetMin : 0, { size: 40, stroke: 4,
+              description: `${usedMin} of ${budgetMin} minutes of work lined up today` })}
             <!-- "lined up", not "today": the standing plant shows minutes
                  actually spent against the same budget, and two rings both
                  labelled "today" against the same denominator read as the
@@ -1049,7 +1051,8 @@ export function renderPatterns(root, store, actions) {
         <tbody>
           ${stats.map((s) => `
             <tr class="table-row-link" data-open-topic="${esc(s.pattern.id)}">
-              <td>${ringSvg(s.attempts ? s.solvedCleanRate || 0 : 0, { size: 34, stroke: 4, label: s.attempts ? pct(s.solvedCleanRate) : "–" })}</td>
+              <td>${ringSvg(s.attempts ? s.solvedCleanRate || 0 : 0, { size: 34, stroke: 4, label: s.attempts ? pct(s.solvedCleanRate) : "–",
+                description: s.attempts ? `${pct(s.solvedCleanRate)} clean-solve rate across ${s.attempts} attempts` : "No attempts yet" })}</td>
               <td><span class="row gap-sm" style="align-items:center"><span class="pattern-icon">${patternIcon(s.pattern.id, { size: 15 })}</span>${esc(s.pattern.name)}</span></td>
               <td class="num">${s.problemCount}</td>
               <td class="num">${s.attempts}</td>
@@ -1199,8 +1202,10 @@ export function renderSystemDesign(root, store) {
       <p class="muted">Unlocks once mock interviews show the coding fundamentals are solid — the point
       is to run this alongside coding prep once you're ready, not to defer it forever.</p>
       <div class="row gap" style="align-items:center">
-        <div class="row gap-sm" style="align-items:center">${ringSvg(sd.minMocks ? Math.min(1, sd.mocksLogged / sd.minMocks) : 0, { size: 48, label: `${sd.mocksLogged}/${sd.minMocks}` })}<span class="stat-label">mocks logged</span></div>
-        <div class="row gap-sm" style="align-items:center">${ringSvg(sd.recentSolvedCleanRate || 0, { size: 48, color: (sd.recentSolvedCleanRate || 0) >= sd.minSolvedCleanRate ? "var(--good)" : "var(--accent)", label: pct(sd.recentSolvedCleanRate) })}<span class="stat-label">recent clean-solve (need ${pct(sd.minSolvedCleanRate)})</span></div>
+        <div class="row gap-sm" style="align-items:center">${ringSvg(sd.minMocks ? Math.min(1, sd.mocksLogged / sd.minMocks) : 0, { size: 48, label: `${sd.mocksLogged}/${sd.minMocks}`,
+          description: `${sd.mocksLogged} of ${sd.minMocks} mock interviews logged` })}<span class="stat-label">mocks logged</span></div>
+        <div class="row gap-sm" style="align-items:center">${ringSvg(sd.recentSolvedCleanRate || 0, { size: 48, color: (sd.recentSolvedCleanRate || 0) >= sd.minSolvedCleanRate ? "var(--good)" : "var(--accent)", label: pct(sd.recentSolvedCleanRate),
+          description: `Recent clean-solve rate ${pct(sd.recentSolvedCleanRate)}, need ${pct(sd.minSolvedCleanRate)}` })}<span class="stat-label">recent clean-solve (need ${pct(sd.minSolvedCleanRate)})</span></div>
       </div>
       <span class="badge ${sd.unlocked ? "badge-good" : "badge-warn"}">${sd.unlocked ? "Unlocked" : "Locked"}</span>
       <label class="field checkbox-field" style="margin-top:1rem">
@@ -1460,7 +1465,8 @@ export function renderQuiz(root, store, actions) {
     <div class="card">
       <div class="row space-between" style="align-items:center">
         <h2>Pattern-recognition drill</h2>
-        <span class="row gap-sm" style="align-items:center">${total ? ringSvg(correct / total, { size: 36, stroke: 4, label: pct(correct / total) }) : ""}<span class="muted small">${correct}/${total} lifetime</span></span>
+        <span class="row gap-sm" style="align-items:center">${total ? ringSvg(correct / total, { size: 36, stroke: 4, label: pct(correct / total),
+          description: `${correct} of ${total} pattern-recall questions correct` }) : ""}<span class="muted small">${correct}/${total} lifetime</span></span>
       </div>
       <p class="muted">If this popped up cold in an interview, what pattern would you reach for?</p>
       <div class="quiz-prompt">

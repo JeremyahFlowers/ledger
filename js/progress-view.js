@@ -186,9 +186,13 @@ function describeSeries(points, format, lowerIsBetter) {
 function volumeChart(weeks) {
   const max = Math.max(1, ...weeks.map((w) => w.attempts));
   return `
-    <ul class="volume-bars">
+    <!-- One image with one description, rather than a row of decorative spans
+         carrying title attributes that most screen readers ignore outright.
+         The bars are a picture of the numbers; the sentence below is the
+         numbers, and a reader gets whichever one it can use. -->
+    <ul class="volume-bars" role="img" aria-label="${esc(describeVolume(weeks))}">
       ${weeks.map((w) => `
-        <li>
+        <li aria-hidden="true">
           <span class="volume-bar" style="--h:${Math.round((w.attempts / max) * 100)}%"
                 title="${esc(shortWeek(w.weekStart))}: ${w.attempts} attempt${w.attempts === 1 ? "" : "s"}, ${w.minutes} min"></span>
           <span class="chart-label">${esc(shortWeek(w.weekStart))}</span>
@@ -197,6 +201,18 @@ function volumeChart(weeks) {
     <p class="muted small" style="margin-top:0.4rem">
       ${weeks.reduce((s, w) => s + w.attempts, 0)} attempts across
       ${weeks.filter((w) => w.attempts > 0).length} active week${weeks.filter((w) => w.attempts > 0).length === 1 ? "" : "s"}.</p>`;
+}
+
+/** The volume chart as a sentence. Weeks with nothing in them are named as
+ * such, because a gap is the part of this chart most worth knowing about. */
+function describeVolume(weeks) {
+  const active = weeks.filter((w) => w.attempts > 0);
+  if (!active.length) return "No practice recorded in this window.";
+  const total = weeks.reduce((n, w) => n + w.attempts, 0);
+  const busiest = weeks.reduce((a, b) => (b.attempts > a.attempts ? b : a));
+  return `${total} attempts across ${active.length} active week${active.length === 1 ? "" : "s"} `
+    + `of ${weeks.length}. Busiest was the week of ${shortWeek(busiest.weekStart)} with `
+    + `${busiest.attempts}. ${weeks.length - active.length} week${weeks.length - active.length === 1 ? "" : "s"} with none.`;
 }
 
 function moversHtml(movers) {

@@ -57,7 +57,7 @@ one-line title is not enough to pick the work up again a week later.
   *Done:* an outcome that distinguishes them, with the schedule treating them
   sensibly and old attempts unaffected.
 
-- [ ] **30. Charts are readable only if you can see them.**
+- [x] **30. Charts are readable only if you can see them.** _(1.4.0)_
   The line charts carry a sentence summary; the volume bars and the mastery
   rings carry `title` attributes, which most screen readers ignore.
   *Done:* every chart states its own content the way the line charts do.

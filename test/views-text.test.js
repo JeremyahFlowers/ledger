@@ -105,3 +105,43 @@ describe("the Reflect save gate", () => {
     assert.match(styles, /cursor:\s*not-allowed/);
   });
 });
+
+describe("charts describe themselves", () => {
+  // The line charts always carried a sentence summary. The volume bars and the
+  // mastery rings carried `title` attributes, which most screen readers ignore
+  // outright — so half the Progress page was readable only if you could see
+  // it.
+  const views = readFileSync(fileURLToPath(new URL("../js/views.js", import.meta.url)), "utf8");
+  const progress = readFileSync(fileURLToPath(new URL("../js/progress-view.js", import.meta.url)), "utf8");
+
+  test("test_charts_everySvgChartHasARoleAndAName", () => {
+    // A bare <svg> is announced as nothing at all.
+    for (const [file, src] of [["views.js", views], ["progress-view.js", progress]]) {
+      const charts = src.match(/<svg[^>]*class="(chart|ring|heatmap|week-strip)"[^>]*/g) || [];
+      assert.ok(charts.length > 0, `${file} should contain charts`);
+      for (const tag of charts) {
+        assert.match(tag, /role="img"/, `${file}: ${tag.slice(0, 60)} needs role="img"`);
+        assert.match(tag, /aria-label=/, `${file}: ${tag.slice(0, 60)} needs a name`);
+      }
+    }
+  });
+
+  test("test_volumeChart_hasASentenceNotJustTitles", () => {
+    assert.match(progress, /role="img" aria-label="\$\{esc\(describeVolume\(weeks\)\)\}"/);
+    // And the decorative bars are hidden, so a reader gets the sentence once
+    // rather than the sentence plus seven unlabelled list items.
+    assert.match(progress, /<li aria-hidden="true">/);
+  });
+
+  test("test_volumeDescription_namesTheGaps", () => {
+    // A gap is the part of this chart most worth knowing about.
+    const fn = progress.slice(progress.indexOf("function describeVolume"));
+    assert.match(fn.slice(0, fn.indexOf("function moversHtml")), /with none/);
+  });
+
+  test("test_rings_fallBackToAPercentageRatherThanNothing", () => {
+    // Every call site passes a description, but a new one that forgets should
+    // still announce something true.
+    assert.match(views, /description \|\| `\$\{Math\.round\(f \* 100\)\}% complete`/);
+  });
+});
