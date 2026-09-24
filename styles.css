@@ -204,6 +204,12 @@ main.page-full { --page-max: none; padding: 0; }
   padding: 0.6rem 0; border-bottom: 1px solid var(--border);
 }
 .queue-item:last-child { border-bottom: none; }
+/* Rows in the bank are focusable so they can be walked with the arrow keys;
+   the browser's own ring is the highlight, which keeps it consistent with
+   every other focusable thing on the page. */
+.queue-item:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 6px;
+}
 .queue-name { font-weight: 600; margin-top: 0.2rem; }
 .pattern-mini-list li { padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
 .pattern-mini-list li:last-child { border-bottom: none; }

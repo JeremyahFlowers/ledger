@@ -72,7 +72,7 @@ in passing and didn't stop for.
   *Done:* a mock imposes the structure it's meant to — a clock you can't
   quietly ignore, and prompts that arrive when they'd matter.
 
-- [ ] **23. The bank can't be worked from the keyboard.**
+- [x] **23. The bank can't be worked from the keyboard.** _(1.3.0)_
   Filters are reachable; the 2,500-row list is mouse-only.
   *Done:* arrow-key movement through results with Enter to start.
 

@@ -208,7 +208,7 @@ export async function renderBank(root, store, actions) {
           </button>` : ""}
       </div>`}`;
 
-  wire(root, store, actions, matches, saved);
+  wire(root, store, actions, matches, saved, page);
 }
 
 function modeTabsHtml(bankCount) {
@@ -330,6 +330,47 @@ function rowHtml(problem, saved) {
 }
 
 /**
+ * Arrow-key movement through the results, with Enter to start one.
+ *
+ * The filters were reachable from the keyboard and the 2,500-row list beneath
+ * them was not, which is the wrong way round: the filters are three controls
+ * and the list is everything.
+ *
+ * Bound on the list rather than the document so it cannot swallow arrow keys
+ * meant for the search box or the page, and the rows are made focusable so
+ * the browser's own focus ring does the highlighting.
+ */
+function wireListKeyboard(root, store, actions, page) {
+  const list = root.querySelector("#bank-list");
+  if (!list) return;
+  const rows = [...list.querySelectorAll(".queue-item")];
+  rows.forEach((row, i) => {
+    row.tabIndex = 0;
+    row.dataset.rowIndex = String(i);
+  });
+
+  list.addEventListener("keydown", (e) => {
+    const row = e.target.closest(".queue-item");
+    if (!row) return;
+    const i = Number(row.dataset.rowIndex);
+
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const next = rows[i + (e.key === "ArrowDown" ? 1 : -1)];
+      if (next) next.focus();
+      return;
+    }
+    if (e.key === "Enter") {
+      // Enter on the row starts it; a button inside the row handles its own.
+      if (e.target !== row) return;
+      e.preventDefault();
+      const entry = page[i];
+      if (entry) startCatalogProblem(entry, store, actions);
+    }
+  });
+}
+
+/**
  * Begin a session on a catalog problem, saving it first if it is new.
  *
  * A problem has to exist in the user's own list before a session can be logged
@@ -369,7 +410,7 @@ function filtered(appState, saved) {
   });
 }
 
-function wire(root, store, actions, matches, saved) {
+function wire(root, store, actions, matches, saved, page) {
   root.querySelectorAll("[data-mode]").forEach((btn) => {
     btn.addEventListener("click", () => { switchMode(btn.dataset.mode, actions); });
   });
@@ -438,6 +479,8 @@ function wire(root, store, actions, matches, saved) {
       saveToBank(store, [problem]);
     });
   });
+
+  wireListKeyboard(root, store, actions, page);
 
   root.querySelectorAll("[data-start-catalog]").forEach((btn) => {
     btn.addEventListener("click", () => {
