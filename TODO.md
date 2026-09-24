@@ -67,7 +67,7 @@ one-line title is not enough to pick the work up again a week later.
   in one unbroken scroll. Finding any of it means reading all of it.
   *Done:* structure a person can scan.
 
-- [ ] **39. The empty app is the least designed part of it.**
+- [x] **39. The empty app is the least designed part of it.** _(1.5.0)_
   Every view has an empty state, each written where it sits, some offering the
   action that would end it and some just saying there is nothing here. The
   first hour is the one that decides whether there is a second.

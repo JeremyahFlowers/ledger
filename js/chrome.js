@@ -209,8 +209,30 @@ export function emptyState(icon, headline, explanation, action = null) {
       <span class="empty-state-icon">${navIcon(icon, { size: 22 })}</span>
       <p class="empty-state-headline">${esc(headline)}</p>
       <p class="muted small">${esc(explanation)}</p>
-      ${action ? `<button class="btn btn-ghost btn-sm" data-goto="${esc(action.tab)}">${esc(action.label)}</button>` : ""}
+      ${actionHtml(action)}
     </div>`;
+}
+
+/**
+ * The one control that ends this empty state.
+ *
+ * Two kinds, because there are two kinds of empty. Some are ended somewhere
+ * else — no mock interviews, start one from the queue — and take `{ tab }`.
+ * Others are ended by something already on the same screen: the journal's
+ * "no notes yet" sits directly under the form that adds one, and sending
+ * someone to another tab would be absurd. Those take `{ focus }`, a selector
+ * for the field to scroll to and put the cursor in.
+ *
+ * Before this the helper only knew how to navigate, so the four empty states
+ * whose answer was on their own page simply had no button — which read as
+ * "nothing here" rather than "here is how to start".
+ */
+function actionHtml(action) {
+  if (!action) return "";
+  const attr = action.tab
+    ? `data-goto="${esc(action.tab)}"`
+    : `data-goto-focus="${esc(action.focus)}"`;
+  return `<button class="btn btn-ghost btn-sm" ${attr}>${esc(action.label)}</button>`;
 }
 
 /**
@@ -221,6 +243,14 @@ export function emptyState(icon, headline, explanation, action = null) {
  * and no second mechanism to remember. Safe on a view with none.
  */
 export function wireNavigationTargets(root, actions) {
+  root.querySelectorAll("[data-goto-focus]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const target = root.querySelector(btn.dataset.gotoFocus);
+      if (!target) return;
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      target.focus({ preventScroll: true });
+    });
+  });
   root.querySelectorAll("[data-goto]").forEach((btn) => {
     btn.addEventListener("click", () => actions.switchTab(btn.dataset.goto));
   });

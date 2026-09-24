@@ -551,7 +551,8 @@ export function renderJournal(root, store) {
     <div class="card">
       <h2>Notes</h2>
       ${notes.length === 0 ? emptyState("journal", "No notes yet",
-        "A weekly retro here is where patterns across sessions become visible — what keeps tripping you up, and what finally clicked.") : `
+        "A weekly retro here is where patterns across sessions become visible — what keeps tripping you up, and what finally clicked.",
+        { focus: "#journal-form [name=text]", label: "Write the first one" }) : `
       <ul class="journal-list">
         ${notes.map((n) => `<li><div class="row space-between"><strong>${esc(n.type.replace(/-/g, " "))}</strong><span class="muted">${fmtDate(n.date)}</span></div><p>${esc(n.text)}</p></li>`).join("")}
       </ul>`}
@@ -734,7 +735,8 @@ export function renderSystemDesign(root, store) {
     <div class="card">
       <h2>Past sessions</h2>
       ${sessions.length === 0 ? emptyState("systemDesign", "No design sessions logged",
-        "Pick a system, talk through it, then record what you covered and how confident you felt. Confidence over time is the signal worth watching here.") : `
+        "Pick a system, talk through it, then record what you covered and how confident you felt. Confidence over time is the signal worth watching here.",
+        { focus: "#sd-form [name=topic]", label: "Log the first one" }) : `
       <ul class="journal-list">
         ${sessions.map((s) => `<li><div class="row space-between"><strong>${esc(s.topic)}</strong><span class="muted">${fmtDate(s.date)} · confidence ${s.confidence ?? "—"}/5</span></div><p>${esc(s.notes)}</p></li>`).join("")}
       </ul>`}
@@ -873,7 +875,8 @@ export function renderTopicDetail(root, store, actions) {
       <h2>Practice ladder</h2>
       <p class="muted small">Your own logged problems, easiest first.</p>
       ${problems.length === 0 ? emptyState("log", "Nothing logged yet",
-        "Solved something elsewhere — on paper, in a real interview, straight on LeetCode? Record it here and it joins the same review schedule.") : `
+        "Solved something elsewhere — on paper, in a real interview, straight on LeetCode? Record it here and it joins the same review schedule.",
+        { tab: "bank", label: "Find one for this pattern" }) : `
       <ul class="queue-list">${problems.map((p) => queueItemHtml(state, p)).join("")}</ul>`}
     </div>
     <div class="card">
@@ -987,7 +990,8 @@ export function renderWhiteboard(root, store, actions) {
     <div class="card">
       <h2>Saved boards</h2>
       ${boards.length === 0 ? emptyState("whiteboard", "No boards saved yet",
-        "Sketching the shape of a problem before writing code is most of the work in an interview. Anything you draw here can be saved against a problem.") : `
+        "Sketching the shape of a problem before writing code is most of the work in an interview. Anything you draw here can be saved against a problem.",
+        { focus: "#wb-save-form [name=caption]", label: "Draw one and save it" }) : `
       <ul class="queue-list">
         ${boards.map((b) => `
           <li class="queue-item">
