@@ -66,7 +66,7 @@ in passing and didn't stop for.
   *Done:* split along seams that already exist, with no behaviour change and
   the test suite green throughout.
 
-- [ ] **22. Mock mode is a checklist and nothing else.**
+- [x] **22. Mock mode is a checklist and nothing else.** _(1.3.0)_
   It flags the attempt and shows five prompts. It doesn't feel different from
   an ordinary session, which is the entire point of practising one.
   *Done:* a mock imposes the structure it's meant to — a clock you can't

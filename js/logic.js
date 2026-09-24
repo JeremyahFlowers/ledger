@@ -38,6 +38,60 @@ export const MISTAKE_TAGS = [
   "other",
 ];
 
+// ---------- Mock interviews ----------
+//
+// A mock used to be an ordinary session with a pill on it and five prompts
+// listed in a box. Nothing about it felt different from practising alone,
+// which is the entire point of practising one: the pressure, the clock you
+// cannot quietly ignore, and the habit of saying what you are doing before
+// you do it.
+//
+// So a mock now has a shape. The same five things the checklist always asked
+// for, but arriving when they would actually matter in a real interview,
+// against a clock that runs down rather than up.
+
+/** A standard technical screen. Long enough to be realistic, short enough to
+ * be a constraint. */
+export const MOCK_MINUTES = 45;
+
+/**
+ * The phases of a mock, as fractions of the whole.
+ *
+ * Fractions rather than fixed minutes so a shorter or longer mock keeps its
+ * proportions — the point of "state your approach before coding" is that it
+ * comes early, not that it comes at minute five.
+ */
+export const MOCK_PHASES = [
+  { until: 0.12, label: "Clarify",  prompt: "Ask about constraints and edge cases before writing anything." },
+  { until: 0.22, label: "Approach", prompt: "Say your approach out loud, and why, before you start typing." },
+  { until: 0.75, label: "Code",     prompt: "Keep narrating — say what you're doing and the trade-offs you're making." },
+  { until: 0.88, label: "Complexity", prompt: "State the time and space complexity without being asked." },
+  { until: 1.00, label: "Test",     prompt: "Walk an example through your code before you call it done." },
+];
+
+/**
+ * Which phase a mock is in, and how long is left.
+ *
+ * `overrun` rather than clamping at zero: running over is information, and an
+ * interview that quietly stops counting teaches the opposite of the lesson.
+ */
+export function mockPhase(elapsedMin, totalMin = MOCK_MINUTES) {
+  const fraction = totalMin > 0 ? elapsedMin / totalMin : 0;
+  const remainingMin = totalMin - elapsedMin;
+  const phase = MOCK_PHASES.find((p) => fraction <= p.until) || MOCK_PHASES[MOCK_PHASES.length - 1];
+  return {
+    index: MOCK_PHASES.indexOf(phase),
+    label: phase.label,
+    prompt: phase.prompt,
+    remainingMin,
+    fraction,
+    overrun: remainingMin < 0,
+    // The last few minutes of an interview feel different from the middle,
+    // and the UI should too.
+    urgent: remainingMin <= totalMin * 0.15,
+  };
+}
+
 export const MOCK_CHECKLIST = [
   "Clarified constraints & edge cases before coding",
   "Stated approach out loud before typing",

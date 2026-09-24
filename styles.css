@@ -458,6 +458,22 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
   background: var(--surface);
 }
 .ws-bar-id { min-width: 0; flex: 1 1 16rem; }
+
+/* A mock's clock runs down, and the last stretch should feel different from
+   the middle — that pressure is the thing being practised. */
+.clock-urgent { color: var(--warn); }
+.clock-overrun { color: var(--bad); }
+
+.mock-phase {
+  display: flex; flex-direction: column; gap: 0.1rem;
+  padding: 0.3rem 0.7rem; border-left: 3px solid var(--warn);
+  max-width: 24rem;
+}
+.mock-phase-label {
+  font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--warn);
+}
+.mock-phase-prompt { font-size: 0.8rem; color: var(--text-muted); }
 .ws-bar-id .session-problem-title { font-size: 1.05rem; margin: 0.2rem 0 0; }
 .ws-bar-actions { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin-left: auto; }
 .ws-bar .session-clock { font-size: 1.5rem; }

@@ -16,7 +16,7 @@
 import {
   todayISO, applyOutcome, activateProblem, uid, MISTAKE_TAGS, MOCK_CHECKLIST,
   quizOptions, updateStreak, computePlantState, recommendSession, allAttempts,
-  normalizeStatement, MAX_STATEMENT_CHARS, lastAttemptWithCode,
+  normalizeStatement, MAX_STATEMENT_CHARS, lastAttemptWithCode, mockPhase, MOCK_MINUTES,
 } from "./logic.js";
 import { esc, richText, fmtDate, patternName, toast, OUTCOME_GLYPH, showTopic } from "./ui.js";
 import { TOPICS } from "./topics-content.js";
@@ -177,7 +177,8 @@ export function renderWorkspace(root, store, actions) {
         <p class="muted small">No link for this one — open it wherever you keep it.</p>`}
         <label class="field checkbox-field">
           <input type="checkbox" id="ws-mock-toggle" ${session.isMock ? "checked" : ""} />
-          Verbalized mock — talk through your approach out loud, strict timer
+          Verbalized mock — ${MOCK_MINUTES} minutes, counting down, with the prompts an
+          interviewer would expect you to hit on your own
         </label>
         <button class="btn btn-primary" id="ws-start">Start timer</button>
       </div>`;
@@ -202,6 +203,7 @@ export function renderWorkspace(root, store, actions) {
       <div class="ws-bar">
         <div class="ws-bar-id">${header}</div>
         <div class="session-clock" id="ws-clock">00:00</div>
+        ${session.isMock ? `<div class="mock-phase" id="ws-mock-phase"></div>` : ""}
         <div class="ws-bar-actions">
           <button type="button" class="btn btn-ghost btn-sm" id="ws-mark-insight" ${session.insightAt ? "disabled" : ""}>
             ${session.insightAt ? `Insight at ${Math.round((session.insightAt - session.startedAt) / 60000)} min` : "I've got my approach"}
@@ -283,7 +285,27 @@ export function renderWorkspace(root, store, actions) {
       clearInterval(session.intervalId);
       return;
     }
-    clock.textContent = fmtClock(Date.now() - session.startedAt);
+    const elapsedMs = Date.now() - session.startedAt;
+    // A mock counts down. The clock in a real interview is the constraint, not
+    // a stopwatch, and showing elapsed time makes it easy to lose track of how
+    // much is left — which is exactly the thing worth practising.
+    if (session.isMock) {
+      const phase = mockPhase(elapsedMs / 60000);
+      clock.textContent = (phase.overrun ? "+" : "") + fmtClock(Math.abs(phase.remainingMin) * 60000);
+      clock.classList.toggle("clock-urgent", phase.urgent && !phase.overrun);
+      clock.classList.toggle("clock-overrun", phase.overrun);
+      const host = document.getElementById("ws-mock-phase");
+      if (host && host.dataset.phase !== String(phase.index)) {
+        // Written only when the phase changes, not 4 times a second: replacing
+        // this text continuously would make it unreadable and fight a screen
+        // reader announcing it.
+        host.dataset.phase = String(phase.index);
+        host.innerHTML = `<span class="mock-phase-label">${esc(phase.label)}</span>
+          <span class="mock-phase-prompt">${esc(phase.prompt)}</span>`;
+      }
+    } else {
+      clock.textContent = fmtClock(elapsedMs);
+    }
   }, 250);
 
   // ---- panes ----
