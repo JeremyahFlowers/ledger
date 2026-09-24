@@ -217,6 +217,26 @@ function runSearch(rawQuery) {
     });
   }
 
+  // Your own notes. These are the thing the app works hardest to collect —
+  // "the window only shrinks from the left" — and until now the one thing it
+  // could not find again. Ranked below your problems but above the catalog:
+  // a note you wrote is more yours than a problem you have never opened.
+  if (query.length >= MIN_QUERY) {
+    for (const problem of state.problems) {
+      for (const attempt of problem.attempts || []) {
+        const note = attempt.soulStatement;
+        if (!note) continue;
+        const s = score(note, query);
+        if (s == null) continue;
+        results.push({
+          kind: "note", score: s + 15, id: attempt.id, title: note,
+          subtitle: `${problem.name} · ${attempt.date}`,
+          problem,
+        });
+      }
+    }
+  }
+
   if (catalog && query.length >= MIN_QUERY) {
     const owned = new Set(state.problems.map((p) => p.catalogSlug || slugify(p.name)));
     for (const entry of catalog.problems) {
@@ -246,7 +266,7 @@ function topPatternOf(entry) {
 /** Keep every kind represented — an exact catalog match shouldn't be buried
  * under six of your own near-misses, and vice versa. */
 function capPerGroup(list) {
-  const counts = { pattern: 0, mine: 0, catalog: 0 };
+  const counts = { pattern: 0, mine: 0, note: 0, catalog: 0 };
   return list.filter((r) => ++counts[r.kind] <= MAX_PER_GROUP);
 }
 
@@ -272,8 +292,8 @@ export function groupByKind(list) {
   return order.flatMap((kind) => buckets.get(kind));
 }
 
-const KIND_LABEL = { pattern: "Pattern", mine: "Your problems", catalog: "Catalog" };
-const KIND_ICON = { pattern: "topics", mine: "queue", catalog: "bank" };
+const KIND_LABEL = { pattern: "Pattern", mine: "Your problems", note: "Things you wrote", catalog: "Catalog" };
+const KIND_ICON = { pattern: "topics", mine: "queue", note: "journal", catalog: "bank" };
 
 function paint(query) {
   const host = panel();
@@ -363,6 +383,12 @@ function choose(hit) {
   }
   if (hit.kind === "mine") {
     deps.actions.startProblem(hit.problem);
+    return;
+  }
+  if (hit.kind === "note") {
+    // The note's own page is the problem's history, where it sits in context
+    // with the attempt that produced it.
+    deps.actions.openProblem(hit.problem.id);
     return;
   }
   // A catalog problem isn't yours yet, so the useful move is to read it.

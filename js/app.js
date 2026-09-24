@@ -469,6 +469,10 @@ installSearch({
       views.startSession(problem);
       actions.switchTab("workspace");
     },
+    openProblem(problemId) {
+      views.showProblem(problemId);
+      actions.switchTab("problemDetail");
+    },
   },
 });
 

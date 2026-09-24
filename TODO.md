@@ -13,7 +13,7 @@ one-line title is not enough to pick the work up again a week later.
 
 ## P0 — the app can't answer its own best question
 
-- [ ] **24. Your own notes are unsearchable.**
+- [x] **24. Your own notes are unsearchable.** _(1.4.0)_
   Soul statements are the thing this app works hardest to collect — "the window
   only shrinks from the left" — and there is no way to find one again. Search
   covers problem titles, patterns and the catalog, and skips every word you
