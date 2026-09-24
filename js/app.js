@@ -487,6 +487,11 @@ renderAll();
 trackChromeHeight();
 startClocks();
 
+// Coming back online is the best possible moment to retry a failed save, and
+// far better than waiting out a backoff that started while there was no
+// connection at all.
+window.addEventListener("online", () => store.retryNow("Ledger: save after reconnecting"));
+
 // A tab being hidden is the last reliable moment before a phone evicts it —
 // pagehide alone is not enough on iOS, which often never fires it.
 for (const event of ["visibilitychange", "pagehide"]) {

@@ -25,7 +25,7 @@ in passing and didn't stop for.
   that would exceed the limit is caught with an explanation and a way to shed
   weight rather than a raw API error.
 
-- [ ] **16. A failed sync never retries itself.**
+- [x] **16. A failed sync never retries itself.** _(1.3.0)_
   A save that fails leaves the work in localStorage and the status at "offline"
   until the next mutation happens to trigger a flush. Close the tab in between
   and the only copy is on that device. "Save now" helps, but only if you notice.

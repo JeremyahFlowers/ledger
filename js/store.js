@@ -9,6 +9,21 @@ const CONFIG_KEY = "ledger.config";
 const CACHE_KEY = "ledger.cache.state";
 const SAVE_DEBOUNCE_MS = 1200;
 
+// Retry schedule for a save that failed for a reason that might pass —
+// offline, a flaky connection, GitHub having a moment. Backs off so a long
+// outage doesn't mean a request every second for an hour, and stops rather
+// than retrying forever, because a failure that survives four minutes is not
+// going to be fixed by a fifth attempt.
+//
+// Why this exists: a failed save left the work in localStorage and the status
+// at "offline" until the next mutation happened to trigger a flush. Close the
+// tab in between and the only copy of that session was on that device.
+const RETRY_DELAYS_MS = [5000, 15000, 45000, 120000];
+
+// Failures that will not be fixed by waiting. Retrying a bad token or a log
+// that is too large just produces the same error on a timer.
+const PERMANENT_FAILURES = new Set(["conflict", "too_large", "no_workflow_scope"]);
+
 export function loadConfig() {
   try {
     return JSON.parse(localStorage.getItem(CONFIG_KEY)) || {};
@@ -39,6 +54,8 @@ class Store {
     // Settings: "Synced" alone says the last attempt worked, not whether it
     // was a minute ago or before you shut the laptop on Friday.
     this.lastSyncedAt = null;
+    this.retryTimer = null;
+    this.retryAttempt = 0;
   }
 
   onChange(fn) {
@@ -130,6 +147,9 @@ class Store {
     this._cacheLocally();
     this._emit();
     clearTimeout(this.saveTimer);
+    // A new change restarts the backoff: it is a fresh attempt at fresh work,
+    // not a continuation of whatever was failing before.
+    this.retryAttempt = 0;
     this.saveTimer = setTimeout(() => this.flush(message), SAVE_DEBOUNCE_MS);
   }
 
@@ -142,6 +162,7 @@ class Store {
     // the difference is whether the user is told something they can act on.
     const footprint = syncFootprint(this.state);
     if (footprint.over) {
+      this._cancelRetry();      // retrying cannot make the file smaller
       this.status = "error";
       this.error = `Your prep log is ${formatBytes(footprint.total)}, past GitHub's `
         + `${formatBytes(footprint.limit)} limit for a single file, so it can't be saved. `
@@ -158,11 +179,44 @@ class Store {
       this.status = "synced";
       this.lastSyncedAt = Date.now();
       this.error = null;
+      this._cancelRetry();
     } catch (err) {
       this.status = err.code === "conflict" ? "conflict" : "offline";
       this.error = err.message || String(err);
+      if (!PERMANENT_FAILURES.has(err.code)) this._scheduleRetry(message);
     }
     this._emit();
+  }
+
+  /** Queue another attempt, backing off, until the schedule runs out. */
+  _scheduleRetry(message) {
+    clearTimeout(this.retryTimer);
+    const delay = RETRY_DELAYS_MS[this.retryAttempt];
+    if (delay === undefined) {
+      // Out of attempts. Null rather than a stale id, so "is a retry pending"
+      // is answerable by looking.
+      this.retryTimer = null;
+      return;
+    }
+    this.retryAttempt += 1;
+    this.retryTimer = setTimeout(() => {
+      // Still worth trying? A later mutate may have already saved it, and a
+      // conflict needs the user rather than another attempt.
+      if (this.dirty && this.status !== "conflict") this.flush(message);
+    }, delay);
+  }
+
+  _cancelRetry() {
+    clearTimeout(this.retryTimer);
+    this.retryTimer = null;
+    this.retryAttempt = 0;
+  }
+
+  /** Try again now, as the browser reports the network back. The backoff is
+   * reset first: coming back online is new information, not another failure. */
+  retryNow(message = "Ledger: retry save") {
+    this._cancelRetry();
+    if (this.dirty) this.flush(message);
   }
 
   /**
