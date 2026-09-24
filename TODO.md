@@ -62,7 +62,7 @@ one-line title is not enough to pick the work up again a week later.
   rings carry `title` attributes, which most screen readers ignore.
   *Done:* every chart states its own content the way the line charts do.
 
-- [ ] **31. Export is all-or-nothing.**
+- [x] **31. Export is all-or-nothing.** _(1.4.0)_
   You can export the whole log. There is no way to take one problem's history
   somewhere, or to share what you did this week.
   *Done:* a single problem's history can be exported on its own.

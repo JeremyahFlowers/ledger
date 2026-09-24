@@ -597,14 +597,94 @@ function confirmDiscard(diff, losing) {
   return confirm(`This discards ${count} logged attempt${plural.s} that only ${plural.verb} on ${where}. Continue?`);
 }
 
-/** Shared by Settings and the conflict screen. */
-function downloadState(state) {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+// Long enough for the browser to have started reading the blob, short enough
+// that a page full of exports doesn't hold them all open.
+const REVOKE_DELAY_MS = 1000;
+
+/** Offer some text as a file download. One helper, because the whole-log
+ * export and a single problem's history were otherwise the same six lines
+ * twice.
+ *
+ * The anchor goes into the document and the object URL is released on a later
+ * turn of the event loop: Firefox ignores a click on a detached anchor, and
+ * revoking synchronously can pull the blob out from under a download that has
+ * not started reading it yet. */
+function downloadFile(filename, text, type = "application/json") {
+  const url = URL.createObjectURL(new Blob([text], { type }));
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `ledger-export-${todayISO()}.json`;
+  a.href = url;
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(a.href);
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS);
+}
+
+function downloadState(state) {
+  downloadFile(`ledger-export-${todayISO()}.json`, JSON.stringify(state, null, 2));
+}
+
+/**
+ * One problem's history, as readable text.
+ *
+ * Markdown rather than JSON on purpose. The whole-log export exists to move
+ * your data; this exists to take one problem's story somewhere a person will
+ * read it — a note to yourself, a message to someone helping you prepare. JSON
+ * would be the wrong format for either.
+ */
+export function problemToMarkdown(state, problem) {
+  const lines = [];
+  lines.push(`# ${problem.name}${problem.number ? ` (#${problem.number})` : ""}`);
+  lines.push("");
+  lines.push(`- Pattern: ${patternName(state, problem.patternId)}`);
+  lines.push(`- Difficulty: ${problem.difficulty}`);
+  lines.push(`- Attempts: ${(problem.attempts || []).length}`);
+  const url = problemUrl(problem);
+  if (url) lines.push(`- Link: ${url}`);
+  lines.push("");
+
+  if (problem.analysis?.predictions?.length) {
+    lines.push(`## What I thought going in (${problem.analysis.at})`);
+    for (const p of problem.analysis.predictions) {
+      lines.push(`- ${patternName(state, p.pattern)} — ${Math.round(p.probability * 100)}%`);
+    }
+    lines.push("");
+  }
+
+  const history = [...(problem.attempts || [])].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+  if (!history.length) {
+    lines.push("_No attempts recorded yet._");
+  } else {
+    lines.push("## History");
+    lines.push("");
+    for (const a of history) {
+      lines.push(`### ${a.date} — ${outcomeLabel(a.outcome)}`);
+      const timings = [
+        a.timeToInsightMin != null ? `${a.timeToInsightMin} min to the approach` : null,
+        a.timeToSolveMin != null ? `${a.timeToSolveMin} min total` : null,
+        a.patternGuess === "correct" ? "recalled the pattern" : "missed the pattern",
+        a.isMock ? "mock interview" : null,
+      ].filter(Boolean);
+      lines.push(timings.join(" · "));
+      if ((a.mistakeTags || []).length) {
+        lines.push("");
+        lines.push(`Mistakes: ${a.mistakeTags.map((t) => t.replace(/-/g, " ")).join(", ")}`);
+      }
+      if (a.soulStatement) {
+        lines.push("");
+        lines.push(`> ${a.soulStatement}`);
+      }
+      if (a.code) {
+        lines.push("");
+        lines.push("```" + (a.codeLang || ""));
+        lines.push(a.code);
+        lines.push("```");
+      }
+      lines.push("");
+    }
+  }
+  return lines.join("\n");
 }
 
 export function renderDashboard(root, store, actions) {
@@ -2176,6 +2256,7 @@ export function renderProblemDetail(root, store, actions) {
         <button class="btn btn-primary btn-sm" data-start-problem="${esc(p.id)}">Practice this</button>
         ${url ? `<a class="btn btn-ghost btn-sm" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Open on LeetCode &#8599;</a>` : ""}
         <button class="btn btn-ghost btn-sm" data-goto-topic="${esc(p.patternId)}">Read the pattern</button>
+        <button class="btn btn-ghost btn-sm" id="export-problem">Export this history</button>
       </div>
     </div>
 
@@ -2225,6 +2306,11 @@ export function renderProblemDetail(root, store, actions) {
     </div>`;
 
   root.querySelector("#problem-back").addEventListener("click", () => actions.switchTab("queue"));
+  root.querySelector("#export-problem").addEventListener("click", () => {
+    const slug = (p.name || "problem").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    downloadFile(`${slug}-${todayISO()}.md`, problemToMarkdown(state, p), "text/markdown");
+    toast("Downloaded.");
+  });
   wireBoardViewers(root, store, boards);
   wireStartButtons(root, store, actions);
   root.querySelector("[data-goto-topic]")?.addEventListener("click", (e) => {
