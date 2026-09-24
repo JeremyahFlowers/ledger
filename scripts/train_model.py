@@ -92,6 +92,21 @@ MIN_AUC = 0.70
 # decides whether a pattern earns a "confident" badge.
 TARGET_PRECISION = 0.65
 
+# A second, lower bar for a "likely" tier.
+#
+# Measured, not guessed. One operating point was doing two jobs: the ranked
+# list, which only needs good ordering, and the confident badge, which needs to
+# be right. At a ~2% base rate a 65% precision floor is genuinely demanding, and
+# the price was recall — greedy fired on 6.7% of true cases, binary search on
+# 0.6%, despite AUCs of 0.81 and 0.75.
+#
+# Relaxing the floor to 0.55 buys back a great deal of that: greedy 0.067 ->
+# 0.349, binary search 0.006 -> 0.112, sliding window 0.097 -> 0.250,
+# recursion/DP 0.279 -> 0.416. Still right more often than not, which is the
+# line that matters, and the measured precision is shown next to the badge so
+# the user is never asked to take it on trust.
+LIKELY_PRECISION = 0.55
+
 
 SEED_JS = ROOT / "js" / "seed.js"
 
@@ -178,8 +193,8 @@ def split_labels(rows, pattern):
     return y
 
 
-def pick_threshold(y_true, probs):
-    """Highest-recall threshold that still reaches TARGET_PRECISION.
+def pick_threshold(y_true, probs, target=TARGET_PRECISION):
+    """Highest-recall threshold that still reaches `target` precision.
 
     Falls back to the most precise threshold available when the target is
     unreachable, so a weak pattern is quiet rather than chatty. Returns
@@ -195,7 +210,7 @@ def pick_threshold(y_true, probs):
             y_true, pred, average="binary", zero_division=0)
         if p > fallback_p or (p == fallback_p and r > 0 and t > fallback_t):
             fallback_t, fallback_p = float(t), p
-        if p >= TARGET_PRECISION and r > best_recall:
+        if p >= target and r > best_recall:
             best_t, best_recall = float(t), r
 
     if best_t is not None:
@@ -228,6 +243,18 @@ def train_pattern(X, y, rows):
     metrics.update(threshold=round(threshold, 3), precision=round(float(p), 3),
                    recall=round(float(r), 3), f1=round(float(f), 3),
                    metTargetPrecision=bool(met_target))
+
+    # The "likely" tier. Only recorded when it is genuinely more permissive
+    # than the confident one — for a pattern the model separates cleanly the
+    # two coincide, and offering a second badge that means the same thing
+    # would be noise.
+    likely_t, likely_met = pick_threshold(yp, probs, LIKELY_PRECISION)
+    if likely_met and likely_t < threshold:
+        lp, lr, _, _ = precision_recall_fscore_support(
+            yp, (probs >= likely_t).astype(int), average="binary", zero_division=0)
+        metrics.update(likelyThreshold=round(likely_t, 3),
+                       likelyPrecision=round(float(lp), 3),
+                       likelyRecall=round(float(lr), 3))
 
     if metrics["auc"] < MIN_AUC:
         metrics["status"] = "below-quality-bar"
@@ -316,6 +343,10 @@ def main():
                 "weights": [round(float(w), 4) for w in ws],
                 "intercept": round(b, 4),
                 "threshold": metrics_all[pattern]["threshold"],
+                **({"likelyThreshold": metrics_all[pattern]["likelyThreshold"],
+                    "likelyPrecision": metrics_all[pattern]["likelyPrecision"],
+                    "likelyRecall": metrics_all[pattern]["likelyRecall"]}
+                   if "likelyThreshold" in metrics_all[pattern] else {}),
                 "auc": metrics_all[pattern]["auc"],
                 "precision": metrics_all[pattern]["precision"],
                 "recall": metrics_all[pattern]["recall"],

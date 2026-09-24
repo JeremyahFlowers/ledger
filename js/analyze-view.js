@@ -190,10 +190,11 @@ function predictionRowHtml(p) {
       <button type="button" class="pred-row ${selected ? "selected" : ""}" data-pick="${esc(p.pattern)}" data-testid="analyze-prediction">
         <span class="pattern-icon">${patternIcon(p.pattern, { size: 15 })}</span>
         <span class="pred-name">${esc(patternLabel(p.pattern))}</span>
-        <span class="pred-bar"><span class="pred-fill ${p.confident ? "confident" : ""}"
+        <span class="pred-bar"><span class="pred-fill ${p.confident ? "confident" : p.likely ? "likely" : ""}"
           style="width:${pctValue}%"></span></span>
         <span class="pred-pct">${pctValue}%</span>
-        ${p.confident ? `<span class="pill pill-good" title="Above this pattern's tuned decision threshold">confident</span>` : ""}
+        ${p.confident ? `<span class="pill pill-good" title="Above this pattern's tuned decision threshold — right ${Math.round((p.reliability.precision || 0) * 100)}% of the time on held-out problems">confident</span>` : ""}
+        ${p.likely ? `<span class="pill pill-warn" title="Above this pattern's lower bar — right ${Math.round((p.reliability.likelyPrecision || 0) * 100)}% of the time on held-out problems">likely</span>` : ""}
         ${weak ? `<span class="pill pill-muted" title="This pattern's precision on held-out problems is below 65% — treat it as a hint">weak signal</span>` : ""}
       </button>
     </li>`;

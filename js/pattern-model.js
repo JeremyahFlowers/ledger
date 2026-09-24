@@ -116,14 +116,29 @@ export async function analyze(rawText) {
   const predictions = [];
   for (const [id, entry] of model.patterns) {
     const score = scorePattern(entry, vec);
+    const probability = sigmoid(score);
+    // Two tiers, because one operating point was doing two jobs. A 65%
+    // precision floor at a ~2% base rate is demanding, and the price was
+    // recall: greedy fired on 6.7% of true cases and binary search on 0.6%,
+    // despite the model ranking both far better than that. The lower tier is
+    // still right more often than not, and always carries its measured
+    // precision so it is never taken on trust. See LIKELY_PRECISION in
+    // scripts/train_model.py.
+    const confident = probability >= entry.threshold;
+    const likely = !confident
+      && entry.likelyThreshold != null
+      && probability >= entry.likelyThreshold;
     predictions.push({
       pattern: id,
-      probability: sigmoid(score),
+      probability,
       score,
       threshold: entry.threshold,
-      confident: sigmoid(score) >= entry.threshold,
+      confident,
+      likely,
       reliability: { auc: entry.auc, precision: entry.precision, recall: entry.recall,
-        trainedOn: entry.positives },
+        trainedOn: entry.positives,
+        likelyPrecision: entry.likelyPrecision ?? null,
+        likelyRecall: entry.likelyRecall ?? null },
     });
   }
   predictions.sort((a, b) => b.probability - a.probability);

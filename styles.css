@@ -700,6 +700,9 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 .pred-bar { height: 7px; border-radius: 4px; background: var(--border); overflow: hidden; }
 .pred-fill { display: block; height: 100%; background: var(--text-muted); border-radius: 4px; }
 .pred-fill.confident { background: var(--accent); }
+/* The lower tier: right more often than not, but not as sure. Warn rather
+   than accent, so the eye separates the two without reading the badge. */
+.pred-fill.likely { background: var(--warn); }
 .pred-pct { font-variant-numeric: tabular-nums; text-align: right; color: var(--text-muted); }
 
 .small-heading { font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em;

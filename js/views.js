@@ -660,6 +660,19 @@ export function renderDashboard(root, store, actions) {
 
   root.innerHTML = `
     ${plantCardHtml(plant)}
+    ${hasActiveSession() ? `
+    <!-- An unfinished session is the only thing more urgent than today's
+         recommendation, and without this there is no way back to one you
+         navigated away from. -->
+    <div class="card session-cta-card">
+      <div class="row space-between session-cta-row">
+        <div>
+          <h2>Session in progress</h2>
+          <p class="muted">${esc(currentSessionProblemName())} — still open, with your code and timer.</p>
+        </div>
+        <button class="btn btn-primary" id="cta-resume">Back to it</button>
+      </div>
+    </div>` : ""}
     <div class="card session-cta-card">
       <div class="row space-between session-cta-row">
         <div>
@@ -752,6 +765,8 @@ export function renderDashboard(root, store, actions) {
       actions.switchTab("workspace");
     });
   }
+  root.querySelector("#cta-resume")?.addEventListener("click", () => actions.switchTab("workspace"));
+
   root.querySelector("#cta-warmup").addEventListener("click", () => {
     resetWarmup();
     actions.switchTab("warmup");
@@ -1191,6 +1206,11 @@ export function abandonSession() {
 /** Checkpoint the live session, if there is one. Called when the tab is hidden. */
 export function checkpointSession() {
   if (session?.startedAt) checkpoint(session);
+}
+
+/** The problem the open session is on, for the Dashboard's resume card. */
+export function currentSessionProblemName() {
+  return session?.problem?.name || "A problem";
 }
 
 export function hasActiveSession() {

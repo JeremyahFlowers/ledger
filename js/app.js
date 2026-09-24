@@ -399,13 +399,12 @@ function resumeInterruptedSession() {
   resumeChecked = true;
   if (views.hasActiveSession()) return;          // nothing was interrupted
   if (!views.restoreSession(store.state)) return;
-  // Only say so if they are not already looking at it — landing straight back
-  // in the workspace is self-explanatory, a toast on the dashboard is not.
-  if (activeTab !== "workspace") {
-    activeTab = "workspace";
-    localStorage.setItem("ledger.activeTab", activeTab);
-  }
-  views.toast("Picked up where you left off.");
+  // The session is back either way, but where you were is respected. Forcing
+  // the workspace meant navigating to Settings mid-session and reloading
+  // yanked you into the problem — the app overriding a deliberate choice
+  // because it knew better. If you left the workspace, the Dashboard offers
+  // the session back instead.
+  if (SESSION_TABS[activeTab]) views.toast("Picked up where you left off.");
 }
 
 function renderView() {

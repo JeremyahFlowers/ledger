@@ -93,7 +93,7 @@ quietly fails to keep it.
 
 ## P3 — model and data quality
 
-- [ ] **13. Technique patterns are under-recalled.**
+- [x] **13. Technique patterns are under-recalled.** _(1.2.0)_
   Binary search sits near 0.9% recall, so sorted-array problems rank
   Arrays & Hashing above Two Pointers. Known and documented, not yet improved.
   *Done:* measured improvement on a held-out set without loosening precision
