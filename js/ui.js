@@ -5,7 +5,7 @@
 // dependency direction one-way and means a view module can be split off
 // without creating a cycle back through views.js.
 //
-import { OUTCOMES } from "./logic.js";
+import { OUTCOMES, todayISO } from "./logic.js";
 
 // Why it exists: views.js had grown past 3,000 lines holding the dashboard,
 // queue, session, settings and a dozen shared helpers, and every new feature
@@ -114,7 +114,7 @@ export function outcomeLabel(value) {
 }
 
 // Cross-view handoff for "click a pattern card" -> dedicated page, the same
-// pattern used elsewhere (nav.prefillProblemId, reflectState): a module-level
+// pattern used elsewhere (chrome.js prefill, reflectState): a module-level
 // slot app.js reads via showTopic()/current, not a routed URL param.
 export const topicNav = { patternId: null };
 export function showTopic(patternId) {
@@ -144,3 +144,11 @@ export function downloadFile(filename, text, type = "application/json") {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS);
 }
+
+/** The whole log, as the JSON that syncs. This one is for moving your data;
+ * a problem's history and a week's account export as Markdown instead,
+ * because those are read by people. */
+export function downloadState(state) {
+  downloadFile(`ledger-export-${todayISO()}.json`, JSON.stringify(state, null, 2));
+}
+

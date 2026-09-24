@@ -12,8 +12,12 @@
 // 300 reviews behind — a problem only enters spaced repetition once you
 // actually work it. See STATUS_BACKLOG in logic.js.
 
-import { esc, toast, startSession, offerUndo } from "./views.js";
-import { loadCatalog, PATTERN_CONFIDENCE, MAX_BANK_SIZE, problemFromCatalog, problemUrl, slugify, savedSlugs } from "./catalog.js";
+import { esc, toast, offerUndo } from "./ui.js";
+import { startSession } from "./session-view.js";
+import {
+  loadCatalog, PATTERN_CONFIDENCE, MAX_BANK_SIZE, problemFromCatalog, problemUrl, slugify,
+  savedSlugs,
+} from "./catalog.js";
 import { patternIcon } from "./icons.js";
 import { uid, backlogProblems, STATUS_BACKLOG } from "./logic.js";
 

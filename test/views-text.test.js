@@ -1,4 +1,4 @@
-// Tests for the text helpers in js/views.js.
+// Tests for the text helpers in js/ui.js.
 //
 // richText() introduces markup into user-visible strings, so the order of
 // operations is a security property, not a style choice: escape first, then
@@ -8,10 +8,10 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { esc, richText } from "../js/views.js";
+import { esc, richText } from "../js/ui.js";
 
 describe("esc", () => {
   test("test_esc_htmlSpecialCharacters_areAllEscaped", () => {
@@ -111,19 +111,28 @@ describe("charts describe themselves", () => {
   // mastery rings carried `title` attributes, which most screen readers ignore
   // outright — so half the Progress page was readable only if you could see
   // it.
-  const views = readFileSync(fileURLToPath(new URL("../js/views.js", import.meta.url)), "utf8");
-  const progress = readFileSync(fileURLToPath(new URL("../js/progress-view.js", import.meta.url)), "utf8");
+  // Read every module that renders, rather than a hand-kept list of two. The
+  // first version of this named views.js and progress-view.js, and the moment
+  // the charts moved into chrome.js it would have gone on passing while
+  // checking nothing.
+  const sources = readdirSync(fileURLToPath(new URL("../js", import.meta.url)))
+    .filter((f) => f.endsWith(".js"))
+    .map((f) => [f, readFileSync(fileURLToPath(new URL(`../js/${f}`, import.meta.url)), "utf8")]);
+  const sourceOf = (name) => sources.find(([f]) => f === name)[1];
+  const progress = sourceOf("progress-view.js");
 
   test("test_charts_everySvgChartHasARoleAndAName", () => {
     // A bare <svg> is announced as nothing at all.
-    for (const [file, src] of [["views.js", views], ["progress-view.js", progress]]) {
+    let seen = 0;
+    for (const [file, src] of sources) {
       const charts = src.match(/<svg[^>]*class="(chart|ring|heatmap|week-strip)"[^>]*/g) || [];
-      assert.ok(charts.length > 0, `${file} should contain charts`);
+      seen += charts.length;
       for (const tag of charts) {
         assert.match(tag, /role="img"/, `${file}: ${tag.slice(0, 60)} needs role="img"`);
         assert.match(tag, /aria-label=/, `${file}: ${tag.slice(0, 60)} needs a name`);
       }
     }
+    assert.ok(seen > 0, "no charts found at all — the pattern has drifted, not the charts");
   });
 
   test("test_volumeChart_hasASentenceNotJustTitles", () => {
@@ -142,6 +151,6 @@ describe("charts describe themselves", () => {
   test("test_rings_fallBackToAPercentageRatherThanNothing", () => {
     // Every call site passes a description, but a new one that forgets should
     // still announce something true.
-    assert.match(views, /description \|\| `\$\{Math\.round\(f \* 100\)\}% complete`/);
+    assert.match(sourceOf("chrome.js"), /description \|\| `\$\{Math\.round\(f \* 100\)\}% complete`/);
   });
 });

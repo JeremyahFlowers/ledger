@@ -8,7 +8,7 @@
     "test": "node --test 'test/*.test.js'",
     "test:coverage": "node --test --experimental-test-coverage 'test/*.test.js'",
     "test:watch": "node --test --watch 'test/*.test.js'",
-    "check": "node scripts/check-modules.mjs",
+    "check": "node scripts/check-modules.mjs && node scripts/check-references.mjs",
     "verify": "npm run check && npm test",
     "dev": "python3 scripts/dev-server.py"
   },

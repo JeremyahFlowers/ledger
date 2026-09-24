@@ -18,11 +18,11 @@
 // left out rather than drawn as flat. A chart that misleads is worse than no
 // chart, because it gets believed.
 
-import { esc } from "./views.js";
-import { pct, mins, fmtDate, toast, outcomeLabel, downloadFile } from "./ui.js";
-import { weeklyProgress, patternMovement, progressSummary, PROGRESS_WEEKS, allAttempts,
-  weekInReview, todayISO } from "./logic.js";
-import { patternIcon, navIcon } from "./icons.js";
+import { esc, pct, mins, fmtDate, toast, outcomeLabel, downloadFile } from "./ui.js";
+import {
+  weeklyProgress, patternMovement, progressSummary, PROGRESS_WEEKS, allAttempts, weekInReview,
+} from "./logic.js";
+import { patternIcon } from "./icons.js";
 
 const CHART_WIDTH = 560;
 const CHART_HEIGHT = 120;

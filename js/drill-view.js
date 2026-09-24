@@ -1,0 +1,208 @@
+// The two recall drills: the pattern quiz and the warm-up.
+//
+// Where this fits: both are pages under Practice that ask the same question in
+// different settings — given a problem you have already solved, which pattern
+// does it want? The quiz is open-ended and keeps a lifetime score; the warm-up
+// is a fixed short run you do before a session to get your head in.
+//
+// They share a file because they share a shape: module-level question state, a
+// weighted pick that avoids repeating what it just asked, and a reveal that
+// shows the real approach rather than only marking you wrong.
+
+import { pickQuizProblem, quizOptions, recommendSession } from "./logic.js";
+import { patternIcon } from "./icons.js";
+import { esc, pct, patternName } from "./ui.js";
+import { emptyState, ringSvg } from "./chrome.js";
+import { startSession } from "./session-view.js";
+
+// ---------- Quiz ----------
+
+let quizState = { current: null, options: [], answered: null, recentIds: [] };
+
+export function renderQuiz(root, store, actions) {
+  const state = store.state;
+  if (!quizState.current) nextQuizQuestion(state);
+
+  const total = state.quiz.totalAsked;
+  const correct = state.quiz.totalCorrect;
+
+  if (!quizState.current) {
+    root.innerHTML = `
+      <div class="card">
+        <h2>Pattern-recognition drill</h2>
+        ${emptyState("quiz", "Nothing to drill yet",
+          "This drill shows a problem you've already solved and asks which pattern it used — the recall step that makes a pattern stick. It needs a few logged attempts to draw from.",
+          { tab: "queue", label: "See what is ready for a refresher" })}
+      </div>`;
+    return;
+  }
+
+  const p = quizState.current;
+  root.innerHTML = `
+    <div class="card">
+      <div class="row space-between" style="align-items:center">
+        <h2>Pattern-recognition drill</h2>
+        <span class="row gap-sm" style="align-items:center">${total ? ringSvg(correct / total, { size: 36, stroke: 4, label: pct(correct / total),
+          description: `${correct} of ${total} pattern-recall questions correct` }) : ""}<span class="muted small">${correct}/${total} lifetime</span></span>
+      </div>
+      <p class="muted">If this popped up cold in an interview, what pattern would you reach for?</p>
+      <div class="quiz-prompt">
+        <div class="queue-name">${esc(p.name)}${p.number ? ` <span class="muted">#${p.number}</span>` : ""}</div>
+        <span class="pill pill-muted">${esc(p.difficulty)}</span>
+      </div>
+      <div class="quiz-options">
+        ${quizState.options.map((optId) => {
+          const pat = state.patterns.find((x) => x.id === optId);
+          let cls = "quiz-option";
+          if (quizState.answered) {
+            if (optId === p.patternId) cls += " correct";
+            else if (optId === quizState.answered && optId !== p.patternId) cls += " incorrect";
+          }
+          return `<button type="button" class="${cls}" data-answer="${esc(optId)}" ${quizState.answered ? "disabled" : ""}><span class="pattern-icon">${patternIcon(optId, { size: 15 })}</span>${esc(pat.name)}</button>`;
+        }).join("")}
+      </div>
+      ${quizState.answered ? `
+        <p class="quiz-feedback">${quizState.answered === p.patternId ? "Correct." : `Actual approach: <strong>${esc(patternName(state, p.patternId))}</strong> — ${esc(p.approach)}`}</p>
+        <button class="btn btn-primary" id="quiz-next">Next question</button>
+      ` : ""}
+    </div>`;
+
+  root.querySelectorAll("[data-answer]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      quizState.answered = btn.dataset.answer;
+      const isCorrect = quizState.answered === p.patternId;
+      store.mutate((s) => {
+        s.quiz.totalAsked += 1;
+        if (isCorrect) s.quiz.totalCorrect += 1;
+        s.quiz.recent.push({ correct: isCorrect });
+        if (s.quiz.recent.length > 20) s.quiz.recent.shift();
+      }, "Ledger: quiz answer");
+      actions.rerender();
+    });
+  });
+  const nextBtn = root.querySelector("#quiz-next");
+  if (nextBtn) {
+    nextBtn.addEventListener("click", () => {
+      nextQuizQuestion(state);
+      actions.rerender();
+    });
+  }
+}
+
+function nextQuizQuestion(state) {
+  const p = pickQuizProblem(state, quizState.recentIds);
+  quizState.current = p;
+  quizState.answered = null;
+  if (!p) return;
+  quizState.options = quizOptions(state, p.patternId);
+  quizState.recentIds = [p.id, ...quizState.recentIds].slice(0, 5);
+}
+
+// ---------- Warmup ----------
+// A bounded (3-question) version of the same drill, framed as the on-ramp
+// into a session rather than open-ended practice — "encourage 5 minutes of
+// pattern review before you start."
+
+const WARMUP_LENGTH = 3;
+let warmupState = { count: 0, current: null, options: [], answered: null, recentIds: [] };
+
+export function resetWarmup() {
+  warmupState = { count: 0, current: null, options: [], answered: null, recentIds: [] };
+}
+
+export function renderWarmup(root, store, actions) {
+  const state = store.state;
+  if (warmupState.count === 0 && !warmupState.current) nextWarmupQuestion(state);
+
+  if (warmupState.count >= WARMUP_LENGTH || (!warmupState.current && warmupState.count > 0)) {
+    const rec = recommendSession(state);
+    root.innerHTML = `
+      <div class="card">
+        <h2>Warmed up</h2>
+        <p class="muted">${rec.problem ? esc(rec.message) : "Patterns are loaded, and there's nothing due right now — good day to stop here."}</p>
+        <div class="row gap">
+          ${rec.problem ? `<button class="btn btn-primary" id="warmup-start">Start — ${esc(rec.problem.name)}</button>` : ""}
+          <button class="btn btn-ghost" data-tab="dashboard">Back to dashboard</button>
+        </div>
+      </div>`;
+    wireTabButtons(root, actions);
+    const startBtn = root.querySelector("#warmup-start");
+    if (startBtn) {
+      startBtn.addEventListener("click", () => {
+        startSession(rec.problem);
+        resetWarmup();
+        actions.switchTab("workspace");
+      });
+    }
+    return;
+  }
+
+  if (!warmupState.current) {
+    root.innerHTML = `
+      <div class="card">
+        ${emptyState("quiz", "No warmup available yet",
+          "Warmup replays patterns from problems you've already attempted, to get your head in before a session. Log one first.",
+          { tab: "queue", label: "See what is ready for a refresher" })}
+        <button class="btn btn-ghost" data-tab="dashboard">Back to dashboard</button>
+      </div>`;
+    wireTabButtons(root, actions);
+    return;
+  }
+
+  const p = warmupState.current;
+  root.innerHTML = `
+    <div class="card">
+      <div class="row space-between"><h2>Pattern warmup</h2><span class="muted small">${warmupState.count + 1} of ${WARMUP_LENGTH}</span></div>
+      <p class="muted">If this popped up cold, what pattern would you reach for?</p>
+      <div class="quiz-prompt">
+        <div class="queue-name">${esc(p.name)}${p.number ? ` <span class="muted">#${p.number}</span>` : ""}</div>
+        <span class="pill pill-muted">${esc(p.difficulty)}</span>
+      </div>
+      <div class="quiz-options">
+        ${warmupState.options.map((optId) => {
+          const pat = state.patterns.find((x) => x.id === optId);
+          let cls = "quiz-option";
+          if (warmupState.answered) {
+            if (optId === p.patternId) cls += " correct";
+            else if (optId === warmupState.answered && optId !== p.patternId) cls += " incorrect";
+          }
+          return `<button type="button" class="${cls}" data-answer="${esc(optId)}" ${warmupState.answered ? "disabled" : ""}><span class="pattern-icon">${patternIcon(optId, { size: 15 })}</span>${esc(pat.name)}</button>`;
+        }).join("")}
+      </div>
+      ${warmupState.answered ? `
+        <p class="quiz-feedback">${warmupState.answered === p.patternId ? "Correct." : `It's <strong>${esc(patternName(state, p.patternId))}</strong>.`}</p>
+        <button class="btn btn-primary" id="warmup-next">${warmupState.count + 1 >= WARMUP_LENGTH ? "Finish warmup" : "Next"}</button>
+      ` : ""}
+    </div>`;
+
+  root.querySelectorAll("[data-answer]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      warmupState.answered = btn.dataset.answer;
+      const isCorrect = warmupState.answered === p.patternId;
+      store.mutate((s) => {
+        s.quiz.totalAsked += 1;
+        if (isCorrect) s.quiz.totalCorrect += 1;
+        s.quiz.recent.push({ correct: isCorrect });
+        if (s.quiz.recent.length > 20) s.quiz.recent.shift();
+      }, "Ledger: warmup answer");
+      actions.rerender();
+    });
+  });
+  const nextBtn = root.querySelector("#warmup-next");
+  if (nextBtn) {
+    nextBtn.addEventListener("click", () => {
+      warmupState.count += 1;
+      nextWarmupQuestion(state);
+      actions.rerender();
+    });
+  }
+}
+
+function nextWarmupQuestion(state) {
+  const p = pickQuizProblem(state, warmupState.recentIds);
+  warmupState.current = p;
+  warmupState.answered = null;
+  if (!p) return;
+  warmupState.options = quizOptions(state, p.patternId);
+  warmupState.recentIds = [p.id, ...warmupState.recentIds].slice(0, 5);
+}

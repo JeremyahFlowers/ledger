@@ -1,4 +1,4 @@
-// Tests for exporting one problem's history (js/views.js).
+// Tests for exporting one problem's history (js/detail-view.js).
 //
 // Export was all-or-nothing: the whole log, as JSON, to move your data. There
 // was no way to take one problem's story somewhere a person would read it —
@@ -8,7 +8,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { problemToMarkdown } from "../js/views.js";
+import { problemToMarkdown } from "../js/detail-view.js";
 
 const state = {
   patterns: [

@@ -1,7 +1,20 @@
 import { store } from "./store.js";
 import * as views from "./views.js";
-import { computePlantState, dueProblems, allAttempts, patternStats, systemDesignUnlock, backlogProblems, progressSummary, startDayTimer, stopDayTimer } from "./logic.js";
-import { plantSvg } from "./plant.js";
+import { renderSetup, renderConflict } from "./setup-view.js";
+import { renderQuiz, renderWarmup } from "./drill-view.js";
+import { renderSettings } from "./settings-view.js";
+import { renderProblemDetail, renderDayDetail, showProblem } from "./detail-view.js";
+import { plantWidgetHtml, updatePlantWidget, wireNavigationTargets } from "./chrome.js";
+import { toast, showTopic } from "./ui.js";
+import {
+  startSession, abandonSession, hasActiveSession, restoreSession, checkpointSession,
+  renderWorkspace, renderReflect, renderSessionSummary,
+} from "./session-view.js";
+import {
+  computePlantState, dueProblems, allAttempts, patternStats, systemDesignUnlock,
+  backlogProblems, progressSummary, startDayTimer, stopDayTimer,
+} from "./logic.js";
+
 import { navIcon } from "./icons.js";
 import { renderAnalyze } from "./analyze-view.js";
 import { renderBank } from "./bank-view.js";
@@ -11,7 +24,7 @@ import { installSearch, openSearch, closeSearch, isSearchOpen } from "./search.j
 import { recommendSession } from "./logic.js";
 import { APP_VERSION } from "./version.js";
 import { installErrorHandling, report, guard } from "./errors.js";
-import { hasSeenWelcome, markWelcomeSeen, resetWelcome, renderWelcome } from "./welcome.js";
+import { hasSeenWelcome, markWelcomeSeen, renderWelcome } from "./welcome.js";
 
 // The nav reads like a table of contents, not a junk drawer: Home is the
 // cover page; everything else lives in one of a few named chapters, each
@@ -20,7 +33,7 @@ import { hasSeenWelcome, markWelcomeSeen, resetWelcome, renderWelcome } from "./
 // specific page inside it is always one more click, never the first click.
 const STANDALONE = {
   dashboard: { label: "Home", icon: "home", render: views.renderDashboard },
-  settings: { label: "Settings", icon: "settings", render: views.renderSettings },
+  settings: { label: "Settings", icon: "settings", render: renderSettings },
 };
 
 const SECTIONS = {
@@ -42,7 +55,7 @@ const SECTIONS = {
     pages: [
       { id: "topics", label: "Topics", icon: "topics", render: views.renderTopics, blurb: "One dedicated page per pattern — plain-language hook, concept, invariant, pitfalls, animated worked examples.", stat: (state) => `${state.patterns.length} patterns to explore` },
       { id: "patterns", label: "Patterns", icon: "patterns", render: views.renderPatterns, blurb: "Your mastery table, weakest first — what the next two weeks should focus on.", stat: (state) => { const ranked = patternStats(state).filter((s) => s.attempts > 0).sort((a, b) => (a.solvedCleanRate ?? 1) - (b.solvedCleanRate ?? 1)); return ranked.length ? `Weakest: ${ranked[0].pattern.name}` : "No attempts logged yet"; } },
-      { id: "quiz", label: "Quiz", icon: "quiz", render: views.renderQuiz, blurb: "Open-ended pattern-recall drilling, the same mechanic used in every Reflect step.", stat: (state) => state.quiz.totalAsked ? `${Math.round((state.quiz.totalCorrect / state.quiz.totalAsked) * 100)}% lifetime accuracy` : "No questions answered yet" },
+      { id: "quiz", label: "Quiz", icon: "quiz", render: renderQuiz, blurb: "Open-ended pattern-recall drilling, the same mechanic used in every Reflect step.", stat: (state) => state.quiz.totalAsked ? `${Math.round((state.quiz.totalCorrect / state.quiz.totalAsked) * 100)}% lifetime accuracy` : "No questions answered yet" },
       { id: "analyze", label: "Analyze", icon: "analyze", render: renderAnalyze, blurb: "Paste a problem you don't recognize and see which patterns it resembles — and exactly which words and bounds say so.", stat: () => "Runs in your browser" },
     ],
   },
@@ -77,10 +90,10 @@ PAGE_TO_SECTION.dayDetail = "track";
 // rendering one of these swaps the full nav for a minimal exit bar so the
 // session stays the focus.
 const SESSION_TABS = {
-  workspace: { render: views.renderWorkspace, label: "Session" },
-  reflect: { render: views.renderReflect, label: "Reflect" },
-  warmup: { render: views.renderWarmup, label: "Warmup" },
-  sessionSummary: { render: views.renderSessionSummary, label: "Session complete" },
+  workspace: { render: renderWorkspace, label: "Session" },
+  reflect: { render: renderReflect, label: "Reflect" },
+  warmup: { render: renderWarmup, label: "Warmup" },
+  sessionSummary: { render: renderSessionSummary, label: "Session complete" },
 };
 
 let activeTab = localStorage.getItem("ledger.activeTab") || "dashboard";
@@ -124,9 +137,9 @@ const actions = {
 };
 
 function exitSession() {
-  if (views.hasActiveSession()) {
+  if (hasActiveSession()) {
     if (!confirm("Leave without saving this session?")) return;
-    views.abandonSession();
+    abandonSession();
   }
   actions.switchTab("dashboard");
 }
@@ -246,7 +259,7 @@ function trackPlantGrowth() {
   const plant = computePlantState(store.state);
   const lastStage = localStorage.getItem(PLANT_STAGE_KEY);
   if (lastStage && PLANT_STAGE_ORDER.indexOf(plant.stage) > PLANT_STAGE_ORDER.indexOf(lastStage)) {
-    views.toast(`Your plant grew into a ${plant.stageLabel}.`);
+    toast(`Your plant grew into a ${plant.stageLabel}.`);
     celebrateGrowth();
   }
   localStorage.setItem(PLANT_STAGE_KEY, plant.stage);
@@ -332,13 +345,13 @@ function renderPlantWidget() {
   host.hidden = !show;
   if (!show) return;
   if (!host.querySelector(".plant-widget-inner")) {
-    host.innerHTML = views.plantWidgetHtml(store.state);
+    host.innerHTML = plantWidgetHtml(store.state);
     // Bound once, on the host, which outlives every rebuild of its contents.
     host.addEventListener("click", (event) => {
       if (event.target.closest(".plant-widget-toggle")) toggleDayClock();
     });
   }
-  views.updatePlantWidget(host, store.state);
+  updatePlantWidget(host, store.state);
 }
 
 // One interval for the whole app rather than one per view. The plant has to
@@ -383,7 +396,7 @@ function renderAll() {
   applyPageWidth();
 
   if (store.status === "unconfigured") {
-    views.renderSetup(root, store);
+    renderSetup(root, store);
     return;
   }
   if ((store.status === "loading") && !store.state) {
@@ -395,7 +408,7 @@ function renderAll() {
     return;
   }
   if (store.status === "conflict") {
-    views.renderConflict(root, store, renderAll);
+    renderConflict(root, store, renderAll);
     return;
   }
 
@@ -426,7 +439,7 @@ function renderAll() {
   renderView();
   // Navigation buttons are markup any view can emit, so they're bound here
   // rather than in each view that happens to have one.
-  views.wireNavigationTargets(root, actions);
+  wireNavigationTargets(root, actions);
   views.wireProblemLinks(root, actions);
   views.wireHeatmapDays(root, actions);
   renderPlantWidget();
@@ -445,14 +458,14 @@ let resumeChecked = false;
 function resumeInterruptedSession() {
   if (resumeChecked || !store.state) return;
   resumeChecked = true;
-  if (views.hasActiveSession()) return;          // nothing was interrupted
-  if (!views.restoreSession(store.state)) return;
+  if (hasActiveSession()) return;          // nothing was interrupted
+  if (!restoreSession(store.state)) return;
   // The session is back either way, but where you were is respected. Forcing
   // the workspace meant navigating to Settings mid-session and reloading
   // yanked you into the problem — the app overriding a deliberate choice
   // because it knew better. If you left the workspace, the Dashboard offers
   // the session back instead.
-  if (SESSION_TABS[activeTab]) views.toast("Picked up where you left off.");
+  if (SESSION_TABS[activeTab]) toast("Picked up where you left off.");
 }
 
 function renderView() {
@@ -472,8 +485,8 @@ function renderView() {
 function renderViewInner() {
   if (SESSION_TABS[activeTab]) return SESSION_TABS[activeTab].render(root, store, actions);
   if (activeTab === "topicDetail") return views.renderTopicDetail(root, store, actions);
-  if (activeTab === "problemDetail") return views.renderProblemDetail(root, store, actions);
-  if (activeTab === "dayDetail") return views.renderDayDetail(root, store, actions);
+  if (activeTab === "problemDetail") return renderProblemDetail(root, store, actions);
+  if (activeTab === "dayDetail") return renderDayDetail(root, store, actions);
   if (STANDALONE[activeTab]) return STANDALONE[activeTab].render(root, store, actions);
   if (SECTIONS[activeTab]) return renderSectionIndex(root, SECTIONS[activeTab], actions);
 
@@ -489,12 +502,12 @@ function renderViewInner() {
  * to first. Returns false when there's genuinely nothing to start, so the
  * keypress falls through instead of appearing to do nothing. */
 function startRecommendedSession() {
-  if (!store.state || views.hasActiveSession()) return false;
+  if (!store.state || hasActiveSession()) return false;
   const rec = recommendSession(store.state);
   if (!rec || !rec.problem) return false;
-  views.startSession(rec.problem);
+  startSession(rec.problem);
   actions.switchTab("workspace");
-  views.toast(`Started: ${rec.problem.name}`);
+  toast(`Started: ${rec.problem.name}`);
   return true;
 }
 
@@ -504,16 +517,16 @@ installSearch({
   store,
   actions: {
     openTopic(patternId) {
-      views.showTopic(patternId);
+      showTopic(patternId);
       actions.switchTab("topicDetail");
     },
     startProblem(problem) {
-      if (views.hasActiveSession()) { actions.switchTab("workspace"); return; }
-      views.startSession(problem);
+      if (hasActiveSession()) { actions.switchTab("workspace"); return; }
+      startSession(problem);
       actions.switchTab("workspace");
     },
     openProblem(problemId) {
-      views.showProblem(problemId);
+      showProblem(problemId);
       actions.switchTab("problemDetail");
     },
   },
@@ -524,7 +537,7 @@ installShortcuts({
   openSearch,
   searchOpen: isSearchOpen,
   closeSearch,
-  inSession: views.hasActiveSession,
+  inSession: hasActiveSession,
   exitSession,
   startRecommended: startRecommendedSession,
   isReady: () => store.state != null,
@@ -549,7 +562,7 @@ window.addEventListener("online", () => store.retryNow("Ledger: save after recon
 // pagehide alone is not enough on iOS, which often never fires it.
 for (const event of ["visibilitychange", "pagehide"]) {
   window.addEventListener(event, () => {
-    if (document.visibilityState === "hidden" || event === "pagehide") views.checkpointSession();
+    if (document.visibilityState === "hidden" || event === "pagehide") checkpointSession();
   });
 }
 

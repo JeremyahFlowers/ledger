@@ -32,7 +32,7 @@ one-line title is not enough to pick the work up again a week later.
 
 ## P1 — the same rot, one file along
 
-- [ ] **34. views.js is 2,534 lines and sixteen renderers.**
+- [x] **34. views.js is 2,534 lines and sixteen renderers.** _(1.5.0)_
   Setup, conflict, dashboard, queue, log, patterns, journal, system design,
   topics, quiz, warmup, whiteboard, LeetCode, settings, problem detail and day
   detail share a file because that is where they were each born. This is the

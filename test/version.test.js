@@ -52,7 +52,7 @@ describe("version wiring", () => {
   test("test_settings_showsTheVersion", () => {
     // Being able to read the version off the screen is what makes it useful
     // when something looks wrong on a device you aren't holding.
-    assert.match(read("../js/views.js"), /v\$\{esc\(APP_VERSION\)\}/);
+    assert.match(read("../js/settings-view.js"), /v\$\{esc\(APP_VERSION\)\}/);
   });
 });
 

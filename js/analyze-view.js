@@ -15,8 +15,8 @@
 // treats "confident" as a badge a pattern earns, with its measured precision
 // shown next to it. Where nothing stands out, it says so.
 
-import { esc, toast, startSession, showTopic } from "./views.js";
-import { pct, patternName } from "./ui.js";
+import { esc, toast, showTopic, pct, patternName } from "./ui.js";
+
 import { analyze, explain, readableFeature, BOUND_IMPLICATIONS } from "./pattern-model.js";
 import { problemsForPattern, problemFromCatalog, savedSlugs } from "./catalog.js";
 import { patternIcon } from "./icons.js";

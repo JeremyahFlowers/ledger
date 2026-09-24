@@ -12,7 +12,7 @@
 // already is to you, and the two are combined rather than one sorting the
 // other.
 
-import { esc } from "./views.js";
+import { esc } from "./ui.js";
 import { loadCatalog, PATTERN_CONFIDENCE, slugify, problemUrl } from "./catalog.js";
 import { patternIcon, navIcon } from "./icons.js";
 import { isBacklog } from "./logic.js";
