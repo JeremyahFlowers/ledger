@@ -28,6 +28,71 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 1.4.0 — 2026-09-24
+
+Cycle 3 of TODO.md. The theme, unplanned but consistent across the eight
+items: the app knew more than it was willing to say.
+
+### The app explains itself
+
+- **A first run says what any of this is for.** A new account landed on a
+  dashboard with a plant, a budget ring, a recommendation and a 23-pattern
+  taxonomy and no indication what they were. The reasoning existed — in source
+  comments and this changelog, where nobody looks. Four screens now say it
+  once: skippable, never shown again, and the flag is per-device rather than
+  in the synced state, because it describes this browser and not you.
+
+- **The plant shows its working.** It said "stressed" and listed signals, but
+  the arithmetic from signals to that word lived only in the source. It can
+  now show what specifically moved it, as contributions that sum to the number
+  displayed — the same faithful-by-construction rule the pattern model's
+  explanations follow, rather than a story told about a number computed
+  elsewhere. A contribution of zero is never listed; a row reading "+0" is
+  noise dressed as evidence.
+
+- **Offline says what it means for you.** "Offline — showing cached data"
+  didn't answer the only two questions worth asking: did my last session make
+  it, and what happens if I keep working. It now says both, and says what will
+  happen when the connection returns.
+
+- **Every chart states its own content.** The line charts already carried a
+  sentence summary; the volume bars and mastery rings carried `title`
+  attributes, which most screen readers ignore. They now read the way the line
+  charts do.
+
+### Finding and keeping your own work
+
+- **Search covers your notes.** Soul statements are what this app works
+  hardest to collect — "the window only shrinks from the left" — and there was
+  no way to find one again. Search now finds them and says which session each
+  came from.
+
+- **One problem's history exports on its own.** The whole-log export exists to
+  move your data; it is the wrong thing to hand someone who asked how a
+  problem went. A single problem now exports as Markdown: the prediction you
+  made going in, then every attempt oldest-first with its timings, mistakes,
+  note and code.
+
+### Recording what actually happened
+
+- **"Ran out of time" is its own outcome.** Running out of time on a hard
+  problem you understood is not the same as not getting it, and collapsing
+  them made the clean-solve rate say less than it could. It moves you back a
+  box rather than resetting you to the start. Attempts recorded before this
+  are unaffected.
+
+### Structure
+
+- **logic.js split.** It had grown to 1,254 lines holding scheduling, the
+  plant, planning, stats, progress, the day clock, refresher framing, import
+  validation, the size guard, mock phases and quiz weighting — becoming what
+  views.js had been. Now `stats.js`, `state-health.js` and `session-store.js`
+  alongside it, along the same seams and with no behaviour change. The line
+  that decided each call: logic keeps what it reasons with, stats keeps what
+  it draws.
+
+---
+
 ## 1.3.0 — 2026-09-24
 
 Cycle 2 of TODO.md — drawn from what came up while building cycle 1.
