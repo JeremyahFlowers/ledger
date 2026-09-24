@@ -1489,7 +1489,8 @@ function statementHtml(problem, { loading = false } = {}) {
     return `
       <div class="ws-statement-empty">
         <p class="muted small">No statement synced for this one yet. Paste it here and it stays
-        with the problem — no more switching tabs mid-solve to re-read a constraint.</p>
+        with the problem — or ask the sync job to fetch it, which takes a minute or two.</p>
+        <button type="button" class="btn btn-ghost btn-sm" id="ws-fetch-statement">Fetch it for me</button>
         <textarea class="textarea ws-statement-input" id="ws-statement-input" rows="10"
           placeholder="Paste the problem statement, constraints and examples…"></textarea>
         <button type="button" class="btn btn-sm btn-primary" id="ws-save-statement">Save statement</button>
@@ -1548,6 +1549,26 @@ function wireStatementPane(root, store, problem) {
       if (truncated) toast(`Saved, but trimmed to ${MAX_STATEMENT_CHARS.toLocaleString()} characters.`);
     });
   }
+
+  // Bound on the pane, which survives the repaints the paste box does not.
+  body.addEventListener("click", async (event) => {
+    if (!event.target.closest("#ws-fetch-statement")) return;
+    const btn = event.target.closest("#ws-fetch-statement");
+    btn.disabled = true;
+    btn.textContent = "Asking…";
+    try {
+      await store.requestStatements();
+      // Deliberately not promising it will appear: the job fetches twenty per
+      // run and this problem may not be in the first twenty.
+      toast("Asked GitHub to fetch statements. Check back in a minute or two.");
+      btn.textContent = "Asked";
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = "Fetch it for me";
+      report(new AppError(err.message || "Couldn't start the sync job.",
+        { code: err.code || "dispatch_failed", cause: err }), "asking for statements");
+    }
+  });
 
   editBtn.addEventListener("click", () => {
     const current = problem.statement || "";

@@ -90,6 +90,38 @@ export class GitHubStore {
     return JSON.parse(base64ToUtf8(json.content));
   }
 
+  /**
+   * Ask the statements workflow to run now.
+   *
+   * Statements arrive from a scheduled job that fetches twenty per run, so a
+   * problem added today could show its paste box until tomorrow. The workflow
+   * already accepts workflow_dispatch; this is the app asking for it rather
+   * than the user going to the Actions tab.
+   *
+   * Needs a token with the `workflow` scope. A 403 here means the token is
+   * fine for everything else and just can't do this, which is worth saying
+   * exactly rather than reporting as a generic failure.
+   */
+  async dispatchWorkflow(file, ref = this.branch) {
+    const res = await fetch(`${API}/repos/${this.owner}/${this.repo}/actions/workflows/${encodeURIComponent(file)}/dispatches`, {
+      method: "POST",
+      headers: { ...this._headers(), "Content-Type": "application/json" },
+      body: JSON.stringify({ ref }),
+    });
+    if (res.status === 403) {
+      const err = new Error("Your GitHub token can't start workflows — it needs the \"workflow\" scope.");
+      err.code = "no_workflow_scope";
+      throw err;
+    }
+    if (res.status === 404) {
+      const err = new Error("Couldn't find that workflow in your data repo.");
+      err.code = "no_workflow";
+      throw err;
+    }
+    if (!res.ok) throw await this._errorFrom(res);
+    return true;
+  }
+
   /** Reads a binary file and returns its raw base64 content (no decoding) —
    * used to display a saved whiteboard PNG as a data: URL on demand. */
   async fetchBinaryFile(path) {

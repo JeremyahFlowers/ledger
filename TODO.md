@@ -80,7 +80,7 @@ quietly fails to keep it.
   Running an analysis and then starting a problem throws the explanation away.
   *Done:* the analysis attaches to the problem so it's there in the workspace.
 
-- [ ] **11. Statements can be fetched on demand.**
+- [x] **11. Statements can be fetched on demand.** _(1.2.0)_
   20 per scheduled run means a newly added problem shows a paste box for up to
   a day.
   *Done:* a control that triggers the workflow for the problem in front of you.

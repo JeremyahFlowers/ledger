@@ -262,6 +262,15 @@ class Store {
     }
   }
 
+  /** The workflow file in the data repo that fetches problem statements. */
+  static STATEMENTS_WORKFLOW = "leetcode-sync.yml";
+
+  /** Ask the data repo to fetch statements now rather than on its schedule. */
+  async requestStatements() {
+    if (!this.gh) throw new Error("Not connected.");
+    return this.gh.dispatchWorkflow(Store.STATEMENTS_WORKFLOW);
+  }
+
   /** Saves a PNG (as a data URL) as a brand-new file in the repo — used by
    * the whiteboard. Binary assets are stored outside state.json so the main
    * sync document stays small; only a path reference lives in state. */
