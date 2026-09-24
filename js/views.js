@@ -1862,6 +1862,10 @@ function agoText(ms) {
  */
 function syncCardHtml(store) {
   const unsaved = store.dirty;
+  // Spelled out rather than left to a tooltip. If saving has actually stopped,
+  // the one thing someone needs to know is whether to keep working — and a
+  // title attribute is not where anyone looks for that.
+  const stalled = store.status === "offline" || store.status === "error";
   return `
     <div class="card">
       <h2>Sync</h2>
@@ -1876,6 +1880,10 @@ function syncCardHtml(store) {
           : "Nothing has reached GitHub yet."}
         ${store.error ? `<br/><span class="budget-warn">${esc(store.error)}</span>` : ""}
       </p>
+      ${stalled ? `<p class="banner banner-warn small" style="margin:0.5rem 0">
+        <strong>Keep working — nothing is lost.</strong> Everything is saved on this device and will
+        go to GitHub on its own once it can. Until then this is the only copy, so avoid clearing your
+        browser data or switching devices.</p>` : ""}
       <div class="row gap-sm" style="margin-top:0.6rem;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" id="sync-pull" ${unsaved ? "disabled" : ""}
           title="${unsaved ? "Save your changes first" : "Fetch changes made on another device"}">Check for changes</button>

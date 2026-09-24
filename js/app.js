@@ -200,21 +200,35 @@ function renderSectionIndex(root, section, actions) {
   });
 }
 
+// Each status says what it means *for the user's work*, not what the network
+// did. "Offline — showing cached data" describes the app's situation and
+// leaves the only question that matters — is what I just did safe? — for the
+// user to guess at.
 const STATUS_MAP = {
-  unconfigured: ["Not connected", "warn"],
-  loading: ["Syncing…", "info"],
-  saving: ["Saving…", "info"],
-  synced: ["Synced", "good"],
-  offline: ["Offline — showing cached data", "warn"],
-  conflict: ["Sync conflict", "bad"],
-  error: ["Sync error", "bad"],
+  unconfigured: ["Not connected", "warn",
+    "Nothing is being saved anywhere yet. Connect a GitHub repository in Settings."],
+  loading: ["Syncing…", "info", "Fetching your log from GitHub."],
+  saving: ["Saving…", "info", "Writing your latest changes to GitHub."],
+  synced: ["Synced", "good", "Everything you've done is on GitHub."],
+  offline: ["Offline", "warn",
+    "Your work is saved on this device and will go to GitHub by itself once the connection is back. "
+    + "Carry on — nothing is lost. Until then this is the only copy, so don't clear your browser data."],
+  conflict: ["Needs a decision", "bad",
+    "This log changed somewhere else too. Nothing has been overwritten — choose which version to keep."],
+  error: ["Can't save", "bad", "Your work is safe on this device. See Settings for what's wrong."],
 };
 
 function renderStatus() {
-  const [text, cls] = STATUS_MAP[store.status] || ["", ""];
+  const [text, cls, explanation] = STATUS_MAP[store.status] || ["", "", ""];
   statusEl.textContent = text;
   statusEl.className = `status status-${cls}`;
-  statusEl.title = store.error || "";
+  // The specific error, if there is one, then what it means. A raw API
+  // message on its own tells you what failed and not what to do.
+  statusEl.title = [store.error, explanation].filter(Boolean).join("\n\n");
+  // Announced, because the chip changing colour in the corner is not something
+  // a screen-reader user finds out about otherwise.
+  statusEl.setAttribute("role", "status");
+  statusEl.setAttribute("aria-label", `Sync: ${text}. ${explanation}`);
 }
 
 const PLANT_STAGE_ORDER = ["seed", "sprout", "seedling", "young", "budding", "flowering", "tree"];

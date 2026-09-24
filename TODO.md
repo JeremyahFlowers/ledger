@@ -36,7 +36,7 @@ one-line title is not enough to pick the work up again a week later.
   quiz weighting. It is becoming what views.js was.
   *Done:* split along the same kind of seams, no behaviour change.
 
-- [ ] **27. "Offline" doesn't say what it means for you.**
+- [x] **27. "Offline" doesn't say what it means for you.** _(1.4.0)_
   The status chip reads "Offline — showing cached data". It doesn't say
   whether your last session made it, or what happens if you keep working.
   *Done:* offline states say what is and isn't safe, and what will happen when
