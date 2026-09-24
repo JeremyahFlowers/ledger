@@ -28,6 +28,43 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 1.2.0 — 2026-09-24
+
+The rest of TODO.md: expanding what was already there.
+
+### The model says more, without saying it louder
+
+The weak technique patterns turned out not to be a capacity problem.
+Backtracking had an AUC of 0.930 and fired on 11.7% of true cases; binary
+search 0.746 and 0.6%. One operating point was doing two jobs — the ranked
+list only needs good ordering, the confident badge needs to be right — and at
+a ~2% base rate a 65% precision floor is demanding enough that recall was the
+price.
+
+- **A second "likely" tier**, measured at a 55% precision floor. Greedy goes
+  from 6.7% to 34.9% recall, binary search 0.6% to 11.2%, sliding window 9.7%
+  to 25.0%. The confident badge and its guarantee are unchanged; both tiers
+  show their measured precision, so neither is taken on trust. A sorted-array
+  search now ranks Binary Search first with a likely badge, where it
+  previously cleared no threshold at all.
+
+### Expanded
+
+- **Each pattern's topic page carries its own trend** — attempts, clean rate,
+  recall rate, and the sessions that produced them. Completes a chain that
+  didn't exist: mastery table → pattern → attempts → the session.
+- **The bank can be ordered** five ways, including best-match once a pattern
+  filter is on, and **"Pick one for me"** starts one outright.
+- **Analyze keeps the problem you pasted**, with its statement and the
+  ranking, so the workspace opens with the problem already written down.
+- **Statements can be fetched on demand** instead of waiting for the daily job.
+- **Review intervals are editable**, guarded so the table can't be made
+  nonsense.
+- **The streak forgives one rest day a week**, shown as a rest day rather than
+  backfilled as practice. The rest of the app tells you to stop at your
+  budget; the streak shouldn't punish you for it.
+- **An unfinished session is offered back from the Dashboard.**
+
 ## 1.1.0 — 2026-09-23
 
 Working through TODO.md, starting with everything that could cost you work.
