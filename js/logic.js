@@ -242,17 +242,62 @@ export function patternStats(state) {
   });
 }
 
+// One missed day per week is forgiven. The rest of this app spends its effort
+// telling people to stop at their budget, that a lighter week is a good
+// outcome, and that a volume spike is the shape that precedes quitting — and
+// then reset a forty-day streak to 1 for taking a single Sunday off. That is
+// the loudest number on the dashboard contradicting everything around it.
+//
+// One per rolling week, not unlimited: a streak that survives any gap is not
+// measuring anything. And a used grace day is shown as a grace day rather
+// than backfilled as practice, because the streak has to stay something the
+// record can support.
+export const STREAK_GRACE_DAYS_PER_WEEK = 1;
+const GRACE_WINDOW_DAYS = 7;
+
+/** Grace days spent in the week ending `today`. */
+function recentGraceUsed(streak, today) {
+  return (streak.graceDays || []).filter((d) => daysBetween(d, today) < GRACE_WINDOW_DAYS).length;
+}
+
 export function updateStreak(state) {
   const today = todayISO();
   const streak = state.streak;
+  if (!Array.isArray(streak.graceDays)) streak.graceDays = [];
   if (streak.lastActiveDate === today) return;
-  if (streak.lastActiveDate && daysBetween(streak.lastActiveDate, today) === 1) {
+
+  const gap = streak.lastActiveDate ? daysBetween(streak.lastActiveDate, today) : null;
+
+  // Keep only the grace days still inside the window, so the allowance
+  // genuinely renews rather than accumulating a record of every one ever used.
+  streak.graceDays = streak.graceDays.filter((d) => daysBetween(d, today) < GRACE_WINDOW_DAYS);
+
+  if (gap === 1) {
+    streak.current += 1;
+  } else if (gap === 2 && recentGraceUsed(streak, today) < STREAK_GRACE_DAYS_PER_WEEK) {
+    // Exactly one day missed, and an allowance left to cover it. The missed
+    // day is recorded, not the practice.
+    streak.graceDays.push(addDaysISO(streak.lastActiveDate, 1));
     streak.current += 1;
   } else {
     streak.current = 1;
+    streak.graceDays = [];
   }
   streak.longest = Math.max(streak.longest || 0, streak.current);
   streak.lastActiveDate = today;
+}
+
+/** Whether a grace day is currently holding the streak together, for the UI
+ * to say so honestly rather than implying an unbroken run. */
+export function streakGraceInfo(state, today = todayISO()) {
+  const streak = state.streak || {};
+  const used = (streak.graceDays || []).filter((d) => daysBetween(d, today) < GRACE_WINDOW_DAYS);
+  return {
+    used: used.length,
+    allowance: STREAK_GRACE_DAYS_PER_WEEK,
+    remaining: Math.max(0, STREAK_GRACE_DAYS_PER_WEEK - used.length),
+    dates: used,
+  };
 }
 
 export function systemDesignUnlock(state) {

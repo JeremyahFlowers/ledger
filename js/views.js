@@ -3,7 +3,7 @@ import {
   updateStreak, systemDesignUnlock, uid, MISTAKE_TAGS, MOCK_CHECKLIST, daysBetween,
   activityByDate, patternTrend, pickQuizProblem, quizOptions, addDaysISO, recommendSession,
   computePlantState, normalizeStatement, MAX_STATEMENT_CHARS, inspectImport, describeState,
-  recomputeSchedule, removeAttempt, editAttempt, isBacklog,
+  recomputeSchedule, removeAttempt, editAttempt, isBacklog, streakGraceInfo,
   budgetProgress, budgetPressure, refresherStatus, STATUS_ACTIVE,
 } from "./logic.js";
 import {
@@ -677,7 +677,15 @@ export function renderDashboard(root, store, actions) {
       <div class="card streak-card">
         <div class="row space-between" style="align-items:center; flex-wrap:wrap; gap:1rem">
           <div class="stat-row">
-            <div class="stat"><span class="stat-num">${state.streak.current}</span><span class="stat-label">day streak</span></div>
+            <div class="stat">
+              <span class="stat-num">${state.streak.current}</span>
+              <!-- Says outright when a rest day is holding the streak
+                   together. A streak that quietly papers over a gap is a
+                   number the record cannot support, and this app does not
+                   get to claim you practised on a day you didn't. -->
+              <span class="stat-label">day streak${streakGraceInfo(state).used
+                ? ` <span class="muted" title="A rest day this week is covered, so the streak holds.">· incl. a rest day</span>` : ""}</span>
+            </div>
             <div class="stat"><span class="stat-num">${state.streak.longest}</span><span class="stat-label">longest</span></div>
           </div>
           <div class="row gap-sm" style="align-items:center">

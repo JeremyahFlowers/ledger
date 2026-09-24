@@ -85,7 +85,7 @@ quietly fails to keep it.
   a day.
   *Done:* a control that triggers the workflow for the problem in front of you.
 
-- [ ] **12. The streak tolerates one missed day.**
+- [x] **12. The streak tolerates one missed day.** _(1.2.0)_
   A single missed day resets a long streak to 1, which punishes exactly the
   rest day the rest of the app encourages.
   *Done:* one grace day per week, shown honestly as a grace day rather than
