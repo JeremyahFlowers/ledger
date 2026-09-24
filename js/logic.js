@@ -811,8 +811,11 @@ function median(values) {
  * part of the story and collapsing it would hide exactly the pattern worth
  * seeing.
  */
-export function weeklyProgress(state, weeks = PROGRESS_WEEKS) {
-  const attempts = allAttempts(state);
+export function weeklyProgress(state, weeks = PROGRESS_WEEKS, patternId = null) {
+  // patternId narrows the same calculation to one pattern, so the per-pattern
+  // trend on a topic page is the global chart with a filter rather than a
+  // second implementation that could disagree with it.
+  const attempts = allAttempts(state, patternId);
   const thisMonday = mondayOf(todayISO());
 
   const buckets = new Map();
@@ -880,8 +883,8 @@ export function patternMovement(state, { recent = 5, minEach = 2 } = {}) {
  * volume is the shape that precedes burning out and stopping, and this app
  * exists because that happened. Naming it while it's happening is the point.
  */
-export function progressSummary(state, weeks = PROGRESS_WEEKS) {
-  const rows = weeklyProgress(state, weeks);
+export function progressSummary(state, weeks = PROGRESS_WEEKS, patternId = null) {
+  const rows = weeklyProgress(state, weeks, patternId);
   const rated = rows.filter((r) => r.cleanRate != null);
   const timed = rows.filter((r) => r.medianInsightMin != null);
 

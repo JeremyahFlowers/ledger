@@ -64,7 +64,7 @@ quietly fails to keep it.
 
 ## P2 — expanding what's there
 
-- [ ] **8. Progress drills down per pattern.**
+- [x] **8. Progress drills down per pattern.** _(1.2.0)_
   The charts are global. "Sliding Window is at 0%" is actionable only if you
   can then see which attempts made it so.
   *Done:* clicking a pattern in Progress or the mastery table shows that

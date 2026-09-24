@@ -11,6 +11,7 @@ import {
 } from "./split-pane.js";
 import { APP_VERSION, RELEASED } from "./version.js";
 import { migrateState } from "./seed.js";
+import { patternProgressHtml } from "./progress-view.js";
 import { recentFaults, clearFaults, report, AppError } from "./errors.js";
 import { checkpoint, readCheckpoint, clearCheckpoint, isResumable, adjustedStart } from "./session-store.js";
 import { TOPICS } from "./topics-content.js";
@@ -2145,7 +2146,14 @@ export function renderTopicDetail(root, store, actions) {
         <button class="btn btn-ghost btn-sm" type="submit">Add link</button>
       </form>
       <a class="btn btn-ghost btn-sm" href="https://www.youtube.com/results?search_query=${encodeURIComponent(pat.name + " leetcode pattern explained")}" target="_blank" rel="noopener">Search YouTube for "${esc(pat.name)}"</a>
-    </div>`;
+    </div>
+
+    <!-- The pattern's own trend lives here rather than on Progress. Progress
+         answers "am I getting better" across everything, which is the right
+         question there and useless the moment you know which pattern is weak:
+         "0% across 3 attempts" is only actionable next to the attempts that
+         made it so. -->
+    ${patternProgressHtml(state, pat.id)}`;
 
   root.querySelector("#topic-back").addEventListener("click", () => actions.switchTab("topics"));
 

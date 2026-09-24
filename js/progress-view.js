@@ -19,7 +19,7 @@
 // chart, because it gets believed.
 
 import { esc } from "./views.js";
-import { weeklyProgress, patternMovement, progressSummary, PROGRESS_WEEKS } from "./logic.js";
+import { weeklyProgress, patternMovement, progressSummary, PROGRESS_WEEKS, allAttempts } from "./logic.js";
 import { patternIcon, navIcon } from "./icons.js";
 
 const CHART_WIDTH = 560;
@@ -239,5 +239,57 @@ function moversHtml(movers) {
             : `<p class="muted small">Nothing going backwards — good.</p>`}
         </div>
       </div>
+    </div>`;
+}
+
+
+/**
+ * One pattern's own trend, for its topic page.
+ *
+ * The Progress page answers "am I getting better" across everything, which is
+ * the right question there and useless the moment you know *which* pattern is
+ * weak: "Sliding Window is at 0% across 3 attempts" is only actionable if you
+ * can then see the attempts that made it so.
+ *
+ * Deliberately the same weeklyProgress/progressSummary as the global charts,
+ * narrowed by patternId, so the two can never tell different stories about the
+ * same data.
+ */
+export function patternProgressHtml(state, patternId) {
+  const attempts = allAttempts(state, patternId);
+  if (attempts.length === 0) {
+    return `
+      <div class="card">
+        <h2>Your history here</h2>
+        <p class="muted small">Nothing logged against this pattern yet. Practising one of the
+        problems above is what starts the record.</p>
+      </div>`;
+  }
+
+  const summary = progressSummary(state, PROGRESS_WEEKS, patternId);
+  const clean = attempts.filter((a) => a.outcome === "solved-clean").length;
+  const recalled = attempts.filter((a) => a.patternGuess === "correct").length;
+
+  return `
+    <div class="card">
+      <h2>Your history here</h2>
+      <div class="stat-row" style="margin-bottom:0.75rem">
+        <div class="stat"><span class="stat-num">${attempts.length}</span><span class="stat-label">attempts</span></div>
+        <div class="stat"><span class="stat-num">${Math.round((clean / attempts.length) * 100)}%</span><span class="stat-label">solved clean</span></div>
+        <div class="stat"><span class="stat-num">${Math.round((recalled / attempts.length) * 100)}%</span><span class="stat-label">pattern recalled</span></div>
+      </div>
+      ${summary.hasEnoughData
+        ? lineChart(summary.weeks.map((w) => ({ label: shortWeek(w.weekStart), value: w.cleanRate })),
+            { format: (v) => `${Math.round(v * 100)}%`, max: 1, min: 0 })
+        : `<p class="muted small">Not enough weeks with data to draw a trend for this pattern yet —
+           that needs a couple of weeks with at least two attempts each.</p>`}
+      <ul class="attempt-mini-list">
+        ${attempts.slice(-6).reverse().map((a) => `
+          <li>
+            <button type="button" class="link-button" data-open-problem="${esc(a.problemId)}">${esc(a.problemName)}</button>
+            <span class="muted small">${esc(a.date)} · ${esc(a.outcome.replace(/-/g, " "))}${
+              a.patternGuess === "correct" ? "" : " · missed the pattern"}</span>
+          </li>`).join("")}
+      </ul>
     </div>`;
 }
