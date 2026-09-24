@@ -375,3 +375,67 @@ export function quizConfusions(state) {
 
   return { pairs, graded: detailed.length, ungraded: recent.length - detailed.length };
 }
+
+// ---------- How your mocks are going ----------
+//
+// A mock records five specific interview behaviours — did you clarify
+// constraints, state the approach out loud, narrate trade-offs, give
+// complexity unprompted, test before declaring done — and every one of them
+// was written down and never read again. `state.mocks` fed exactly one thing:
+// the ring that unlocks the system design track.
+//
+// That is the wrong half to keep. Whether you solved it is already in the
+// attempt; the mock exists for the part that only happens when someone is
+// watching, and the checklist is the only record of it anywhere in the app.
+//
+// The rates here are over recent mocks rather than all of them, because a
+// habit you fixed four months ago is not what you want to be shown, and the
+// weakest one is named because "you are at 40% on three of five" is a table,
+// not an answer.
+
+/** Mocks counted toward the habit rates. Enough to be a pattern, recent
+ *  enough to still be true of you. */
+export const MOCK_WINDOW = 10;
+
+/** Below this, a rate per behaviour is one or two runs and reads as a verdict. */
+export const MOCK_MIN = 3;
+
+/**
+ * Per-behaviour rates across your recent mocks.
+ *
+ * `checklist` is a sparse object keyed by the behaviour's index — an unticked
+ * box is simply absent — so a missing key counts as not done, which is what it
+ * meant when the box was left alone.
+ */
+export function mockReview(state, checklistItems, window = MOCK_WINDOW) {
+  const all = state.mocks || [];
+  const recent = all.slice(-window);
+  const enough = recent.length >= MOCK_MIN;
+
+  const habits = checklistItems.map((label, i) => {
+    const done = recent.filter((m) => !!(m.checklist || {})[i]).length;
+    return { index: i, label, done, of: recent.length, rate: enough ? done / recent.length : null };
+  });
+
+  const rated = habits.filter((h) => h.rate != null);
+  const weakest = rated.length ? rated.reduce((lo, h) => (h.rate < lo.rate ? h : lo)) : null;
+  const strongest = rated.length ? rated.reduce((hi, h) => (h.rate > hi.rate ? h : hi)) : null;
+
+  const comms = recent.map((m) => m.communicationRating).filter((r) => typeof r === "number");
+  const durations = recent.map((m) => m.durationActualMin).filter((d) => typeof d === "number" && d > 0);
+
+  return {
+    total: all.length,
+    counted: recent.length,
+    enough,
+    needed: Math.max(0, MOCK_MIN - recent.length),
+    habits,
+    // Only worth naming when there is a gap to act on: five behaviours all at
+    // the same rate has no weakest one, it has a number.
+    weakest: weakest && strongest && weakest.rate < strongest.rate ? weakest : null,
+    strongest: weakest && strongest && weakest.rate < strongest.rate ? strongest : null,
+    avgCommunication: comms.length ? comms.reduce((s, r) => s + r, 0) / comms.length : null,
+    commsCount: comms.length,
+    medianMinutes: durations.length ? median(durations) : null,
+  };
+}

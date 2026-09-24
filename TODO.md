@@ -55,7 +55,7 @@ one-line title is not enough to pick the work up again a week later.
   that would change what you study next.
   *Done:* the drill reports your own confusions, in its own terms.
 
-- [ ] **37. Mocks are logged and never reviewed.**
+- [x] **37. Mocks are logged and never reviewed.** _(1.5.0)_
   `state.mocks` accumulates and feeds exactly one thing: the ring that unlocks
   system design. A 45-minute timed run with phases is the closest this app
   gets to the real event, and it leaves no account of itself.

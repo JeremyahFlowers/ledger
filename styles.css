@@ -1548,3 +1548,22 @@ input[type="checkbox"]:focus-visible {
   gap: 0.6rem; flex-wrap: wrap;
 }
 .confusion-pair { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+
+/* Mock habits. A bar rather than a percentage: five rates read as a table,
+   and the question is which one is short, not what number it is. */
+.habit-list { list-style: none; margin: 0.8rem 0 0; padding: 0; display: grid; gap: 0.45rem; }
+.habit-list li {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.8rem; flex-wrap: wrap; line-height: 1.4;
+}
+.habit-bar {
+  display: block; width: 5.5rem; height: 0.45rem; flex: none;
+  background: var(--border); border-radius: 999px; overflow: hidden;
+}
+.habit-bar > span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+
+/* What one mock actually did, under its row. */
+.mock-ticks { list-style: none; margin: 0.4rem 0 0; padding: 0; display: grid; gap: 0.15rem; }
+.mock-ticks li { display: flex; gap: 0.4rem; align-items: baseline; font-size: 0.8rem; line-height: 1.35; }
+.tick-done { color: var(--good); }
+.tick-missed > span:first-child { color: var(--text-muted); }

@@ -19,6 +19,7 @@
 import {
   todayISO, applyOutcome, activateProblem, dueProblems, planToday, allAttempts, patternStats,
   updateStreak, systemDesignUnlock, uid, MISTAKE_TAGS, activityByDate, patternTrend,
+  MOCK_CHECKLIST, mockReview,
   recommendSession, computePlantState, streakGraceInfo, refresherStatus, STATUS_ACTIVE,
 } from "./logic.js";
 
@@ -521,6 +522,7 @@ export function renderJournal(root, store) {
   const entries = allAttempts(state).filter((a) => a.soulStatement).reverse();
   const notes = [...state.journal].reverse();
   const mocks = [...state.mocks].reverse();
+  const review = mockReview(state, MOCK_CHECKLIST);
 
   const reflectionCounts = {};
   for (const a of entries) reflectionCounts[a.date] = (reflectionCounts[a.date] || 0) + 1;
@@ -554,6 +556,7 @@ export function renderJournal(root, store) {
         ${notes.map((n) => `<li><div class="row space-between"><strong>${esc(n.type.replace(/-/g, " "))}</strong><span class="muted">${fmtDate(n.date)}</span></div><p>${esc(n.text)}</p></li>`).join("")}
       </ul>`}
     </div>
+    ${mockReviewHtml(state, review)}
     <div class="card">
       <h2>Mock interviews</h2>
       ${mocks.length === 0 ? emptyState("log", "No mock interviews yet",
@@ -570,6 +573,7 @@ export function renderJournal(root, store) {
                   <span class="pill pill-muted">${fmtDate(m.date)}</span>
                 </div>
                 <div class="queue-name">${esc(state.problems.find((p) => p.id === m.problemId)?.name || "Untitled")}${m.communicationRating ? ` · comms ${m.communicationRating}/5` : ""}${m.durationActualMin != null ? ` · ${m.durationActualMin} min` : ""}</div>
+                ${mockChecklistHtml(m)}
               </div>
             </div>
           </li>`).join("")}
@@ -626,6 +630,72 @@ export function renderJournal(root, store) {
     e.target.reset();
     toast("Noted.");
   });
+}
+
+/**
+ * What your recent mocks say about how you interview.
+ *
+ * Deliberately not about whether you solved them — that is already in the
+ * attempt, and counting it twice would make a mock look like a harder rep. A
+ * mock exists for the part that only happens when someone is watching, and
+ * the checklist was the only record of that anywhere in the app.
+ */
+function mockReviewHtml(state, review) {
+  if (!review.total) return "";
+
+  if (!review.enough) {
+    return `
+      <div class="card">
+        <h2>How your mocks are going</h2>
+        <p class="muted">${review.total} logged. ${review.needed} more and this will start
+        reporting which of the five habits you actually keep — a rate over
+        ${review.counted} would be a verdict on one bad morning.</p>
+      </div>`;
+  }
+
+  return `
+    <div class="card">
+      <h2>How your mocks are going</h2>
+      <p class="muted small">Across your last ${review.counted} mock${review.counted === 1 ? "" : "s"}.
+      Not whether you solved them — that's in the attempt. This is the part that only happens
+      when someone is watching.</p>
+
+      ${review.weakest ? `<p>The one to work on: <strong>${esc(review.weakest.label.toLowerCase())}</strong>,
+        which you did in ${review.weakest.done} of ${review.weakest.of}. You are most reliable at
+        ${esc(review.strongest.label.toLowerCase())}.</p>` : ""}
+
+      <ul class="habit-list">
+        ${review.habits.map((h) => `
+          <li>
+            <span>${esc(h.label)}</span>
+            <span class="row gap-sm" style="align-items:center">
+              <span class="habit-bar" aria-hidden="true"><span style="width:${Math.round(h.rate * 100)}%"></span></span>
+              <span class="muted small">${h.done}/${h.of}</span>
+            </span>
+          </li>`).join("")}
+      </ul>
+
+      ${review.avgCommunication != null || review.medianMinutes != null ? `
+        <p class="muted small">${[
+          review.avgCommunication != null
+            ? `Communication averaging ${review.avgCommunication.toFixed(1)}/5 across the ${review.commsCount} you rated`
+            : null,
+          review.medianMinutes != null ? `${review.medianMinutes} min typical` : null,
+        ].filter(Boolean).join(" · ")}.</p>` : ""}
+    </div>`;
+}
+
+/** The five behaviours for one mock, so a row is a record of that run rather
+ *  than a line in a list. */
+function mockChecklistHtml(mock) {
+  const done = MOCK_CHECKLIST.map((label, i) => ({ label, done: !!(mock.checklist || {})[i] }));
+  if (!done.some((d) => d.done)) return "";
+  return `<ul class="mock-ticks">
+    ${done.map((d) => `<li class="${d.done ? "tick-done" : "tick-missed"}">
+      <span aria-hidden="true">${d.done ? "\u2713" : "\u00b7"}</span>
+      <span class="${d.done ? "" : "muted"}">${esc(d.label)}</span>
+    </li>`).join("")}
+  </ul>`;
 }
 
 // ---------- System Design ----------
