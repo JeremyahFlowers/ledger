@@ -21,7 +21,7 @@ import { loadCodeMirror, CODE_MODES } from "./codemirror-loader.js";
 import { createWhiteboard } from "./whiteboard.js";
 import { plantSvg } from "./plant.js";
 import { patternIcon, navIcon } from "./icons.js";
-import { esc, richText, pct, mins, fmtDate, patternName, toast, offerUndo, OUTCOME_GLYPH, topicNav, showTopic, outcomeOptions, outcomeLabel } from "./ui.js";
+import { esc, richText, pct, mins, fmtDate, patternName, toast, offerUndo, OUTCOME_GLYPH, topicNav, showTopic, outcomeOptions, outcomeLabel, downloadFile } from "./ui.js";
 import {
   startSession, abandonSession, hasActiveSession, restoreSession, checkpointSession,
   currentSessionProblemName, renderWorkspace, renderReflect, renderSessionSummary,
@@ -31,7 +31,7 @@ import {
 // split that forces every caller to be rewritten is a split that gets
 // abandoned halfway. The definitions now live in ui.js and session-view.js;
 // this file is just still the door they are reached through.
-export { esc, richText, pct, toast, offerUndo, showTopic };
+export { esc, richText, pct, toast, offerUndo, showTopic, downloadFile };
 export {
   startSession, abandonSession, hasActiveSession, restoreSession, checkpointSession,
   currentSessionProblemName, renderWorkspace, renderReflect, renderSessionSummary,
@@ -595,30 +595,6 @@ function confirmDiscard(diff, losing) {
   const where = losing === "mine" ? "this device" : "GitHub";
   const plural = count === 1 ? { s: "", verb: "exists" } : { s: "s", verb: "exist" };
   return confirm(`This discards ${count} logged attempt${plural.s} that only ${plural.verb} on ${where}. Continue?`);
-}
-
-// Long enough for the browser to have started reading the blob, short enough
-// that a page full of exports doesn't hold them all open.
-const REVOKE_DELAY_MS = 1000;
-
-/** Offer some text as a file download. One helper, because the whole-log
- * export and a single problem's history were otherwise the same six lines
- * twice.
- *
- * The anchor goes into the document and the object URL is released on a later
- * turn of the event loop: Firefox ignores a click on a detached anchor, and
- * revoking synchronously can pull the blob out from under a download that has
- * not started reading it yet. */
-function downloadFile(filename, text, type = "application/json") {
-  const url = URL.createObjectURL(new Blob([text], { type }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.style.display = "none";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS);
 }
 
 function downloadState(state) {

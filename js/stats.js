@@ -235,3 +235,101 @@ export function modelScorecard(state) {
     disagreements: disagreements.sort((a, b) => (b.at || "").localeCompare(a.at || "")),
   };
 }
+
+// ---------- What you actually did this week ----------
+//
+// The charts above answer "am I improving", over twelve weeks, as rates. They
+// deliberately refuse to say anything about a single week, because one week is
+// not a trend — which left the app with no answer at all to the plainer and
+// more immediate question of what you did in the last seven days.
+//
+// So this counts rather than rates. It reports what happened: which problems
+// you worked, what you wrote down, what moved up a box. The one number it does
+// compute — the share solved cleanly — carries its own sample size, and the
+// view is required to show it, because seven days is exactly the window where
+// a percentage is most tempting and least meaningful.
+//
+// Ends today rather than on a calendar boundary. "This week" means the last
+// seven days you lived through, not the remains of one that started Monday.
+
+export const REVIEW_DAYS = 7;
+
+/**
+ * A readable account of the last `days` days, ending on `endISO` inclusive.
+ *
+ * Returns counts, the sessions themselves, the notes you wrote, the problems
+ * that moved up a box, and — separately — the same figures for the week before,
+ * so the view can say quieter or busier without the caller doing the arithmetic
+ * twice.
+ */
+export function weekInReview(state, endISO = todayISO(), days = REVIEW_DAYS) {
+  const startISO = addDaysISO(endISO, -(days - 1));
+  const inWindow = (d) => !!d && d >= startISO && d <= endISO;
+
+  const sessions = allAttempts(state).filter((a) => inWindow(a.date));
+  const outcomes = {};
+  for (const a of sessions) outcomes[a.outcome] = (outcomes[a.outcome] || 0) + 1;
+
+  const patterns = {};
+  for (const a of sessions) patterns[a.patternId] = (patterns[a.patternId] || 0) + 1;
+
+  // Self-reported solve time, which is what an attempt records. Not the day
+  // clock's wall time — that is budget spent, including the half hour you sat
+  // looking at it, and the two answer different questions.
+  //
+  // Counted separately from the sessions, because most attempts carry no time
+  // at all: totalling them and labelling the result "this week" would say the
+  // week was twenty minutes long when it was ten sessions with two timed.
+  const timed = sessions.filter((a) => typeof a.timeToSolveMin === "number" && a.timeToSolveMin > 0);
+  const minutes = timed.reduce((sum, a) => sum + a.timeToSolveMin, 0);
+  const clean = outcomes["solved-clean"] || 0;
+
+  // Only problems whose most recent attempt landed in the window: a box
+  // reached last month is not something that moved this week.
+  const promoted = (state.problems || []).filter((p) => {
+    const last = (p.attempts || [])[p.attempts.length - 1];
+    return last && inWindow(last.date) && p.box > 0 && last.outcome === "solved-clean";
+  }).map((p) => ({ id: p.id, name: p.name, box: p.box }));
+
+  const notes = sessions
+    .filter((a) => a.soulStatement)
+    .map((a) => ({ date: a.date, problemId: a.problemId, problemName: a.problemName, text: a.soulStatement }))
+    .reverse();
+
+  const mocks = (state.mocks || []).filter((m) => inWindow(m.date));
+  const journal = (state.journal || []).filter((j) => inWindow(j.date));
+  const daysWorked = new Set(sessions.map((a) => a.date));
+  const previous = countOnly(state, addDaysISO(startISO, -1), days);
+
+  return {
+    startISO, endISO, days,
+    sessions: [...sessions].reverse(),  // newest first, the way it reads
+    sessionCount: sessions.length,
+    activeDays: daysWorked.size,
+    minutes,
+    timedCount: timed.length,
+    outcomes,
+    cleanCount: clean,
+    // Null below three: a "100% clean week" off one attempt is the single most
+    // misleading number this app could print.
+    cleanRate: sessions.length >= 3 ? clean / sessions.length : null,
+    patterns: Object.entries(patterns)
+      .map(([id, n]) => ({ patternId: id, attempts: n }))
+      .sort((a, b) => b.attempts - a.attempts),
+    promoted, notes, mocks, journal,
+    previous,
+    quiet: sessions.length === 0,
+  };
+}
+
+/** The bare counts for a window, without recursing into its own predecessor. */
+function countOnly(state, endISO, days) {
+  const startISO = addDaysISO(endISO, -(days - 1));
+  const sessions = allAttempts(state).filter((a) => a.date >= startISO && a.date <= endISO);
+  return {
+    startISO, endISO,
+    sessionCount: sessions.length,
+    activeDays: new Set(sessions.map((a) => a.date)).size,
+    cleanCount: sessions.filter((a) => a.outcome === "solved-clean").length,
+  };
+}

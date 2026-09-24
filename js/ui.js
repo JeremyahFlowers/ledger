@@ -120,3 +120,27 @@ export const topicNav = { patternId: null };
 export function showTopic(patternId) {
   topicNav.patternId = patternId;
 }
+
+// Long enough for the browser to have started reading the blob, short enough
+// that a page full of exports doesn't hold them all open.
+const REVOKE_DELAY_MS = 1000;
+
+/** Offer some text as a file download. One helper, because the whole-log
+ * export and a single problem's history were otherwise the same six lines
+ * twice.
+ *
+ * The anchor goes into the document and the object URL is released on a later
+ * turn of the event loop: Firefox ignores a click on a detached anchor, and
+ * revoking synchronously can pull the blob out from under a download that has
+ * not started reading it yet. */
+export function downloadFile(filename, text, type = "application/json") {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS);
+}

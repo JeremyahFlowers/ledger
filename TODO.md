@@ -22,7 +22,7 @@ one-line title is not enough to pick the work up again a week later.
   *Done:* the app reports how often it named your problem's pattern, on your
   own problems, and says plainly when there are too few to tell.
 
-- [ ] **33. There is no view of a week.**
+- [x] **33. There is no view of a week.** _(1.5.0)_
   The progress charts show twelve weeks of rates, which answers "am I
   improving" and not "what did I do". Item 31 named this explicitly — "or to
   share what you did this week" — and delivered only the half about one

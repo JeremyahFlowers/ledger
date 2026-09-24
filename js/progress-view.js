@@ -19,7 +19,9 @@
 // chart, because it gets believed.
 
 import { esc } from "./views.js";
-import { weeklyProgress, patternMovement, progressSummary, PROGRESS_WEEKS, allAttempts } from "./logic.js";
+import { pct, mins, fmtDate, toast, outcomeLabel, downloadFile } from "./ui.js";
+import { weeklyProgress, patternMovement, progressSummary, PROGRESS_WEEKS, allAttempts,
+  weekInReview, todayISO } from "./logic.js";
 import { patternIcon, navIcon } from "./icons.js";
 
 const CHART_WIDTH = 560;
@@ -29,12 +31,15 @@ const PADDING = { top: 10, right: 8, bottom: 20, left: 30 };
 // over-interpret.
 const MIN_POINTS_FOR_CHART = 2;
 
-export function renderProgress(root, store) {
+export function renderProgress(root, store, actions) {
   const state = store.state;
   const summary = progressSummary(state, PROGRESS_WEEKS);
   const movers = patternMovement(state);
+  const week = weekInReview(state);
 
   root.innerHTML = `
+    ${weekHtml(state, week)}
+
     <div class="card">
       <h2>Are you getting better?</h2>
       ${summary.hasEnoughData
@@ -70,6 +75,175 @@ export function renderProgress(root, store) {
     </div>
 
     ${moversHtml(movers)}`;
+
+  wireWeek(root, store, week, actions);
+}
+
+// ---------- The last seven days ----------
+//
+// Everything below this on the page answers "am I improving", over twelve
+// weeks, in rates — and refuses on principle to say anything about a single
+// week, because one week is not a trend. Which left no answer at all to the
+// plainer question you actually have on a Sunday evening: what did I do.
+//
+// So this counts instead of rating, and leads with the account rather than a
+// score. The one rate it shows carries its sample beside it, and disappears
+// below three attempts: a "100% clean week" off one problem is the most
+// misleading thing this app could print, and the easiest.
+
+function weekHtml(state, week) {
+  const range = `${fmtDate(week.startISO)} – ${fmtDate(week.endISO)}`;
+
+  if (week.quiet) {
+    return `
+      <div class="card">
+        <h2>Your week</h2>
+        <p class="muted small">${esc(range)}</p>
+        <p class="muted">Nothing logged in the last seven days. That is information, not a
+        verdict — weeks happen. The queue will still be there, and nothing you have built
+        expires.</p>
+      </div>`;
+  }
+
+  return `
+    <div class="card">
+      <div class="row space-between" style="align-items:flex-start;gap:0.75rem;flex-wrap:wrap">
+        <div>
+          <h2>Your week</h2>
+          <p class="muted small">${esc(range)}</p>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="export-week">Export this week</button>
+      </div>
+
+      <div class="stat-row" style="margin-top:0.5rem">
+        <div class="stat"><span class="stat-num">${week.sessionCount}</span>
+          <span class="stat-label">session${week.sessionCount === 1 ? "" : "s"}</span></div>
+        <div class="stat"><span class="stat-num">${week.activeDays}</span>
+          <span class="stat-label">of 7 days</span></div>
+        ${week.timedCount ? `<div class="stat"><span class="stat-num">${mins(week.minutes)}</span>
+          <span class="stat-label">${week.timedCount === week.sessionCount
+            ? "solving" : `across ${week.timedCount} timed`}</span></div>` : ""}
+        ${week.cleanRate != null ? `<div class="stat"><span class="stat-num">${pct(week.cleanRate)}</span>
+          <span class="stat-label">clean, of ${week.sessionCount}</span></div>` : ""}
+      </div>
+      ${week.cleanRate == null ? `<p class="muted small">Too few attempts this week for a
+        clean-solve rate to mean anything — ${week.cleanCount} of ${week.sessionCount} went
+        cleanly.</p>` : ""}
+      <p class="muted small">${esc(comparisonText(week))}</p>
+
+      ${week.promoted.length ? `
+        <h3 class="week-heading">What moved up</h3>
+        <ul class="week-list">
+          ${week.promoted.map((p) => `<li>
+            <button type="button" class="link-button" data-open-problem="${esc(p.id)}">${esc(p.name)}</button>
+            <span class="muted small">— now box ${p.box}</span></li>`).join("")}
+        </ul>` : ""}
+
+      <h3 class="week-heading">What you worked on</h3>
+      <ul class="week-list">
+        ${week.sessions.map((a) => `<li>
+          <span class="outcome-dot ${esc(outcomeClass(a.outcome))}" aria-hidden="true"></span>
+          <button type="button" class="link-button" data-open-problem="${esc(a.problemId)}">${esc(a.problemName)}</button>
+          <span class="muted small">— ${esc(outcomeLabel(a.outcome))}, ${esc(fmtDate(a.date))}</span>
+        </li>`).join("")}
+      </ul>
+
+      ${week.notes.length ? `
+        <h3 class="week-heading">What you wrote down</h3>
+        <ul class="week-notes">
+          ${week.notes.map((n) => `<li>
+            <blockquote>${esc(n.text)}</blockquote>
+            <span class="muted small">${esc(n.problemName)} · ${esc(fmtDate(n.date))}</span>
+          </li>`).join("")}
+        </ul>` : ""}
+
+      ${week.mocks.length || week.journal.length ? `
+        <p class="muted small week-also">Also this week:
+        ${[week.mocks.length ? `${week.mocks.length} mock${week.mocks.length === 1 ? "" : "s"}` : null,
+           week.journal.length ? `${week.journal.length} journal entr${week.journal.length === 1 ? "y" : "ies"}` : null]
+          .filter(Boolean).join(" and ")}.</p>` : ""}
+    </div>`;
+}
+
+/** Quieter or busier than the week before — said as a fact, never as praise or
+ *  a reprimand. A lighter week is a legitimate outcome everywhere else in this
+ *  app and has to read as one here. */
+function comparisonText(week) {
+  const prev = week.previous;
+  if (!prev || prev.sessionCount === 0) {
+    return `Nothing logged the week before, so there's nothing to compare against yet.`;
+  }
+  const diff = week.sessionCount - prev.sessionCount;
+  if (diff === 0) return `The same number of sessions as the week before.`;
+  return `${Math.abs(diff)} ${diff > 0 ? "more" : "fewer"} session${Math.abs(diff) === 1 ? "" : "s"} `
+    + `than the week before, which had ${prev.sessionCount}.`;
+}
+
+const OUTCOME_CLASS = {
+  "solved-clean": "outcome-good",
+  "solved-struggled": "outcome-warn",
+  "ran-out-of-time": "outcome-warn",
+  failed: "outcome-bad",
+};
+function outcomeClass(outcome) {
+  return OUTCOME_CLASS[outcome] || "outcome-warn";
+}
+
+/**
+ * The same week, as text you can paste somewhere.
+ *
+ * Markdown for the same reason a problem's history is: the audience is a
+ * person reading it — you next Sunday, or whoever is helping you prepare.
+ */
+export function weekToMarkdown(state, week) {
+  const lines = [`# Week of ${week.startISO} to ${week.endISO}`, ""];
+  if (week.quiet) {
+    lines.push("Nothing logged this week.");
+    return lines.join("\n");
+  }
+
+  lines.push(`- ${week.sessionCount} session${week.sessionCount === 1 ? "" : "s"} across `
+    + `${week.activeDays} of ${week.days} days`);
+  if (week.timedCount) {
+    lines.push(`- ${week.minutes} minutes solving`
+      + (week.timedCount === week.sessionCount ? "" : ` (across the ${week.timedCount} I timed)`));
+  }
+  lines.push(week.cleanRate != null
+    ? `- ${Math.round(week.cleanRate * 100)}% solved cleanly (${week.cleanCount} of ${week.sessionCount})`
+    : `- ${week.cleanCount} of ${week.sessionCount} solved cleanly — too few for a rate`);
+  lines.push("");
+
+  if (week.promoted.length) {
+    lines.push("## What moved up");
+    for (const p of week.promoted) lines.push(`- ${p.name} — now box ${p.box}`);
+    lines.push("");
+  }
+
+  lines.push("## What I worked on");
+  for (const a of week.sessions) {
+    lines.push(`- ${a.date} — ${a.problemName}: ${outcomeLabel(a.outcome)}`);
+  }
+  lines.push("");
+
+  if (week.notes.length) {
+    lines.push("## What I wrote down");
+    for (const n of week.notes) {
+      lines.push(`> ${n.text}`);
+      lines.push(`> — ${n.problemName}, ${n.date}`);
+      lines.push("");
+    }
+  }
+  return lines.join("\n");
+}
+
+function wireWeek(root, store, week, actions) {
+  root.querySelector("#export-week")?.addEventListener("click", () => {
+    downloadFile(`week-${week.endISO}.md`, weekToMarkdown(store.state, week), "text/markdown");
+    toast("Downloaded.");
+  });
+  root.querySelectorAll(".card [data-open-problem]").forEach((btn) => {
+    btn.addEventListener("click", () => actions.openProblem(btn.dataset.openProblem));
+  });
 }
 
 function headlineText(summary) {

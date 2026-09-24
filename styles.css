@@ -1521,3 +1521,21 @@ input[type="checkbox"]:focus-visible {
 .scorecard-heading { font-size: 0.95rem; margin: 1rem 0 0.4rem; }
 .scorecard-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.45rem; }
 .scorecard-list li { line-height: 1.45; }
+
+/* The week in review. Denser than the charts below it: this is an account of
+   what happened, so it should read like a list and not like a dashboard. */
+.week-heading { font-size: 0.95rem; margin: 1.1rem 0 0.4rem; }
+.week-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; }
+.week-list li { display: flex; align-items: baseline; gap: 0.45rem; flex-wrap: wrap; line-height: 1.45; }
+/* Takes its fill from the outcome class beside it, which already sets a
+   foreground colour — one source for what each outcome looks like. */
+.outcome-dot {
+  flex: none; width: 0.5rem; height: 0.5rem; border-radius: 50%;
+  background: currentColor; transform: translateY(-0.05em);
+}
+.week-notes { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.8rem; }
+.week-notes blockquote {
+  margin: 0 0 0.2rem; padding-left: 0.7rem;
+  border-left: 2px solid var(--border); color: var(--text);
+}
+.week-also { margin-top: 1rem; }
