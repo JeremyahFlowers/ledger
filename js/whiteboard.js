@@ -105,6 +105,30 @@ export function createWhiteboard(root) {
     // any point: the board is stroke-backed, so resize() replays what was
     // drawn rather than scaling or clearing a bitmap.
     resize,
+
+    /**
+     * The drawing as plain data, for checkpointing a session.
+     *
+     * Strokes rather than pixels, which is what makes this cheap enough to
+     * write on every change and what lets it be replayed onto a canvas of a
+     * different size later. Copied on the way out so a caller holding the
+     * result can't mutate the live board.
+     */
+    toJSON: () => strokes.map((s) => ({ color: s.color, width: s.width, points: s.points.slice() })),
+
+    /** Replace the drawing with previously serialized strokes. */
+    restore(saved) {
+      if (!Array.isArray(saved)) return;
+      strokes.length = 0;
+      for (const s of saved) {
+        // Defensive: this comes back from storage, which anything could have
+        // written. A malformed stroke should be skipped, not thrown on.
+        if (s && Array.isArray(s.points)) {
+          strokes.push({ color: s.color, width: s.width, points: s.points });
+        }
+      }
+      redraw();
+    },
     destroy: () => window.removeEventListener("resize", resize),
   };
 }

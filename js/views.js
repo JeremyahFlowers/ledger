@@ -10,6 +10,7 @@ import {
 } from "./split-pane.js";
 import { APP_VERSION, RELEASED } from "./version.js";
 import { recentFaults, clearFaults, report, AppError } from "./errors.js";
+import { checkpoint, readCheckpoint, clearCheckpoint, isResumable, adjustedStart } from "./session-store.js";
 import { TOPICS } from "./topics-content.js";
 import { loadCodeMirror, CODE_MODES } from "./codemirror-loader.js";
 import { createWhiteboard } from "./whiteboard.js";
@@ -1059,6 +1060,49 @@ const SPLITTER_PX = 8;
 let session = null;
 let reflectState = null;
 
+/**
+ * Put back a session that a reload interrupted.
+ *
+ * Called once from app.js before the first render. Returns true when a session
+ * was restored, so the caller knows the workspace tab is worth showing.
+ *
+ * The problem is re-resolved from current state by id rather than trusted from
+ * the checkpoint: it may have been edited, or removed entirely, since.
+ */
+export function restoreSession(state, now = Date.now()) {
+  const snap = readCheckpoint();
+  if (!snap || !isResumable(snap, now)) {
+    if (snap) clearCheckpoint();       // too old to resume, and no use keeping
+    return false;
+  }
+  const problem = state.problems.find((p) => p.id === snap.problemId);
+  if (!problem) {
+    clearCheckpoint();
+    return false;
+  }
+  session = {
+    problem,
+    isMock: snap.isMock,
+    // Moved forward by however long the tab was closed, so the clock shows
+    // time spent working rather than time since you started.
+    startedAt: adjustedStart(snap, now),
+    insightAt: snap.insightAt,
+    endedAt: null,
+    intervalId: null,
+    whiteboardCtl: null,
+    whiteboardShown: !!snap.whiteboardShown,
+    cm: null,
+    codeLang: snap.codeLang || "cpp",
+    checklist: snap.checklist || {},
+    capturedCode: snap.code || "",
+    capturedWhiteboardDataUrl: null,
+    mounted: false,
+    teardownSplitters: null,
+    restoredBoard: snap.whiteboard || [],
+  };
+  return true;
+}
+
 export function startSession(problem, { isMock = false } = {}) {
   session = {
     problem, isMock,
@@ -1072,11 +1116,17 @@ export function startSession(problem, { isMock = false } = {}) {
 
 /** Called when the user exits Workspace or Reflect without saving. */
 export function abandonSession() {
+  clearCheckpoint();
   if (session?.intervalId) clearInterval(session.intervalId);
   if (session?.whiteboardCtl) session.whiteboardCtl.destroy();
   if (session?.teardownSplitters) session.teardownSplitters();
   session = null;
   reflectState = null;
+}
+
+/** Checkpoint the live session, if there is one. Called when the tab is hidden. */
+export function checkpointSession() {
+  if (session?.startedAt) checkpoint(session);
 }
 
 export function hasActiveSession() {
@@ -1129,6 +1179,7 @@ export function renderWorkspace(root, store, actions) {
     });
     root.querySelector("#ws-start").addEventListener("click", () => {
       session.startedAt = Date.now();
+      checkpoint(session);
       actions.rerender(); // safe: nothing is mounted yet
     });
     return;
@@ -1252,11 +1303,25 @@ export function renderWorkspace(root, store, actions) {
     boardBtn.setAttribute("aria-pressed", String(shown));
     // Created on first show rather than up front: someone who never opens the
     // board shouldn't pay for a canvas and its listeners.
-    if (shown && !session.whiteboardCtl) session.whiteboardCtl = createWhiteboard(boardHost);
+    if (shown && !session.whiteboardCtl) {
+      session.whiteboardCtl = createWhiteboard(boardHost);
+      // A drawing recovered from a checkpoint is replayed onto the fresh
+      // canvas; strokes are resolution-independent so the pane's current size
+      // doesn't matter.
+      if (session.restoredBoard?.length) {
+        session.whiteboardCtl.restore(session.restoredBoard);
+        session.restoredBoard = null;
+      }
+      boardHost.addEventListener("pointerup", () => checkpoint(session));
+    }
     applyPanes(redistribute(sizes, visible(), DEFAULT_PANES));
   };
   boardBtn.addEventListener("click", () => setBoard(!session.whiteboardShown));
   root.querySelector("#ws-close-board").addEventListener("click", () => setBoard(false));
+  // A session restored from a checkpoint can arrive with the board already
+  // open, which nothing else would act on: until restore existed, the board
+  // was always closed at mount and could only be created by the toggle.
+  if (session.whiteboardShown) setBoard(true);
 
   const codeHost = root.querySelector("#ws-code-editor");
   const langSelect = root.querySelector("#ws-code-lang");
@@ -1267,6 +1332,13 @@ export function renderWorkspace(root, store, actions) {
       mode: CODE_MODES[session.codeLang].mode,
       lineNumbers: true,
       viewportMargin: Infinity,
+    });
+    // Debounced: typing shouldn't write to storage on every keystroke, but a
+    // second of idle is short enough that nothing meaningful is ever lost.
+    let codeTimer = null;
+    session.cm.on("change", () => {
+      clearTimeout(codeTimer);
+      codeTimer = setTimeout(() => checkpoint(session), 1000);
     });
   });
   langSelect.addEventListener("change", () => {
@@ -1306,11 +1378,13 @@ export function renderWorkspace(root, store, actions) {
     session.insightAt = Date.now();
     e.target.textContent = `Insight at ${Math.round((session.insightAt - session.startedAt) / 60000)} min`;
     e.target.disabled = true;
+    checkpoint(session);
   });
 
   root.querySelectorAll("[data-ws-check]").forEach((cb) => {
     cb.addEventListener("change", () => {
       session.checklist[cb.dataset.wsCheck] = cb.checked;
+      checkpoint(session);
     });
   });
 

@@ -371,6 +371,7 @@ function renderAll() {
     views.renderConflict(root, store, renderAll);
     return;
   }
+  resumeInterruptedSession();
   renderView();
   // Navigation buttons are markup any view can emit, so they're bound here
   // rather than in each view that happens to have one.
@@ -383,6 +384,24 @@ function renderAll() {
 // exactly like a broken app and says nothing. The failure is now shown and the
 // rest of the chrome — nav, search, the plant — keeps working, so there is
 // always a way out of a broken page.
+// store.init() is async, so the first render can run before there is any state
+// to resolve a checkpointed problem against. This therefore runs on the first
+// render that *has* state, not at boot, and only once.
+let resumeChecked = false;
+function resumeInterruptedSession() {
+  if (resumeChecked || !store.state) return;
+  resumeChecked = true;
+  if (views.hasActiveSession()) return;          // nothing was interrupted
+  if (!views.restoreSession(store.state)) return;
+  // Only say so if they are not already looking at it — landing straight back
+  // in the workspace is self-explanatory, a toast on the dashboard is not.
+  if (activeTab !== "workspace") {
+    activeTab = "workspace";
+    localStorage.setItem("ledger.activeTab", activeTab);
+  }
+  views.toast("Picked up where you left off.");
+}
+
 function renderView() {
   try {
     return renderViewInner();
@@ -461,6 +480,14 @@ store.init();
 renderAll();
 trackChromeHeight();
 startClocks();
+
+// A tab being hidden is the last reliable moment before a phone evicts it —
+// pagehide alone is not enough on iOS, which often never fires it.
+for (const event of ["visibilitychange", "pagehide"]) {
+  window.addEventListener(event, () => {
+    if (document.visibilityState === "hidden" || event === "pagehide") views.checkpointSession();
+  });
+}
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

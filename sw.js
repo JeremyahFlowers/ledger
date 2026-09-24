@@ -59,6 +59,7 @@ const SHELL = [
   "./js/split-pane.js",
   "./js/version.js",
   "./js/errors.js",
+  "./js/session-store.js",
 ];
 
 self.addEventListener("install", (event) => {
