@@ -20,7 +20,7 @@ one-line title is not enough to pick the work up again a week later.
   wrote yourself.
   *Done:* search finds your notes and shows which session each came from.
 
-- [ ] **25. Nothing explains itself on first run.**
+- [x] **25. Nothing explains itself on first run.** _(1.4.0)_
   A new account lands on a dashboard with a plant, a budget ring, a
   recommendation and a 23-pattern taxonomy, and no indication what any of it
   is for. The reasoning behind every one of those exists — it's in the source

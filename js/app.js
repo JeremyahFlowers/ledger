@@ -11,6 +11,7 @@ import { installSearch, openSearch, closeSearch, isSearchOpen } from "./search.j
 import { recommendSession } from "./logic.js";
 import { APP_VERSION } from "./version.js";
 import { installErrorHandling, report, guard } from "./errors.js";
+import { hasSeenWelcome, markWelcomeSeen, resetWelcome, renderWelcome } from "./welcome.js";
 
 // The nav reads like a table of contents, not a junk drawer: Home is the
 // cover page; everything else lives in one of a few named chapters, each
@@ -310,7 +311,10 @@ function toggleDayClock() {
 function renderPlantWidget() {
   const host = document.getElementById("plant-widget");
   if (!host || !store.state) return;
-  const show = !PLANT_WIDGET_HIDDEN_ON.has(activeTab);
+  // The ticking clock calls this every second, so the check has to live here
+  // rather than at the point the welcome screen is drawn — otherwise the
+  // interval un-hides the plant a second after onboarding hides it.
+  const show = !PLANT_WIDGET_HIDDEN_ON.has(activeTab) && hasSeenWelcome();
   host.hidden = !show;
   if (!show) return;
   if (!host.querySelector(".plant-widget-inner")) {
@@ -380,6 +384,30 @@ function renderAll() {
     views.renderConflict(root, store, renderAll);
     return;
   }
+
+  // Shown once, after the connection works and before anything else. A
+  // dashboard full of unexplained machinery is a poor first impression for an
+  // app whose whole argument is about *how* to practise.
+  if (!hasSeenWelcome()) {
+    // The chrome is part of what needs explaining, so none of it is on screen
+    // while the explanation is. A plant and a countdown in the corner of the
+    // page that is telling you what a plant and a countdown are for is the
+    // exact confusion this is meant to clear up.
+    nav.hidden = true;
+    document.querySelector(".topbar-search").hidden = true;
+    renderWelcome(root, {
+      step: welcomeStep,
+      onStep: (next) => { welcomeStep = next; renderAll(); },
+      onDone: () => {
+        markWelcomeSeen();
+        document.querySelector(".topbar-search").hidden = false;
+        renderAll();
+      },
+    });
+    return;
+  }
+  document.querySelector(".topbar-search").hidden = false;
+
   resumeInterruptedSession();
   renderView();
   // Navigation buttons are markup any view can emit, so they're bound here
@@ -398,6 +426,7 @@ function renderAll() {
 // store.init() is async, so the first render can run before there is any state
 // to resolve a checkpointed problem against. This therefore runs on the first
 // render that *has* state, not at boot, and only once.
+let welcomeStep = 0;
 let resumeChecked = false;
 function resumeInterruptedSession() {
   if (resumeChecked || !store.state) return;

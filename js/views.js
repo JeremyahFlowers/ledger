@@ -12,6 +12,7 @@ import {
 } from "./split-pane.js";
 import { APP_VERSION, RELEASED } from "./version.js";
 import { migrateState } from "./seed.js";
+import { resetWelcome } from "./welcome.js";
 import { patternProgressHtml } from "./progress-view.js";
 import { recentFaults, clearFaults, report, AppError } from "./errors.js";
 import { checkpoint, readCheckpoint, clearCheckpoint, isResumable, adjustedStart } from "./session-store.js";
@@ -1912,6 +1913,7 @@ export function renderSettings(root, store, actions) {
       <p class="muted small" style="margin:0.4rem 0 0">What changed in this version, and every one
       before it, is in <a href="https://github.com/JeremyahFlowers/ledger/blob/main/CHANGELOG.md"
       target="_blank" rel="noopener noreferrer">the changelog</a>.</p>
+      <button class="btn btn-ghost btn-sm" id="replay-welcome" style="margin-top:0.6rem">What is this app for?</button>
     </div>
 
     ${syncCardHtml(store)}
@@ -1976,6 +1978,11 @@ export function renderSettings(root, store, actions) {
         <option value="dark">Dark</option>
       </select>
     </div>`;
+
+  root.querySelector("#replay-welcome")?.addEventListener("click", () => {
+    resetWelcome();
+    actions.rerender();
+  });
 
   root.querySelector("#sync-pull")?.addEventListener("click", async () => {
     try {

@@ -1066,6 +1066,22 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 }
 .fault-list li:last-child { border-bottom: none; }
 
+/* ---------- First run ---------- */
+
+.welcome-card { max-width: 34rem; margin: 2rem auto; }
+.welcome-card h2 { margin: 0.6rem 0 0.5rem; font-size: 1.35rem; }
+.welcome-body { font-size: 1rem; line-height: 1.55; margin: 0; }
+.welcome-aside {
+  margin: 0.8rem 0 0; padding-left: 0.7rem;
+  border-left: 3px solid var(--accent);
+}
+.welcome-dots { display: flex; gap: 0.35rem; }
+.welcome-dot {
+  width: 22px; height: 3px; border-radius: 999px;
+  background: var(--border);
+}
+.welcome-dot.on { background: var(--accent); }
+
 /* ---------- Version ---------- */
 
 .version-card { border-color: var(--accent); }
