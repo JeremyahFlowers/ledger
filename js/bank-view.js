@@ -19,6 +19,55 @@ import { uid, backlogProblems, STATUS_BACKLOG } from "./logic.js";
 
 const PAGE_SIZE = 40;
 const DIFFICULTIES = ["Easy", "Medium", "Hard"];
+const DIFFICULTY_RANK = { Easy: 0, Medium: 1, Hard: 2 };
+
+/**
+ * How the list can be ordered.
+ *
+ * One table drives both the <select> and the comparator, so a new option
+ * cannot appear in the menu without an ordering behind it. "Best match for
+ * this pattern" is the useful default once a pattern filter is on: catalog
+ * order is arbitrary, and the top of an arbitrary list is a poor place to
+ * start.
+ */
+export const SORTS = {
+  number:     { label: "Problem number",  compare: (a, b) => (a.number ?? 1e9) - (b.number ?? 1e9) },
+  difficulty: { label: "Easiest first",   compare: (a, b) => (DIFFICULTY_RANK[a.difficulty] ?? 9) - (DIFFICULTY_RANK[b.difficulty] ?? 9) || (a.number ?? 1e9) - (b.number ?? 1e9) },
+  hardest:    { label: "Hardest first",   compare: (a, b) => (DIFFICULTY_RANK[b.difficulty] ?? -1) - (DIFFICULTY_RANK[a.difficulty] ?? -1) || (a.number ?? 1e9) - (b.number ?? 1e9) },
+  confidence: { label: "Best match for the pattern", compare: null }, // needs the pattern; see sortMatches
+  title:      { label: "Title A-Z",       compare: (a, b) => a.title.localeCompare(b.title) },
+};
+
+/**
+ * Order a filtered list.
+ *
+ * Exported and pure so the ordering can be pinned without a catalog or a DOM.
+ * "Best match" is only meaningful with a pattern selected — without one it
+ * falls back to problem number rather than pretending to rank by a confidence
+ * that isn't there.
+ */
+export function sortMatches(rows, sortKey, patternId) {
+  const list = [...rows];
+  if (sortKey === "confidence") {
+    if (!patternId) return list.sort(SORTS.number.compare);
+    return list.sort((a, b) => (b.patterns[patternId] || 0) - (a.patterns[patternId] || 0)
+      || (a.number ?? 1e9) - (b.number ?? 1e9));
+  }
+  const compare = SORTS[sortKey]?.compare || SORTS.number.compare;
+  return list.sort(compare);
+}
+
+/**
+ * One problem from a filtered list, chosen at random.
+ *
+ * Deciding what to work on is its own tax, and scanning 2,500 rows to avoid
+ * making that decision is worse than the decision. `pick` is injected so the
+ * choice can be tested.
+ */
+export function pickOne(rows, pick = Math.random) {
+  if (!rows.length) return null;
+  return rows[Math.floor(pick() * rows.length)] || rows[0];
+}
 // A cap on one bulk action. Large enough to be worth the button, small enough
 // that a stray click is easy to undo by hand.
 const BULK_LIMIT = 50;
@@ -32,6 +81,7 @@ const state = {
   difficulty: "",
   search: "",
   hideSaved: true,
+  sort: "number",
   shown: PAGE_SIZE,
   // Slugs saved during this visit. "Hide saved" is about not re-reading a list
   // you've already worked through, so it applies to what was saved before you
@@ -100,7 +150,7 @@ export async function renderBank(root, store, actions) {
     return;
   }
 
-  const matches = filtered(store.state, saved);
+  const matches = sortMatches(filtered(store.state, saved), state.sort, state.pattern);
   const page = matches.slice(0, state.shown);
   const roomLeft = MAX_BANK_SIZE - bankCount;
 
@@ -128,6 +178,11 @@ export async function renderBank(root, store, actions) {
           </select></label>
         <label class="field"><span class="label">Search</span>
           <input class="input" id="bank-search" data-testid="bank-filter-search" type="search" placeholder="title or number" value="${esc(state.search)}" /></label>
+        <label class="field"><span class="label">Order</span>
+          <select class="select" id="bank-sort" data-testid="bank-sort">
+            ${Object.entries(SORTS).map(([k, v]) =>
+              `<option value="${k}" ${state.sort === k ? "selected" : ""}>${esc(v.label)}</option>`).join("")}
+          </select></label>
       </div>
       <label class="field checkbox-field">
         <input type="checkbox" id="bank-hide-saved" data-testid="bank-filter-hide-saved" ${state.hideSaved ? "checked" : ""} /> Hide problems I've already saved
@@ -135,7 +190,10 @@ export async function renderBank(root, store, actions) {
       <div class="row space-between" style="margin-top:0.75rem;flex-wrap:wrap;gap:0.5rem">
         <span class="muted small">${matches.length.toLocaleString()} match${matches.length === 1 ? "" : "es"} ·
           ${bankCount} of ${MAX_BANK_SIZE} bank slots used${roomLeft <= 0 ? " — bank full" : ""}</span>
-        ${matches.length && roomLeft > 0 ? `<button class="btn btn-ghost btn-sm" id="bank-bulk" data-testid="bank-bulk-save">Save first ${Math.min(BULK_LIMIT, matches.length, roomLeft)} to bank</button>` : ""}
+        <span class="row gap-sm" style="flex-wrap:wrap">
+          ${matches.length ? `<button class="btn btn-ghost btn-sm" id="bank-surprise" data-testid="bank-surprise">Pick one for me</button>` : ""}
+          ${matches.length && roomLeft > 0 ? `<button class="btn btn-ghost btn-sm" id="bank-bulk" data-testid="bank-bulk-save">Save first ${Math.min(BULK_LIMIT, matches.length, roomLeft)} to bank</button>` : ""}
+        </span>
       </div>
     </div>
 
@@ -271,6 +329,27 @@ function rowHtml(problem, saved) {
     </li>`;
 }
 
+/**
+ * Begin a session on a catalog problem, saving it first if it is new.
+ *
+ * A problem has to exist in the user's own list before a session can be logged
+ * against it, so saving is part of starting rather than a step they have to
+ * know to do first. Shared by the per-row Start button and "Pick one for me",
+ * which would otherwise be two copies of the same four-step dance.
+ */
+function startCatalogProblem(entry, store, actions) {
+  const slug = entry.slug;
+  const find = () => store.state.problems.find((p) => (p.catalogSlug || slugify(p.name)) === slug);
+  if (!find()) {
+    state.justSaved.add(slug);
+    saveToBank(store, [entry]);
+  }
+  const problem = find();
+  if (!problem) return;
+  startSession(problem);
+  actions.switchTab("workspace");
+}
+
 /** Both the browse and "my bank" screens render the same mode switch, so the
  * handler lives here rather than being wired twice. */
 function switchMode(mode, actions) {
@@ -307,6 +386,15 @@ function wire(root, store, actions, matches, saved) {
   root.querySelector("#bank-pattern").addEventListener("change", onFilterChange("pattern"));
   root.querySelector("#bank-difficulty").addEventListener("change", onFilterChange("difficulty"));
   root.querySelector("#bank-hide-saved").addEventListener("change", onFilterChange("hideSaved"));
+  root.querySelector("#bank-sort").addEventListener("change", onFilterChange("sort"));
+
+  root.querySelector("#bank-surprise")?.addEventListener("click", () => {
+    const chosen = pickOne(matches);
+    if (!chosen) return;
+    // Starting it outright rather than scrolling to it: the point of asking
+    // for one is to stop deciding, and a highlighted row is another decision.
+    startCatalogProblem(chosen, store, actions);
+  });
 
   // Typing shouldn't re-render the whole list on every keystroke, and it must
   // not steal focus back to the top of the page.
@@ -353,22 +441,8 @@ function wire(root, store, actions, matches, saved) {
 
   root.querySelectorAll("[data-start-catalog]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const slug = btn.dataset.startCatalog;
-      const entry = state.catalog.problems.find((p) => p.slug === slug);
-      if (!entry) return;
-      // It has to exist as one of the user's own problems before a session can
-      // be logged against it, so saving is part of starting rather than a
-      // separate step they have to know to do first. Already-saved problems
-      // are found rather than duplicated.
-      const existing = store.state.problems.find((p) => (p.catalogSlug || slugify(p.name)) === slug);
-      if (!existing) {
-        state.justSaved.add(slug);
-        saveToBank(store, [entry]);
-      }
-      const problem = store.state.problems.find((p) => (p.catalogSlug || slugify(p.name)) === slug);
-      if (!problem) return;
-      startSession(problem);
-      actions.switchTab("workspace");
+      const entry = state.catalog.problems.find((p) => p.slug === btn.dataset.startCatalog);
+      if (entry) startCatalogProblem(entry, store, actions);
     });
   });
 

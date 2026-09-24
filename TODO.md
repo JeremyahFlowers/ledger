@@ -70,7 +70,7 @@ quietly fails to keep it.
   *Done:* clicking a pattern in Progress or the mastery table shows that
   pattern's own trend and its attempts.
 
-- [ ] **9. The bank can be sorted and sampled.**
+- [x] **9. The bank can be sorted and sampled.** _(1.2.0)_
   ~2,500 rows in catalog order with filters but no ordering, and no way to say
   "give me one".
   *Done:* sort by number/difficulty/confidence, plus a "pick one for me" that
