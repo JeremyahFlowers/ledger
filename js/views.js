@@ -2,13 +2,14 @@ import {
   todayISO, applyOutcome, activateProblem, dueProblems, planToday, allAttempts, patternStats, progressSummary, PLANT_STAGES, compareStates,
   updateStreak, systemDesignUnlock, uid, MISTAKE_TAGS, MOCK_CHECKLIST, daysBetween,
   activityByDate, patternTrend, pickQuizProblem, quizOptions, addDaysISO, recommendSession,
-  computePlantState, normalizeStatement, MAX_STATEMENT_CHARS,
+  computePlantState, normalizeStatement, MAX_STATEMENT_CHARS, inspectImport, describeState,
   budgetProgress, budgetPressure, refresherStatus, STATUS_ACTIVE,
 } from "./logic.js";
 import {
   installSplitters, loadSizes, gridTemplate, redistribute,
 } from "./split-pane.js";
 import { APP_VERSION, RELEASED } from "./version.js";
+import { migrateState } from "./seed.js";
 import { recentFaults, clearFaults, report, AppError } from "./errors.js";
 import { checkpoint, readCheckpoint, clearCheckpoint, isResumable, adjustedStart } from "./session-store.js";
 import { TOPICS } from "./topics-content.js";
@@ -2606,15 +2607,50 @@ export function renderSettings(root, store, actions) {
   root.querySelector("#import-json").addEventListener("change", async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (!confirm("This replaces all current data with the imported file. Continue?")) return;
-    const text = await file.text();
+    // Reset the input so picking the same file twice fires change again —
+    // otherwise a refused import cannot be retried after fixing the file.
+    e.target.value = "";
+
+    let imported;
     try {
-      const imported = JSON.parse(text);
-      store.mutate((s) => Object.assign(s, imported), "Ledger: import state.json");
-      toast("Imported.");
+      imported = JSON.parse(await file.text());
     } catch (err) {
-      alert("That file isn't valid JSON.");
+      report(new AppError(`${file.name} isn't valid JSON, so nothing was changed.`,
+        { code: "import_unparseable", cause: err }), "reading that file");
+      return;
     }
+
+    // Checked before anything is touched. This replaces the whole prep log,
+    // and it used to accept any JSON that parsed — a truncated download or an
+    // unrelated file silently destroyed every problem, attempt and note.
+    const found = inspectImport(imported);
+    if (!found.ok) {
+      report(new AppError(`${file.name} doesn't look like a Ledger backup: ${found.errors.join(" ")} Nothing was changed.`,
+        { code: "import_invalid" }), "checking that file");
+      return;
+    }
+
+    // Confirmed against what it holds and what it would replace, rather than
+    // against the word "everything".
+    const summary = [
+      `Replace your prep log with ${file.name}?`,
+      "",
+      `That file holds ${found.problems} problem${found.problems === 1 ? "" : "s"} and ${found.attempts} attempt${found.attempts === 1 ? "" : "s"}` +
+        (found.appVersion ? `, last written by Ledger ${found.appVersion}.` : "."),
+      `You currently have ${describeState(state)}.`,
+      "",
+      "This cannot be undone.",
+    ].join("\n");
+    if (!confirm(summary)) return;
+
+    store.mutate((s) => {
+      // Replaced, not merged. Object.assign left any key the file omitted in
+      // place, producing a state half from each — a 2024 problem list beside
+      // a 2026 streak.
+      for (const key of Object.keys(s)) delete s[key];
+      Object.assign(s, migrateState(imported));
+    }, "Ledger: import state.json");
+    toast(`Imported ${found.problems} problems and ${found.attempts} attempts.`);
   });
 
   const themeSelect = root.querySelector("#theme-select");

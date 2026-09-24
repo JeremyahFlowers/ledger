@@ -211,6 +211,75 @@ export function systemDesignUnlock(state) {
   };
 }
 
+// ---------- Validating an imported state file ----------
+//
+// Import replaces the entire prep log, and it used to accept anything that
+// parsed as JSON: a truncated download, an unrelated file, or a hand-edited
+// one with a wrong shape silently destroyed every problem, attempt and note.
+// CLAUDE.md requires validating at the boundary, and a file the user picked
+// off their disk is exactly that boundary.
+//
+// The checks are deliberately shallow — enough to be confident this is a
+// Ledger state file and to say what is in it, not a schema validator. A file
+// that passes is then run through migrateState like any other.
+
+/** Fields an import must have before it is allowed to replace anything. */
+const REQUIRED_ARRAYS = ["problems", "patterns"];
+
+/**
+ * Describe a parsed import, and say whether it is safe to apply.
+ *
+ * Returns counts as well as problems, so the user can be shown what they are
+ * about to overwrite and what with, rather than being asked to confirm a
+ * change they cannot see.
+ */
+export function inspectImport(candidate) {
+  const errors = [];
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+    return { ok: false, errors: ["That file doesn't contain a Ledger backup."], problems: 0, attempts: 0 };
+  }
+
+  for (const key of REQUIRED_ARRAYS) {
+    if (!Array.isArray(candidate[key])) errors.push(`Missing its "${key}" list.`);
+  }
+
+  const problems = Array.isArray(candidate.problems) ? candidate.problems : [];
+  // One malformed problem means the file was produced by something other than
+  // this app, and applying the rest would leave a half-broken log.
+  const malformed = problems.filter((p) => !p || typeof p !== "object" || !p.id || !p.name).length;
+  if (malformed) errors.push(`${malformed} of ${problems.length} problems are missing an id or a name.`);
+
+  const badAttempts = problems.filter(
+    (p) => p && p.attempts !== undefined && !Array.isArray(p.attempts)).length;
+  if (badAttempts) errors.push(`${badAttempts} problems have an unreadable attempt history.`);
+
+  if (candidate.settings && typeof candidate.settings !== "object") {
+    errors.push("Its settings are unreadable.");
+  }
+
+  const attempts = problems.reduce(
+    (n, p) => n + (Array.isArray(p?.attempts) ? p.attempts.length : 0), 0);
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    problems: problems.length,
+    attempts,
+    mocks: Array.isArray(candidate.mocks) ? candidate.mocks.length : 0,
+    journal: Array.isArray(candidate.journal) ? candidate.journal.length : 0,
+    appVersion: candidate.meta?.appVersion || null,
+    createdAt: candidate.meta?.createdAt || null,
+  };
+}
+
+/** One-line summary of what a state holds, for the import confirmation. */
+export function describeState(state) {
+  const problems = state?.problems?.length || 0;
+  const attempts = (state?.problems || []).reduce(
+    (n, p) => n + (Array.isArray(p?.attempts) ? p.attempts.length : 0), 0);
+  return `${problems} problem${problems === 1 ? "" : "s"}, ${attempts} attempt${attempts === 1 ? "" : "s"}`;
+}
+
 // ---------- Refreshers, not deadlines ----------
 //
 // The scheduling underneath is unchanged — Leitner boxes still decide when

@@ -22,7 +22,7 @@ quietly fails to keep it.
   on load, including elapsed time; leaving the tab and coming back resumes
   exactly where you were.
 
-- [ ] **2. Import must validate before it replaces everything.**
+- [x] **2. Import must validate before it replaces everything.** _(1.1.0)_
   Settings → Import JSON does `Object.assign(s, imported)` on whatever parses.
   A truncated file, an unrelated JSON file, or a hand-edited one with a wrong
   shape silently destroys the entire prep log. CLAUDE.md requires validating at
