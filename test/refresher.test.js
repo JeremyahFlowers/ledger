@@ -188,3 +188,76 @@ describe("a brand new account", () => {
     assert.ok(plant.health < 50, "a long lapse after real practice should still register");
   });
 });
+
+describe("the plant explains its own verdict", () => {
+  // The plant is this app's headline judgment and was its least explained
+  // thing: it said "stressed" and left you to guess which of six inputs did
+  // it. The contributions are the arithmetic itself, not a story told about a
+  // number computed elsewhere — the same faithfulness rule the pattern
+  // model's explanations follow. These pin that they really do add up.
+  function activeState(over = {}) {
+    const base = {
+      meta: { schemaVersion: 4 },
+      settings: { dailyBudgetMin: 75, boxIntervalsDays: [0, 1, 3, 7, 16, 35],
+        estimateMinByDifficulty: { Medium: 30 },
+        systemDesignUnlockThreshold: { minMocks: 10, minSolvedCleanRate: 0.7 } },
+      patterns: [{ id: "two-pointers", name: "Two Pointers", description: "" }],
+      problems: [], mocks: [], journal: [],
+      systemDesign: { manualUnlock: false, sessions: [] },
+      streak: { current: 4, longest: 9, lastActiveDate: todayISO() },
+      resources: {}, whiteboards: [],
+      quiz: { totalAsked: 0, totalCorrect: 0, recent: [] },
+    };
+    return { ...base, ...over };
+  }
+  const worked = (daysAgo, outcome = "solved-clean") => ({
+    id: `a${daysAgo}`, date: addDaysISO(todayISO(), -daysAgo), outcome,
+    patternGuess: "correct", timeToInsightMin: 5, timeToSolveMin: 20,
+    mistakeTags: [], soulStatement: "",
+  });
+  const withHistory = (attempts, over = {}) => activeState({
+    problems: [{ id: "p1", name: "P", number: 1, difficulty: "Medium", patternId: "two-pointers",
+      status: STATUS_ACTIVE, box: 1, nextReviewDate: todayISO(), attempts, ...over }],
+  });
+
+  test("test_plantContributions_sumToTheHealthShown", () => {
+    // If these ever diverge the explanation becomes a lie that looks precise.
+    const plant = computePlantState(withHistory([worked(1), worked(3), worked(5)]));
+    const total = 50 + plant.contributions.reduce((n, c) => n + c.delta, 0);
+    assert.equal(plant.health, Math.max(0, Math.min(100, total)));
+  });
+
+  test("test_plantContributions_areOrderedByEffect", () => {
+    // The question is "what is doing this", so the answer is the top of the list.
+    const plant = computePlantState(withHistory([worked(20), worked(25)]));
+    for (let i = 1; i < plant.contributions.length; i++) {
+      assert.ok(Math.abs(plant.contributions[i - 1].delta) >= Math.abs(plant.contributions[i].delta));
+    }
+  });
+
+  test("test_plantContributions_eachOneSaysWhatItIs", () => {
+    const plant = computePlantState(withHistory([worked(2)]));
+    for (const c of plant.contributions) {
+      assert.ok(c.label && c.label.length > 8, `unhelpful label: ${c.label}`);
+      assert.ok(Number.isInteger(c.delta), "a fractional contribution would not add up on screen");
+    }
+  });
+
+  test("test_plantContributions_aLapseIsNamedAsThePenalty", () => {
+    const plant = computePlantState(withHistory([worked(30)]));
+    const lapse = plant.contributions.find((c) => /since you last practised/.test(c.label));
+    assert.ok(lapse, "a long absence should appear by name");
+    assert.ok(lapse.delta < 0);
+  });
+
+  test("test_plantContributions_freshAccount_hasNothingToExplain", () => {
+    // Nothing has happened, so there is nothing that moved it.
+    assert.deepEqual(computePlantState(activeState()).contributions, []);
+  });
+
+  test("test_plantContributions_neverIncludeAZeroEffect", () => {
+    // A row saying "+0" is noise dressed as evidence.
+    const plant = computePlantState(withHistory([worked(1)]));
+    assert.ok(plant.contributions.every((c) => c.delta !== 0));
+  });
+});

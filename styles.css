@@ -1066,6 +1066,20 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 }
 .fault-list li:last-child { border-bottom: none; }
 
+.plant-why { margin: 0.5rem 0; }
+.plant-why summary { cursor: pointer; }
+.plant-contributions { list-style: none; margin: 0.5rem 0 0; padding: 0; font-size: 0.82rem; }
+.plant-contributions li {
+  display: flex; justify-content: space-between; gap: 1rem;
+  padding: 0.25rem 0; border-bottom: 1px solid var(--border);
+}
+.plant-contributions li:last-child { border-bottom: none; }
+.contrib-delta { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-muted); }
+.contrib-delta.up { color: var(--good); }
+.contrib-delta.down { color: var(--bad); }
+.contrib-total { font-weight: 700; border-top: 1px solid var(--border); }
+.contrib-total .contrib-delta { color: var(--text); }
+
 /* ---------- First run ---------- */
 
 .welcome-card { max-width: 34rem; margin: 2rem auto; }

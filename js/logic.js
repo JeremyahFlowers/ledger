@@ -716,19 +716,38 @@ export function computePlantState(state) {
       daysToNextStage: nextStage ? nextStage.min : 0,
       health: 50,
       vitality: "steady",
+      contributions: [],
       signals: { activeDaysInWindow: 0, windowDays: HEALTH_WINDOW_DAYS, daysSinceActive: null,
         recallRate: null, overdueCount: 0, overloaded: false, todaysMin: 0, budget: state.settings.dailyBudgetMin || 75 },
     };
   }
 
-  let health = 50;
-  health += Math.round((activeDaysInWindow / HEALTH_WINDOW_DAYS) * 30) - 15; // consistency: -15..+15
-  health += Math.min(15, state.streak.current * 1.5); // streak: 0..+15
-  if (daysSinceActive >= 7) health -= 25; // gone quiet
-  else if (daysSinceActive >= 3) health -= 10;
-  if (recallRate != null) health += Math.round(recallRate * 20) - 10; // active recall: -10..+10
-  health -= Math.min(20, overdueCount * 3); // stale reviews piling up
-  if (overloaded) health -= 15; // single-day cramming
+  // Built as a list of contributions rather than a running total, so the UI
+  // can show what actually moved the verdict instead of asserting one. The
+  // plant is this app's headline judgment and was its least explained thing:
+  // it said "stressed" and left you to guess which of six inputs did it.
+  //
+  // Faithful by construction, the same principle as the pattern model's
+  // explanations — these ARE the arithmetic, summed below, not a story told
+  // about a number computed elsewhere.
+  const contributions = [];
+  const add = (label, delta) => { if (delta) contributions.push({ label, delta: Math.round(delta) }); };
+
+  add(`Practised ${activeDaysInWindow} of the last ${HEALTH_WINDOW_DAYS} days`,
+    Math.round((activeDaysInWindow / HEALTH_WINDOW_DAYS) * 30) - 15);
+  add(`${state.streak.current}-day streak`, Math.min(15, state.streak.current * 1.5));
+  if (daysSinceActive >= 7) add(`${daysSinceActive} days since you last practised`, -25);
+  else if (daysSinceActive >= 3) add(`${daysSinceActive} days since you last practised`, -10);
+  if (recallRate != null) {
+    add(`Recognising the pattern ${Math.round(recallRate * 100)}% of the time`,
+      Math.round(recallRate * 20) - 10);
+  }
+  add(`${overdueCount} problem${overdueCount === 1 ? "" : "s"} left a long time`,
+    -Math.min(20, overdueCount * 3));
+  if (overloaded) add("Today's volume is past a healthy single sitting", -15);
+
+  const BASE_HEALTH = 50;
+  let health = contributions.reduce((n, c) => n + c.delta, BASE_HEALTH);
   health = Math.max(0, Math.min(100, Math.round(health)));
 
   let vitality = "thriving";
@@ -744,6 +763,9 @@ export function computePlantState(state) {
     daysToNextStage: nextStage ? Math.max(0, nextStage.min - totalDaysPracticed) : 0,
     health,
     vitality,
+    // Largest effect first: the question is "what is doing this", and the
+    // answer is the top of this list.
+    contributions: contributions.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)),
     signals: { activeDaysInWindow, windowDays: HEALTH_WINDOW_DAYS, daysSinceActive, recallRate, overdueCount, overloaded, todaysMin, budget },
   };
 }

@@ -42,7 +42,7 @@ one-line title is not enough to pick the work up again a week later.
   *Done:* offline states say what is and isn't safe, and what will happen when
   the connection returns.
 
-- [ ] **28. The plant's reasoning is buried.**
+- [x] **28. The plant's reasoning is buried.** _(1.4.0)_
   It says "stressed" and lists signals, but the mapping from signals to that
   word is only in the source. The plant is the app's headline judgment and the
   least explained thing in it.

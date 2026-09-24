@@ -85,6 +85,24 @@ function plantCardHtml(plant) {
           <span class="plant-vitality-label ${plant.vitality}">${VITALITY_LABEL[plant.vitality]}</span>
         </div>
         <p class="muted small">${plant.nextStageLabel ? `${plant.daysToNextStage} more practice day${plant.daysToNextStage === 1 ? "" : "s"} to ${esc(plant.nextStageLabel)}` : "Fully grown"} · ${plant.totalDaysPracticed} days practiced, ever</p>
+        <!-- What actually moved the verdict, largest first, with the number
+             each one contributed. These are the arithmetic rather than a
+             story about it — the same faithfulness rule the pattern model's
+             explanations follow. A plant that says "stressed" and leaves you
+             to guess which of six inputs did it is a judgment you cannot
+             argue with or act on. -->
+        <details class="plant-why">
+          <summary class="muted small">Why ${esc(VITALITY_LABEL[plant.vitality].toLowerCase())}?</summary>
+          <ul class="plant-contributions">
+            <li><span>Everyone starts here</span><span class="contrib-delta">50</span></li>
+            ${(plant.contributions || []).map((c) => `
+              <li>
+                <span>${esc(c.label)}</span>
+                <span class="contrib-delta ${c.delta > 0 ? "up" : "down"}">${c.delta > 0 ? "+" : ""}${c.delta}</span>
+              </li>`).join("")}
+            <li class="contrib-total"><span>Health</span><span class="contrib-delta">${plant.health}</span></li>
+          </ul>
+        </details>
         <ul class="plant-signals">
           <li>${signals.activeDaysInWindow}/${signals.windowDays} days active in the last two weeks</li>
           <li>${signals.recallRate != null ? `${pct(signals.recallRate)} pattern-recall accuracy recently` : "Answer a few pattern-recall questions to start tracking this"}</li>
