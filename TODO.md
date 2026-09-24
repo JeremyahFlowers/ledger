@@ -9,6 +9,73 @@ one-line title is not enough to pick the work up again a week later.
 
 ---
 
+# Cycle 2
+
+Drawn from what actually came up while building cycle 1 — the things I noticed
+in passing and didn't stop for.
+
+## P0 — heads for a cliff
+
+- [ ] **15. Nothing watches the sync payload size.**
+  The whole log syncs as one file and GitHub refuses anything over 1 MB. It's
+  at 15 KB now, and ~640 bytes per problem projects to ~320 KB at the 500-problem
+  cap — but Analyze now writes pasted statements *into* state, at 1–3 KB each,
+  and nothing warns before the wall. Hitting it means every save fails at once.
+  *Done:* the size is measured, shown in Settings when it matters, and a save
+  that would exceed the limit is caught with an explanation and a way to shed
+  weight rather than a raw API error.
+
+- [ ] **16. A failed sync never retries itself.**
+  A save that fails leaves the work in localStorage and the status at "offline"
+  until the next mutation happens to trigger a flush. Close the tab in between
+  and the only copy is on that device. "Save now" helps, but only if you notice.
+  *Done:* failed saves retry on their own with a backoff, and on regaining
+  connectivity.
+
+## P1 — the loop leaves value on the table
+
+- [ ] **17. Your previous code for a problem isn't there when you return.**
+  Every attempt stores the code you wrote, and the workspace opens empty on a
+  repeat. Spaced repetition on a problem you solved a month ago is exactly when
+  you'd want to see what you did last time — after you've had your attempt.
+  *Done:* a previous attempt's code is available in the workspace, deliberately
+  behind a reveal so it can't spoil the rep.
+
+- [ ] **18. Saved whiteboards aren't attached to anything.**
+  A session's drawing is uploaded and indexed by problem id, and the only place
+  to see one is the Whiteboard page's flat list.
+  *Done:* a problem's page shows the boards drawn while solving it.
+
+- [ ] **19. The activity heatmap is a dead end.**
+  It shows a year of counts and answers nothing about any of them.
+  *Done:* a day can be opened to see what was actually practised.
+
+- [ ] **20. The quiz ignores the schedule it sits beside.**
+  It cycles through problems while the whole app is built on a spacing
+  algorithm. The one page purely about recall is the one not using it.
+  *Done:* quiz selection is weighted by what's fading and what you've missed
+  before.
+
+## P2 — maintainability and reach
+
+- [ ] **21. views.js is 3,095 lines.**
+  It holds the dashboard, queue, log, session, reflect, journal, settings,
+  topics, problem detail and a dozen shared helpers. Every feature since has
+  made it worse, and it's now the file most likely to hide a bug like the
+  disabled-button one.
+  *Done:* split along seams that already exist, with no behaviour change and
+  the test suite green throughout.
+
+- [ ] **22. Mock mode is a checklist and nothing else.**
+  It flags the attempt and shows five prompts. It doesn't feel different from
+  an ordinary session, which is the entire point of practising one.
+  *Done:* a mock imposes the structure it's meant to — a clock you can't
+  quietly ignore, and prompts that arrive when they'd matter.
+
+- [ ] **23. The bank can't be worked from the keyboard.**
+  Filters are reachable; the 2,500-row list is mouse-only.
+  *Done:* arrow-key movement through results with Enter to start.
+
 ## P0 — loses work, or can't be undone
 
 These share a shape with the save bug: the user does real work and the app
