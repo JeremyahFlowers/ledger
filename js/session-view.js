@@ -481,6 +481,25 @@ export function renderWorkspace(root, store, actions) {
  * a link that throws you into another tab, where the timer isn't, every time
  * you need to re-read a constraint.
  */
+/** Where a statement came from, said plainly. A statement fetched against the
+ *  wrong problem looks exactly like a right one until you read it, and the
+ *  first question then is "where did this come from". */
+const STATEMENT_SOURCE = {
+  leetcode: "fetched from LeetCode",
+  pasted: "pasted by you",
+};
+
+function statementSourceHtml(problem) {
+  const meta = problem.statementMeta;
+  // Statements saved before provenance was recorded. Saying "source unknown"
+  // is the truth; guessing "pasted" because that used to be the only way would
+  // be a plausible lie.
+  const where = meta?.source ? STATEMENT_SOURCE[meta.source] : "source not recorded";
+  const when = meta?.at ? ` on ${esc(meta.at)}` : "";
+  return `<p class="muted small ws-statement-source">Statement ${esc(where)}${when}.
+    <button type="button" class="link-button" id="ws-replace-statement">Replace it</button></p>`;
+}
+
 function statementHtml(problem, { loading = false } = {}) {
   if (loading) return `<p class="muted small">Looking for a synced copy…</p>`;
   if (!problem.statement) {
@@ -494,7 +513,8 @@ function statementHtml(problem, { loading = false } = {}) {
         <button type="button" class="btn btn-sm btn-primary" id="ws-save-statement">Save statement</button>
       </div>`;
   }
-  return `<div class="ws-statement">${richText(problem.statement)}</div>`;
+  return `<div class="ws-statement">${richText(problem.statement)}</div>
+    ${statementSourceHtml(problem)}`;
 }
 
 function wireStatementPane(root, store, problem) {
@@ -512,7 +532,7 @@ function wireStatementPane(root, store, problem) {
       // The session can end while this is in flight, and the pane it was going
       // to paint would then belong to a different problem or be gone entirely.
       if (!body.isConnected || session?.problem?.id !== problem.id) return;
-      if (fetched) problem.statement = fetched;
+      if (fetched) saveStatement(store, problem, fetched, "leetcode");
       repaint();
     });
   }
@@ -536,13 +556,7 @@ function wireStatementPane(root, store, problem) {
         input.focus();
         return;
       }
-      store.mutate((s) => {
-        const stored = s.problems.find((x) => x.id === problem.id);
-        if (stored) stored.statement = text;
-      }, `Ledger: statement for ${problem.name}`);
-      // The store copy is what persists; this keeps the in-session object in
-      // step so the pane can repaint without re-reading state.
-      problem.statement = text;
+      saveStatement(store, problem, text, "pasted");
       repaint();
       if (truncated) toast(`Saved, but trimmed to ${MAX_STATEMENT_CHARS.toLocaleString()} characters.`);
     });
@@ -568,18 +582,51 @@ function wireStatementPane(root, store, problem) {
     }
   });
 
-  editBtn.addEventListener("click", () => {
-    const current = problem.statement || "";
+  const openEditor = ({ keepText }) => {
+    const current = keepText ? problem.statement || "" : "";
     body.innerHTML = `
       <div class="ws-statement-empty">
+        ${keepText ? "" : `<p class="muted small">Replacing the statement. Fetch it again, or paste
+          the right one — whichever you save wins.</p>
+          <button type="button" class="btn btn-ghost btn-sm" id="ws-fetch-statement">Fetch it for me</button>`}
         <textarea class="textarea ws-statement-input" id="ws-statement-input" rows="14">${esc(current)}</textarea>
         <button type="button" class="btn btn-sm btn-primary" id="ws-save-statement">Save statement</button>
       </div>`;
     editBtn.hidden = true;
     wireSave();
+  };
+
+  // Edit keeps what is there — a typo, a missing constraint. Replace clears
+  // it and offers the fetch again, which is the only way back from a
+  // statement synced against the wrong problem.
+  editBtn.addEventListener("click", () => openEditor({ keepText: true }));
+  body.addEventListener("click", (event) => {
+    if (event.target.closest("#ws-replace-statement")) openEditor({ keepText: false });
   });
 
   wireSave();
+}
+
+/**
+ * Store a statement, with where it came from.
+ *
+ * The fetched path used to assign straight onto the problem object, which is
+ * the same object that lives in state — so it changed the app's data without
+ * going through mutate: never cached, never synced, and present only until the
+ * tab closed. It looked like it worked, and the next session fetched it again.
+ */
+function saveStatement(store, problem, text, source) {
+  const meta = { source, at: todayISO() };
+  store.mutate((s) => {
+    const stored = s.problems.find((x) => x.id === problem.id);
+    if (!stored) return;
+    stored.statement = text;
+    stored.statementMeta = meta;
+  }, `Ledger: statement for ${problem.name}`);
+  // Keeps the in-session object in step so the pane repaints without
+  // re-reading state.
+  problem.statement = text;
+  problem.statementMeta = meta;
 }
 
 function patternRevealHtml(state, problem, correctPatternId) {

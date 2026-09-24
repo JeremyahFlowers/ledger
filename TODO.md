@@ -45,7 +45,7 @@ data-loss path that was reproduced in a browser before a line was changed.
   statements and the catalog, and stops there.
   *Done:* everything you wrote is findable, wherever you wrote it.
 
-- [ ] **43. A problem's statement is write-once.**
+- [x] **43. A problem's statement is write-once.** _(1.6.0)_
   Statements arrive from the LeetCode sync or get pasted in, and the workspace
   can edit one. Nothing says where the one you're reading came from, or when,
   and a statement fetched against the wrong problem can only be fixed by

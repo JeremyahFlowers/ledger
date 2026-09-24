@@ -1591,3 +1591,11 @@ input[type="checkbox"]:focus-visible {
 .settings-section .card h3 { font-size: 1rem; margin: 0 0 0.35rem; }
 /* Scrolled-to headings shouldn't land under the sticky header. */
 .settings-section > h2 { scroll-margin-top: 5rem; }
+
+/* Where a statement came from. Under the text rather than above it: it is
+   the answer to a question you only ask after reading something that looks
+   wrong. */
+.ws-statement-source {
+  margin: 0.8rem 0 0; padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+}
