@@ -46,7 +46,7 @@ in passing and didn't stop for.
   to see one is the Whiteboard page's flat list.
   *Done:* a problem's page shows the boards drawn while solving it.
 
-- [ ] **19. The activity heatmap is a dead end.**
+- [x] **19. The activity heatmap is a dead end.** _(1.3.0)_
   It shows a year of counts and answers nothing about any of them.
   *Done:* a day can be opened to see what was actually practised.
 

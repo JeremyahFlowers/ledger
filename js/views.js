@@ -168,8 +168,12 @@ function heatmapSvg(counts, { weeks = 20 } = {}) {
       const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       const n = counts[iso] || 0;
       const alpha = n === 0 ? 0 : 0.25 + 0.75 * Math.min(1, n / max);
+      // Days with something in them are clickable; empty ones are not, because
+      // a cell that opens "you did nothing" is a dead end dressed as a link.
       rects += `<rect x="${col * (cell + gap)}" y="${row * (cell + gap)}" width="${cell}" height="${cell}" rx="2"
-        fill="var(--accent)" fill-opacity="${n === 0 ? 0.08 : alpha.toFixed(2)}"><title>${iso}: ${n}</title></rect>`;
+        fill="var(--accent)" fill-opacity="${n === 0 ? 0.08 : alpha.toFixed(2)}"
+        ${n > 0 ? `class="heat-cell" data-heat-day="${iso}" tabindex="0" role="button"
+          aria-label="${iso}, ${n} attempt${n === 1 ? "" : "s"} — open"` : ""}><title>${iso}: ${n}</title></rect>`;
       d.setDate(d.getDate() + 1);
     }
     col++;
@@ -802,6 +806,25 @@ function wireTabButtons(root, actions) {
  * Topics practice ladder alike. */
 /** Problem names are buttons into that problem's history; bound here rather
  * than in every view that happens to list one. */
+/** Heatmap cells that have something in them open that day. Bound alongside
+ * the other cross-view links, since the heatmap appears on more than one
+ * page. Keyboard too: they are focusable, so Enter and Space must work. */
+export function wireHeatmapDays(root, actions) {
+  root.querySelectorAll("[data-heat-day]").forEach((cell) => {
+    const open = () => {
+      showDay(cell.dataset.heatDay);
+      actions.switchTab("dayDetail");
+    };
+    cell.addEventListener("click", open);
+    cell.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        open();
+      }
+    });
+  });
+}
+
 export function wireProblemLinks(root, actions) {
   root.querySelectorAll("[data-open-problem]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -3175,4 +3198,95 @@ function attemptEditHtml(a) {
         </div>
       </form>
     </li>`;
+}
+
+// ---------- One day's practice ----------
+//
+// The activity heatmap showed a year of counts and answered nothing about any
+// of them: the densest square on the grid was as opaque as the empty ones.
+// This is what a cell opens.
+
+export const dayNav = { date: null };
+export function showDay(iso) {
+  dayNav.date = iso;
+}
+
+export function renderDayDetail(root, store, actions) {
+  const state = store.state;
+  const iso = dayNav.date;
+  const attempts = allAttempts(state).filter((a) => a.date === iso);
+
+  if (!iso) {
+    actions.switchTab("dashboard");
+    return;
+  }
+
+  const minutes = attempts.reduce((n, a) => n + (a.timeToSolveMin || 0), 0);
+  const clean = attempts.filter((a) => a.outcome === "solved-clean").length;
+  const recalled = attempts.filter((a) => a.patternGuess === "correct").length;
+  const boards = (state.whiteboards || []).filter((b) => b.date === iso);
+  const journal = (state.journal || []).filter((j) => j.date === iso);
+
+  root.innerHTML = `
+    <div class="card">
+      <button class="btn btn-ghost btn-sm" id="day-back" style="margin-bottom:0.6rem">&larr; Back</button>
+      <h2 style="margin:0">${esc(fmtDate(iso))}</h2>
+      ${attempts.length === 0
+        ? `<p class="muted">Nothing recorded on this day.</p>`
+        : `<div class="stat-row" style="margin-top:0.75rem">
+            <div class="stat"><span class="stat-num">${attempts.length}</span><span class="stat-label">attempt${attempts.length === 1 ? "" : "s"}</span></div>
+            <div class="stat"><span class="stat-num">${minutes}</span><span class="stat-label">minutes</span></div>
+            <div class="stat"><span class="stat-num">${clean}</span><span class="stat-label">solved clean</span></div>
+            <div class="stat"><span class="stat-num">${recalled}</span><span class="stat-label">pattern recalled</span></div>
+          </div>`}
+    </div>
+
+    ${attempts.length ? `
+    <div class="card">
+      <h2>What you worked</h2>
+      <ul class="attempt-list">
+        ${attempts.map((a) => {
+          const glyph = OUTCOME_GLYPH[a.outcome];
+          return `
+          <li class="attempt-row">
+            <div class="row gap-sm" style="flex-wrap:wrap;align-items:center">
+              <span class="outcome-glyph ${glyph ? glyph.cls : ""}">${glyph ? glyph.symbol : "?"}</span>
+              <button type="button" class="link-button" data-open-problem="${esc(a.problemId)}">${esc(a.problemName)}</button>
+              <span class="pill pill-icon"><span class="pattern-icon">${patternIcon(a.patternId, { size: 13 })}</span>${esc(patternName(state, a.patternId))}</span>
+              ${a.isMock ? `<span class="pill pill-warn">mock</span>` : ""}
+            </div>
+            <p class="muted small" style="margin:0.3rem 0 0">
+              ${a.timeToInsightMin != null ? `${a.timeToInsightMin} min to the approach` : "no insight time"} ·
+              ${a.timeToSolveMin != null ? `${a.timeToSolveMin} min total` : "no total"}</p>
+            ${a.soulStatement ? `<p class="attempt-soul">${esc(a.soulStatement)}</p>` : ""}
+          </li>`;
+        }).join("")}
+      </ul>
+    </div>` : ""}
+
+    ${journal.length ? `
+    <div class="card">
+      <h2>What you wrote</h2>
+      <ul class="journal-list">
+        ${journal.map((j) => `<li><p>${esc(j.text)}</p></li>`).join("")}
+      </ul>
+    </div>` : ""}
+
+    ${boards.length ? `
+    <div class="card">
+      <h2>What you drew</h2>
+      <ul class="board-list">
+        ${boards.map((b) => `
+          <li>
+            <div class="row space-between" style="align-items:center;gap:0.5rem">
+              <span class="muted small">${esc(b.caption || "Whiteboard")}</span>
+              <button class="btn btn-ghost btn-xs" data-view-board="${esc(b.id)}">Show</button>
+            </div>
+            <div class="whiteboard-thumb-host" id="wb-thumb-${esc(b.id)}"></div>
+          </li>`).join("")}
+      </ul>
+    </div>` : ""}`;
+
+  root.querySelector("#day-back").addEventListener("click", () => actions.switchTab("dashboard"));
+  wireBoardViewers(root, store, boards);
 }

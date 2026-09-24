@@ -69,6 +69,8 @@ PAGE_TO_SECTION.topicDetail = "learn";
 // Same arrangement for a single problem's history: reachable from anywhere a
 // problem is listed, and it belongs under Practice for nav-highlight purposes.
 PAGE_TO_SECTION.problemDetail = "practice";
+// A single day's practice, opened from the activity heatmap.
+PAGE_TO_SECTION.dayDetail = "track";
 
 // Entered only via a Dashboard/Workspace button, never from the tab bar —
 // rendering one of these swaps the full nav for a minimal exit bar so the
@@ -94,6 +96,7 @@ function currentViewName() {
   if (SECTIONS[activeTab]) return `${SECTIONS[activeTab].label} overview`;
   if (activeTab === "topicDetail") return "Pattern detail";
   if (activeTab === "problemDetail") return "Problem history";
+  if (activeTab === "dayDetail") return "That day's practice";
   const owner = PAGE_TO_SECTION[activeTab];
   const page = owner && SECTIONS[owner].pages.find((p) => p.id === activeTab);
   return page ? `${SECTIONS[owner].label}, ${page.label}` : "Ledger";
@@ -268,6 +271,7 @@ function celebrateGrowth() {
 const PAGE_WIDTH = {
   workspace: "page-full",     // an IDE: statement, editor and board side by side
   problemDetail: "page-read", // a history to read, not a dashboard
+  dayDetail: "page-read",
   dashboard: "page-wide",     // a grid of cards, and the more of them visible the better
   bank: "page-wide",          // ~2,500 rows to scan
   queue: "page-wide",         // a long list of rows, same as the bank
@@ -382,6 +386,7 @@ function renderAll() {
   // rather than in each view that happens to have one.
   views.wireNavigationTargets(root, actions);
   views.wireProblemLinks(root, actions);
+  views.wireHeatmapDays(root, actions);
   renderPlantWidget();
   applyGrowthAnimation();
 }
@@ -425,6 +430,7 @@ function renderViewInner() {
   if (SESSION_TABS[activeTab]) return SESSION_TABS[activeTab].render(root, store, actions);
   if (activeTab === "topicDetail") return views.renderTopicDetail(root, store, actions);
   if (activeTab === "problemDetail") return views.renderProblemDetail(root, store, actions);
+  if (activeTab === "dayDetail") return views.renderDayDetail(root, store, actions);
   if (STANDALONE[activeTab]) return STANDALONE[activeTab].render(root, store, actions);
   if (SECTIONS[activeTab]) return renderSectionIndex(root, SECTIONS[activeTab], actions);
 

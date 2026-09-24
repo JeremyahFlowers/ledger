@@ -569,6 +569,11 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 
 /* ---------- Heatmap, sparkline, ring, outcome glyphs, week strip ---------- */
 .heatmap { display: block; }
+/* Only the days with something in them are interactive, so only those get the
+   affordance. */
+.heat-cell { cursor: pointer; }
+.heat-cell:hover { stroke: var(--accent); stroke-width: 1.5; }
+.heat-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .sparkline { display: block; }
 .sparkline polyline { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .ring circle:nth-child(2) { transition: stroke-dashoffset 0.4s ease; }
