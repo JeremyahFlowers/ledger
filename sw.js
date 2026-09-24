@@ -60,6 +60,8 @@ const SHELL = [
   "./js/version.js",
   "./js/errors.js",
   "./js/session-store.js",
+  "./js/ui.js",
+  "./js/session-view.js",
 ];
 
 self.addEventListener("install", (event) => {

@@ -58,7 +58,7 @@ in passing and didn't stop for.
 
 ## P2 — maintainability and reach
 
-- [ ] **21. views.js is 3,095 lines.**
+- [x] **21. views.js is 3,095 lines.** _(1.3.0)_
   It holds the dashboard, queue, log, session, reflect, journal, settings,
   topics, problem detail and a dozen shared helpers. Every feature since has
   made it worse, and it's now the file most likely to hide a bug like the

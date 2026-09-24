@@ -75,7 +75,9 @@ describe("the Reflect save gate", () => {
   // every click. A user with a finished session could not save it and had no
   // way to find out why. These pin the fix: the button stays live, and the
   // requirement explains itself on submit.
-  const views = readFileSync(fileURLToPath(new URL("../js/views.js", import.meta.url)), "utf8");
+  // Reflect moved to session-view.js when views.js was split; the guarantee
+  // is about the markup, not about which file holds it.
+  const views = readFileSync(fileURLToPath(new URL("../js/session-view.js", import.meta.url)), "utf8");
   const styles = readFileSync(fileURLToPath(new URL("../styles.css", import.meta.url)), "utf8");
 
   test("test_reflectSave_buttonIsNeverRenderedDisabled", () => {
