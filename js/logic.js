@@ -38,6 +38,61 @@ export const MISTAKE_TAGS = [
   "other",
 ];
 
+/** Counts practice "events" per calendar date across attempts, mocks, and
+ * system design sessions — the data a GitHub-style activity heatmap needs. */
+export function activityByDate(state) {
+  const counts = {};
+  const bump = (date) => {
+    if (date) counts[date] = (counts[date] || 0) + 1;
+  };
+  allAttempts(state).forEach((a) => bump(a.date));
+  state.mocks.forEach((m) => bump(m.date));
+  state.systemDesign.sessions.forEach((s) => bump(s.date));
+  return counts;
+}
+
+/** Rolling solved-clean rate over a pattern's last N attempts, oldest to
+ * newest — what a trend sparkline draws, so a pattern that's recently
+ * improving doesn't get buried by a bad all-time average. */
+
+export function patternStats(state) {
+  return state.patterns.map((pat) => {
+    const attempts = allAttempts(state, pat.id);
+    const n = attempts.length;
+    const solvedClean = attempts.filter((a) => a.outcome === "solved-clean").length;
+    const guessedCorrect = attempts.filter((a) => a.patternGuess === "correct").length;
+    const times = attempts.map((a) => a.timeToInsightMin).filter((t) => typeof t === "number" && !Number.isNaN(t));
+    const avgInsight = times.length ? times.reduce((s, t) => s + t, 0) / times.length : null;
+    const mistakeFreq = {};
+    attempts.forEach((a) => (a.mistakeTags || []).forEach((t) => (mistakeFreq[t] = (mistakeFreq[t] || 0) + 1)));
+    const topMistake = Object.entries(mistakeFreq).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+    return {
+      pattern: pat,
+      problemCount: state.problems.filter((p) => p.patternId === pat.id).length,
+      attempts: n,
+      solvedCleanRate: n ? solvedClean / n : null,
+      patternGuessRate: n ? guessedCorrect / n : null,
+      avgInsightMin: avgInsight,
+      topMistake,
+    };
+  });
+}
+
+
+// Re-exported from stats.js and state-health.js, where these now live.
+export {
+  patternTrend,
+  PROGRESS_WEEKS, weeklyProgress, patternMovement, progressSummary,
+} from "./stats.js";
+
+// Re-exported from state-health.js, where these now live. Everything already
+// imports them from here, and a split that forces every caller to be rewritten
+// is a split that gets abandoned halfway.
+export {
+  SYNC_LIMIT_BYTES, SYNC_WARN_FRACTION, syncFootprint, formatBytes,
+  inspectImport, describeState, compareStates,
+} from "./state-health.js";
+
 // ---------- Mock interviews ----------
 //
 // A mock used to be an ordinary session with a pill on it and five prompts
@@ -273,28 +328,6 @@ export function allAttempts(state, patternId) {
   return out.sort((x, y) => x.date.localeCompare(y.date));
 }
 
-export function patternStats(state) {
-  return state.patterns.map((pat) => {
-    const attempts = allAttempts(state, pat.id);
-    const n = attempts.length;
-    const solvedClean = attempts.filter((a) => a.outcome === "solved-clean").length;
-    const guessedCorrect = attempts.filter((a) => a.patternGuess === "correct").length;
-    const times = attempts.map((a) => a.timeToInsightMin).filter((t) => typeof t === "number" && !Number.isNaN(t));
-    const avgInsight = times.length ? times.reduce((s, t) => s + t, 0) / times.length : null;
-    const mistakeFreq = {};
-    attempts.forEach((a) => (a.mistakeTags || []).forEach((t) => (mistakeFreq[t] = (mistakeFreq[t] || 0) + 1)));
-    const topMistake = Object.entries(mistakeFreq).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
-    return {
-      pattern: pat,
-      problemCount: state.problems.filter((p) => p.patternId === pat.id).length,
-      attempts: n,
-      solvedCleanRate: n ? solvedClean / n : null,
-      patternGuessRate: n ? guessedCorrect / n : null,
-      avgInsightMin: avgInsight,
-      topMistake,
-    };
-  });
-}
 
 // One missed day per week is forgiven. The rest of this app spends its effort
 // telling people to stop at their budget, that a lighter week is a good
@@ -383,72 +416,6 @@ export function lastAttemptWithCode(problem) {
   return withCode.reduce((latest, a) => ((a.date || "") >= (latest.date || "") ? a : latest), withCode[0]);
 }
 
-// ---------- Sync payload size ----------
-//
-// The whole log syncs as one file through the GitHub Contents API, which
-// refuses anything over 1 MB. That is a cliff, not a slope: the save that
-// crosses it fails, and so does every save after it, with a raw API error.
-//
-// It was comfortable while a problem cost ~640 bytes. Analyze now writes
-// pasted statements into state at 1-3 KB each, which is the first thing here
-// that grows without bound, so the distance to the wall is worth measuring
-// before it is worth explaining.
-
-/** GitHub's hard limit on a file written through the Contents API. */
-export const SYNC_LIMIT_BYTES = 1024 * 1024;
-
-/** Start saying something at this fraction of the limit — far enough out that
- * shedding weight is still a choice rather than an emergency. */
-export const SYNC_WARN_FRACTION = 0.7;
-
-/**
- * Measure the synced document and say what is taking the room.
- *
- * Sizes are of the JSON actually sent, not of the objects in memory, because
- * that is what the limit applies to. Reported per category so the advice can
- * be specific: "your statements are 400 KB" is actionable, "your data is
- * large" is not.
- */
-export function syncFootprint(state) {
-  const encoder = typeof TextEncoder === "function" ? new TextEncoder() : null;
-  const bytes = (value) => {
-    const json = JSON.stringify(value ?? null);
-    return encoder ? encoder.encode(json).length : json.length;
-  };
-
-  const total = bytes(state);
-  const problems = state?.problems || [];
-  const statements = problems.reduce((n, p) => n + (p.statement ? bytes(p.statement) : 0), 0);
-  const code = problems.reduce(
-    (n, p) => n + (p.attempts || []).reduce((m, a) => m + (a.code ? bytes(a.code) : 0), 0), 0);
-
-  return {
-    total,
-    limit: SYNC_LIMIT_BYTES,
-    fraction: total / SYNC_LIMIT_BYTES,
-    warn: total >= SYNC_LIMIT_BYTES * SYNC_WARN_FRACTION,
-    over: total >= SYNC_LIMIT_BYTES,
-    breakdown: {
-      statements,
-      code,
-      // Everything that isn't one of the two unbounded contributors.
-      rest: Math.max(0, total - statements - code),
-    },
-    counts: {
-      problems: problems.length,
-      withStatement: problems.filter((p) => p.statement).length,
-      attempts: problems.reduce((n, p) => n + (p.attempts || []).length, 0),
-    },
-  };
-}
-
-/** Human size, for a sentence rather than a table. */
-export function formatBytes(n) {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(2)} MB`;
-}
-
 // ---------- Box intervals ----------
 //
 // boxIntervalsDays decides when each box comes back round, and was honoured
@@ -501,75 +468,6 @@ export function parseBoxIntervals(text) {
     .map((part) => part.trim())
     .filter((part) => part !== "")
     .map((part) => (/^\d+$/.test(part) ? Number(part) : NaN));
-}
-
-// ---------- Validating an imported state file ----------
-//
-// Import replaces the entire prep log, and it used to accept anything that
-// parsed as JSON: a truncated download, an unrelated file, or a hand-edited
-// one with a wrong shape silently destroyed every problem, attempt and note.
-// CLAUDE.md requires validating at the boundary, and a file the user picked
-// off their disk is exactly that boundary.
-//
-// The checks are deliberately shallow — enough to be confident this is a
-// Ledger state file and to say what is in it, not a schema validator. A file
-// that passes is then run through migrateState like any other.
-
-/** Fields an import must have before it is allowed to replace anything. */
-const REQUIRED_ARRAYS = ["problems", "patterns"];
-
-/**
- * Describe a parsed import, and say whether it is safe to apply.
- *
- * Returns counts as well as problems, so the user can be shown what they are
- * about to overwrite and what with, rather than being asked to confirm a
- * change they cannot see.
- */
-export function inspectImport(candidate) {
-  const errors = [];
-  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
-    return { ok: false, errors: ["That file doesn't contain a Ledger backup."], problems: 0, attempts: 0 };
-  }
-
-  for (const key of REQUIRED_ARRAYS) {
-    if (!Array.isArray(candidate[key])) errors.push(`Missing its "${key}" list.`);
-  }
-
-  const problems = Array.isArray(candidate.problems) ? candidate.problems : [];
-  // One malformed problem means the file was produced by something other than
-  // this app, and applying the rest would leave a half-broken log.
-  const malformed = problems.filter((p) => !p || typeof p !== "object" || !p.id || !p.name).length;
-  if (malformed) errors.push(`${malformed} of ${problems.length} problems are missing an id or a name.`);
-
-  const badAttempts = problems.filter(
-    (p) => p && p.attempts !== undefined && !Array.isArray(p.attempts)).length;
-  if (badAttempts) errors.push(`${badAttempts} problems have an unreadable attempt history.`);
-
-  if (candidate.settings && typeof candidate.settings !== "object") {
-    errors.push("Its settings are unreadable.");
-  }
-
-  const attempts = problems.reduce(
-    (n, p) => n + (Array.isArray(p?.attempts) ? p.attempts.length : 0), 0);
-
-  return {
-    ok: errors.length === 0,
-    errors,
-    problems: problems.length,
-    attempts,
-    mocks: Array.isArray(candidate.mocks) ? candidate.mocks.length : 0,
-    journal: Array.isArray(candidate.journal) ? candidate.journal.length : 0,
-    appVersion: candidate.meta?.appVersion || null,
-    createdAt: candidate.meta?.createdAt || null,
-  };
-}
-
-/** One-line summary of what a state holds, for the import confirmation. */
-export function describeState(state) {
-  const problems = state?.problems?.length || 0;
-  const attempts = (state?.problems || []).reduce(
-    (n, p) => n + (Array.isArray(p?.attempts) ? p.attempts.length : 0), 0);
-  return `${problems} problem${problems === 1 ? "" : "s"}, ${attempts} attempt${attempts === 1 ? "" : "s"}`;
 }
 
 // ---------- Refreshers, not deadlines ----------
@@ -854,42 +752,7 @@ export function uid() {
   return (crypto.randomUUID && crypto.randomUUID()) || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-/** Counts practice "events" per calendar date across attempts, mocks, and
- * system design sessions — the data a GitHub-style activity heatmap needs. */
-export function activityByDate(state) {
-  const counts = {};
-  const bump = (date) => {
-    if (date) counts[date] = (counts[date] || 0) + 1;
-  };
-  allAttempts(state).forEach((a) => bump(a.date));
-  state.mocks.forEach((m) => bump(m.date));
-  state.systemDesign.sessions.forEach((s) => bump(s.date));
-  return counts;
-}
 
-/** Rolling solved-clean rate over a pattern's last N attempts, oldest to
- * newest — what a trend sparkline draws, so a pattern that's recently
- * improving doesn't get buried by a bad all-time average. */
-export function patternTrend(state, patternId, window = 10) {
-  const attempts = allAttempts(state, patternId).slice(-window);
-  let solved = 0;
-  return attempts.map((a, i) => {
-    if (a.outcome === "solved-clean") solved += 1;
-    return solved / (i + 1);
-  });
-}
-
-function shuffle(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
-/** Picks a random already-attempted problem for the pattern-recognition
- * quiz, avoiding the last few asked where possible so it doesn't repeat the
- * same one twice in a row. */
 /**
  * Score a problem's worth as a recall question. Higher is more worth asking.
  *
@@ -956,6 +819,14 @@ export function pickQuizProblem(state, excludeIds = [], pick = Math.random) {
 
 /** Builds a shuffled multiple-choice option list for the quiz: the correct
  * pattern plus up to count-1 random distractors from the other patterns. */
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 export function quizOptions(state, correctPatternId, count = 4) {
   const others = shuffle(state.patterns.filter((p) => p.id !== correctPatternId).map((p) => p.id));
   return shuffle([correctPatternId, ...others.slice(0, count - 1)]);
@@ -1061,194 +932,3 @@ export function recommendSession(state) {
   return { type: "none", problem: null, patternId: null, message: "You've covered today's queue. That's a real stopping point." };
 }
 
-// ---------- Progress over time ----------
-//
-// The app already records everything needed to answer "am I actually getting
-// better?", but scattered across three pages: outcomes in the queue, recall
-// accuracy in the quiz, per-pattern rates in the mastery table. These functions
-// aggregate that into a trajectory.
-//
-// Deliberately, none of them reward volume on its own. The failure mode this
-// whole app exists to prevent is grinding harder and calling it progress, so
-// the measures here are about getting *better* — solving cleanly, and
-// recognizing the pattern faster — with volume reported only so a spike
-// followed by a collapse is visible for what it is.
-
-const MS_PER_DAY = 86400000;
-export const PROGRESS_WEEKS = 8;
-/** Below this a week's rate is noise, not a trend, and is reported as null. */
-const MIN_ATTEMPTS_FOR_RATE = 2;
-/** A week this far above the trailing norm is a spike worth naming. */
-const SPIKE_MULTIPLE = 2.5;
-
-function mondayOf(iso) {
-  const d = new Date(`${iso}T00:00:00`);
-  const dayFromMonday = (d.getDay() + 6) % 7;
-  d.setDate(d.getDate() - dayFromMonday);
-  return d.toISOString().slice(0, 10);
-}
-
-function median(values) {
-  if (!values.length) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-}
-
-/**
- * One row per week, oldest first, including weeks with no activity — a gap is
- * part of the story and collapsing it would hide exactly the pattern worth
- * seeing.
- */
-export function weeklyProgress(state, weeks = PROGRESS_WEEKS, patternId = null) {
-  // patternId narrows the same calculation to one pattern, so the per-pattern
-  // trend on a topic page is the global chart with a filter rather than a
-  // second implementation that could disagree with it.
-  const attempts = allAttempts(state, patternId);
-  const thisMonday = mondayOf(todayISO());
-
-  const buckets = new Map();
-  for (let i = weeks - 1; i >= 0; i--) {
-    const d = new Date(`${thisMonday}T00:00:00`);
-    d.setDate(d.getDate() - i * 7);
-    buckets.set(d.toISOString().slice(0, 10), []);
-  }
-  for (const a of attempts) {
-    const week = mondayOf(a.date);
-    if (buckets.has(week)) buckets.get(week).push(a);
-  }
-
-  return [...buckets.entries()].map(([weekStart, rows]) => {
-    const clean = rows.filter((a) => a.outcome === "solved-clean").length;
-    const insights = rows.map((a) => a.timeToInsightMin).filter((n) => typeof n === "number");
-    return {
-      weekStart,
-      attempts: rows.length,
-      cleanRate: rows.length >= MIN_ATTEMPTS_FOR_RATE ? clean / rows.length : null,
-      medianInsightMin: median(insights),
-      minutes: rows.reduce((sum, a) => sum + (a.timeToSolveMin || 0), 0),
-    };
-  });
-}
-
-/**
- * Which patterns moved, comparing the most recent attempts against what came
- * before them.
- *
- * Split by attempt count rather than by date: practice is uneven, and a
- * fortnight where a pattern never came up says nothing about whether it
- * improved. Patterns without enough attempts on both sides are left out rather
- * than shown with a meaningless delta.
- */
-export function patternMovement(state, { recent = 5, minEach = 2 } = {}) {
-  const out = [];
-  for (const pattern of state.patterns) {
-    const attempts = allAttempts(state, pattern.id);
-    if (attempts.length < minEach * 2) continue;
-
-    const split = Math.max(minEach, attempts.length - recent);
-    const before = attempts.slice(0, split);
-    const after = attempts.slice(split);
-    if (before.length < minEach || after.length < minEach) continue;
-
-    const rate = (rows) => rows.filter((a) => a.outcome === "solved-clean").length / rows.length;
-    const beforeRate = rate(before);
-    const afterRate = rate(after);
-    out.push({
-      pattern,
-      before: beforeRate,
-      after: afterRate,
-      delta: afterRate - beforeRate,
-      attempts: attempts.length,
-    });
-  }
-  return out.sort((a, b) => b.delta - a.delta);
-}
-
-/**
- * A plain-language read of the trajectory, plus anything worth flagging.
- *
- * The flag matters as much as the trend: a week at several times the usual
- * volume is the shape that precedes burning out and stopping, and this app
- * exists because that happened. Naming it while it's happening is the point.
- */
-export function progressSummary(state, weeks = PROGRESS_WEEKS, patternId = null) {
-  const rows = weeklyProgress(state, weeks, patternId);
-  const rated = rows.filter((r) => r.cleanRate != null);
-  const timed = rows.filter((r) => r.medianInsightMin != null);
-
-  const half = Math.floor(rated.length / 2);
-  const avg = (list, key) => (list.length ? list.reduce((s, r) => s + r[key], 0) / list.length : null);
-  const cleanEarlier = half ? avg(rated.slice(0, half), "cleanRate") : null;
-  const cleanRecent = half ? avg(rated.slice(half), "cleanRate") : null;
-
-  const insightHalf = Math.floor(timed.length / 2);
-  const insightEarlier = insightHalf ? avg(timed.slice(0, insightHalf), "medianInsightMin") : null;
-  const insightRecent = insightHalf ? avg(timed.slice(insightHalf), "medianInsightMin") : null;
-
-  const active = rows.filter((r) => r.attempts > 0);
-  const typical = active.length > 1
-    ? active.slice(0, -1).reduce((s, r) => s + r.attempts, 0) / Math.max(1, active.length - 1)
-    : null;
-  const latest = rows[rows.length - 1];
-  const spike = typical != null && typical > 0 && latest.attempts > typical * SPIKE_MULTIPLE;
-
-  return {
-    weeks: rows,
-    hasEnoughData: rated.length >= 2,
-    cleanRateDelta: cleanEarlier != null && cleanRecent != null ? cleanRecent - cleanEarlier : null,
-    insightDelta: insightEarlier != null && insightRecent != null ? insightRecent - insightEarlier : null,
-    totalAttempts: rows.reduce((s, r) => s + r.attempts, 0),
-    activeWeeks: active.length,
-    spike: spike ? { attempts: latest.attempts, typical: Math.round(typical * 10) / 10 } : null,
-  };
-}
-
-// ---------- Comparing two versions of the log ----------
-
-/**
- * What differs between this device's state and the one on the server.
- *
- * A sync conflict asks you to discard one side or the other, and until now it
- * asked blind — "keep mine" or "take theirs" with no indication of what either
- * one throws away. Attempts carry stable ids, so the two sides can be compared
- * exactly rather than guessed at, and the answer is usually reassuring: most
- * conflicts are one device a few minutes stale, not a fork with real work on
- * both sides.
- *
- * Counts attempts rather than problems because attempts are the irreplaceable
- * part — a problem can be re-added in seconds, a logged rep with its timings
- * and soul statement cannot be reconstructed.
- */
-export function compareStates(mine, theirs) {
-  const summarize = (state) => {
-    if (!state) return null;
-    const attempts = allAttempts(state);
-    return {
-      problems: state.problems.length,
-      attempts: attempts.length,
-      soulStatements: attempts.filter((a) => a.soulStatement).length,
-      lastActivity: attempts.length ? attempts[attempts.length - 1].date : null,
-    };
-  };
-
-  const idsOf = (state) => new Set(state ? allAttempts(state).map((a) => a.id) : []);
-  const mineIds = idsOf(mine);
-  const theirIds = idsOf(theirs);
-
-  const onlyMine = [...mineIds].filter((id) => !theirIds.has(id)).length;
-  const onlyTheirs = [...theirIds].filter((id) => !mineIds.has(id)).length;
-
-  return {
-    mine: summarize(mine),
-    theirs: summarize(theirs),
-    attemptsOnlyHere: onlyMine,
-    attemptsOnlyThere: onlyTheirs,
-    // The reassuring case worth naming explicitly: one side is simply ahead,
-    // so choosing it loses nothing at all.
-    identical: onlyMine === 0 && onlyTheirs === 0,
-    safeChoice: onlyMine === 0 && onlyTheirs > 0 ? "theirs"
-      : onlyTheirs === 0 && onlyMine > 0 ? "mine"
-      : null,
-  };
-}

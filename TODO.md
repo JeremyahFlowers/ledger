@@ -30,7 +30,7 @@ one-line title is not enough to pick the work up again a week later.
 
 ## P1 — the same rot, one file along
 
-- [ ] **26. logic.js is 1,254 lines.**
+- [x] **26. logic.js is 1,254 lines.** _(1.4.0)_
   It now holds scheduling, the plant, planning, stats, progress, the day
   clock, refresher framing, import validation, the size guard, mock phases and
   quiz weighting. It is becoming what views.js was.

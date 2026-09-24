@@ -63,6 +63,8 @@ const SHELL = [
   "./js/ui.js",
   "./js/session-view.js",
   "./js/welcome.js",
+  "./js/state-health.js",
+  "./js/stats.js",
 ];
 
 self.addEventListener("install", (event) => {
