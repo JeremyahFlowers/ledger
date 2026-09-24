@@ -2895,6 +2895,25 @@ export function renderProblemDetail(root, store, actions) {
       </div>
     </div>
 
+    ${p.analysis ? `
+    <!-- Carried over from Analyze. What you thought before you started is the
+         part worth keeping: comparing it against how the session actually
+         went is the whole point of recording a pattern guess. -->
+    <div class="card">
+      <h2>What you thought going in</h2>
+      <p class="muted small">From analysing this on ${fmtDate(p.analysis.at)}.</p>
+      <ul class="pred-list">
+        ${p.analysis.predictions.map((pred) => `
+          <li class="pred-row">
+            <span class="row gap-sm" style="align-items:center">
+              <span class="pattern-icon">${patternIcon(pred.pattern, { size: 15 })}</span>
+              ${esc(patternName(state, pred.pattern))}
+            </span>
+            <span class="muted small">${Math.round(pred.probability * 100)}%</span>
+          </li>`).join("")}
+      </ul>
+    </div>` : ""}
+
     <div class="card">
       <h2>History</h2>
       ${history.length === 0

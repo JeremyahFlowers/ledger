@@ -19,7 +19,7 @@ import { esc, toast, startSession, showTopic } from "./views.js";
 import { analyze, explain, readableFeature, BOUND_IMPLICATIONS } from "./pattern-model.js";
 import { problemsForPattern, problemFromCatalog, savedSlugs } from "./catalog.js";
 import { patternIcon } from "./icons.js";
-import { uid, todayISO, STATUS_ACTIVE } from "./logic.js";
+import { uid, todayISO, STATUS_ACTIVE, normalizeStatement } from "./logic.js";
 
 const HIGHLIGHT_LEVELS = 4;        // intensity buckets for supporting evidence
 const TOP_PREDICTIONS_SHOWN = 8;
@@ -126,6 +126,7 @@ function resultsHtml(store) {
     </div>
     ${ex ? evidenceHtml(r, ex) : ""}
     ${ex ? highlightHtml(r, ex) : ""}
+    ${ex ? trackPastedHtml(store) : ""}
     ${ex ? practiceHtml(store) : ""}`;
 }
 
@@ -337,6 +338,66 @@ function markedUp(text, spanWeights) {
 
 // ---------- practice handoff ----------
 
+/**
+ * Keep the problem that was actually pasted.
+ *
+ * The suggestions below are other problems that exercise the same pattern —
+ * useful, but not this one. The problem in the box is the one you didn't
+ * recognise, which makes it the one most worth tracking, and until now it was
+ * the only thing on this page you couldn't keep.
+ *
+ * It carries its statement (the text is right there) and the ranking, so the
+ * workspace opens with the problem already written down and the session can
+ * be compared against what you thought going in.
+ */
+function trackPastedHtml(store) {
+  const guessedName = firstLineAsTitle(state.raw);
+  const already = store.state.problems.find((p) => p.statement && p.statement === normalizeStatement(state.raw).text);
+  if (already) {
+    return `
+      <div class="card">
+        <h2>This one's yours</h2>
+        <p class="muted small">You're already tracking this as
+          <button type="button" class="link-button" data-open-problem="${esc(already.id)}">${esc(already.name)}</button>.</p>
+      </div>`;
+  }
+  return `
+    <div class="card">
+      <h2>Keep this problem</h2>
+      <p class="muted small">Track the problem you pasted, not just the pattern. It keeps the text
+      you pasted as its statement and remembers this ranking, so the workspace opens with the
+      problem already in front of you.</p>
+      <form id="track-pasted" class="form">
+        <div class="two-col">
+          <label class="field"><span class="label">Name</span>
+            <input class="input" name="name" value="${esc(guessedName)}" placeholder="What's it called?" /></label>
+          <label class="field"><span class="label">LeetCode #</span>
+            <input class="input" type="number" name="number" placeholder="optional" /></label>
+        </div>
+        <label class="field"><span class="label">Pattern</span>
+          <select class="select" name="patternId">
+            ${store.state.patterns.map((pat) => `<option value="${esc(pat.id)}" ${pat.id === state.selected ? "selected" : ""}>${esc(pat.name)}</option>`).join("")}
+          </select></label>
+        <button class="btn btn-primary btn-sm" type="submit">Track it</button>
+      </form>
+    </div>`;
+}
+
+/**
+ * A usable default name from the pasted text.
+ *
+ * Exported for testing because the heuristic is the whole thing: people paste
+ * a title line, or they paste straight into the statement, and guessing wrong
+ * is fine as long as the field is editable — guessing something absurd is not.
+ */
+export function firstLineAsTitle(raw) {
+  const first = String(raw || "").split("\n").map((l) => l.trim()).find((l) => l.length > 0) || "";
+  // A statement's opening sentence is not a title. A title is short and has
+  // no sentence punctuation.
+  if (first.length > 60 || /[.:;]$/.test(first)) return "";
+  return first.replace(/^\d+\s*[.)-]\s*/, "").slice(0, 60);
+}
+
 function practiceHtml(store) {
   const pattern = state.selected;
   const label = patternLabel(pattern);
@@ -398,6 +459,49 @@ function wireResults(root, store, actions) {
     });
   }
 
+  const trackForm = root.querySelector("#track-pasted");
+  if (trackForm) {
+    trackForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const f = new FormData(trackForm);
+      const name = (f.get("name") || "").trim();
+      if (!name) {
+        toast("Give it a name first — that's how you'll find it again.");
+        trackForm.querySelector('[name="name"]').focus();
+        return;
+      }
+      const { text: statement } = normalizeStatement(state.raw);
+      const analysis = state.result ? {
+        at: todayISO(),
+        // Only the top few: the full ranking is 23 numbers, and this lives in
+        // a state file with a size limit. Three is enough to remember what
+        // you thought and how sure the model was.
+        predictions: state.result.predictions.slice(0, 3)
+          .map((p) => ({ pattern: p.pattern, probability: Math.round(p.probability * 100) / 100 })),
+      } : null;
+
+      const id = uid();
+      store.mutate((s) => {
+        s.problems.push({
+          id,
+          name,
+          number: f.get("number") ? Number(f.get("number")) : null,
+          difficulty: "Unrated",
+          patternId: f.get("patternId"),
+          approach: "", filePath: "", url: "", notes: "",
+          status: STATUS_ACTIVE,
+          box: 0,
+          nextReviewDate: todayISO(),
+          attempts: [],
+          statement,
+          analysis,
+        });
+      }, `Ledger: track ${name} from an analysis`);
+      toast(`Tracking ${name} — its statement came with it.`);
+      actions.rerender();
+    });
+  }
+
   root.querySelectorAll("[data-add]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const problem = state.suggestions.find((p) => p.slug === btn.dataset.add);
@@ -413,6 +517,13 @@ function wireResults(root, store, actions) {
 /** Adds a catalog problem to the user's own tracked list, due immediately, so
  * it shows up in the next session plan like anything else they've logged. */
 function addToQueue(store, problem, patternId) {
+  // Deliberately carries nothing across. These are *suggestions* — other
+  // problems that exercise the same pattern — not the problem that was
+  // pasted, so attaching the pasted statement here would show the wrong
+  // problem's text in the workspace. Caught in testing: pasting "Longest
+  // Substring Without Repeating Characters" attached it to "Substring with
+  // Concatenation of All Words". The pasted problem gets its own handoff,
+  // in trackPastedProblem below.
   store.mutate((s) => {
     // Same test the markup uses to decide between the button and the pill. Two
     // different notions of "already have this" would let the button offer an

@@ -135,7 +135,7 @@ export function problemUrl(problem) {
  * and the seeded problems carry no per-problem resources or whiteboards either,
  * so nothing downstream needs them to exist.
  */
-export function problemFromCatalog(entry, { id, status, patternId = null, nextReviewDate = null }) {
+export function problemFromCatalog(entry, { id, status, patternId = null, nextReviewDate = null, ...extra }) {
   const ranked = Object.entries(entry.patterns).sort((a, b) => b[1] - a[1]);
   return {
     id,
@@ -148,6 +148,13 @@ export function problemFromCatalog(entry, { id, status, patternId = null, nextRe
     box: 0,
     nextReviewDate,
     attempts: [],
+    // Anything else the caller wants to carry across — Analyze attaches the
+    // text you pasted and the ranking it produced. Spread last but after the
+    // fixed fields above, so a caller cannot accidentally overwrite the
+    // identity of the problem it is creating.
+    ...extra,
+    id,
+    catalogSlug: entry.slug,
   };
 }
 

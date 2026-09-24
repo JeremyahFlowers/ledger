@@ -76,7 +76,7 @@ quietly fails to keep it.
   *Done:* sort by number/difficulty/confidence, plus a "pick one for me" that
   respects the current filters.
 
-- [ ] **10. Analyze can hand off its reasoning.**
+- [x] **10. Analyze can hand off its reasoning.** _(1.2.0)_
   Running an analysis and then starting a problem throws the explanation away.
   *Done:* the analysis attaches to the problem so it's there in the workspace.
 
