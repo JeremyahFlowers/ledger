@@ -28,6 +28,75 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 1.5.0 — 2026-09-24
+
+Cycle 4 of TODO.md. Both of the P0s turned out to be the same shape: the app
+already held the answer and had never looked at it.
+
+### Things it knew and never said
+
+- **The model is graded on your problems.** It ships with numbers from a
+  held-out split of a public corpus, which say how it does on problems in
+  general and nothing about how it does on the ones you paste in. Analyze had
+  been writing its ranking onto every problem tracked from it since the
+  feature shipped, and the problem then records which pattern it settled on.
+  Nothing had ever compared the two. Analyze now ends with how often its
+  ranking held your answer — called *agreement*, not accuracy, because you
+  pick the pattern on the same form that just showed you the guess, and
+  nothing here can tell a correct model from an anchored user. The overrules
+  carry no such doubt, so those are listed by name with how sure it was.
+  Below eight problems it reports no percentage and says how many more it
+  needs.
+
+- **A week in review.** The progress charts answer "am I improving" over
+  twelve weeks and refuse on principle to say anything about a single week.
+  Right, and it left no answer to the question you actually have on a Sunday:
+  what did I do. Progress now leads with the last seven days — sessions, days
+  worked, what moved up a box, every problem with its outcome, every note you
+  wrote — exportable as Markdown. The clean-solve rate disappears below three
+  attempts, minutes count only sessions that were actually timed and say so,
+  and the comparison with last week is a fact rather than praise or reproach.
+
+- **The quiz reports your own confusions.** It kept a lifetime score and threw
+  away which pattern you reached for instead — the only part that could change
+  what you study. It now names the pairs you have mixed up more than once, and
+  links to the one to read. Once is a slip; twice is a habit.
+
+- **Mocks report what they were for.** Five interview behaviours recorded on
+  every mock, never read again; `state.mocks` fed one ring. The Journal now
+  says how your last ten went per behaviour and names the one to work on.
+
+### Structure and consistency
+
+- **views.js split five ways** — chrome.js, setup-view.js, drill-view.js,
+  settings-view.js, detail-view.js — from 2,534 lines to 1,032. It also stops
+  being a door: every module that imported `esc` or `startSession` through it
+  now names the module those live in.
+
+- **One rule for destroying things.** There had been three: an undo for some
+  removals, silent deletion for a resource link, a bare `confirm()` for
+  disconnecting, and three different wordings for leaving a session. Now:
+  removing one item from a list happens and offers an undo; anything the app
+  cannot undo afterwards asks first, and says what is lost *and* what
+  survives.
+
+- **Settings in sections**, with anything wrong sitting above them unheaded.
+
+- **Every empty state offers the way out of it.** Four of eight had no action
+  at all, because the helper could only navigate and their answer was on the
+  same page. It now also takes a field to focus.
+
+### Fixed
+
+- A dead `.link-button` rule, defined twice with conflicting intent and
+  shadowed since it was written.
+- `scripts/check-references.mjs` joins `npm run check`. Splitting views.js
+  left `OUTCOME_GLYPH` used in two files and imported by neither — every
+  module loaded, all 577 tests passed, and the Journal threw on open. Loading
+  a module only proves its imports resolve.
+
+---
+
 ## 1.4.0 — 2026-09-24
 
 Cycle 3 of TODO.md. The theme, unplanned but consistent across the eight
