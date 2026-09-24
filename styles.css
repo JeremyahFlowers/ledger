@@ -1567,3 +1567,27 @@ input[type="checkbox"]:focus-visible {
 .mock-ticks li { display: flex; gap: 0.4rem; align-items: baseline; font-size: 0.8rem; line-height: 1.35; }
 .tick-done { color: var(--good); }
 .tick-missed > span:first-child { color: var(--text-muted); }
+
+/* Settings, in sections. It had grown to nine cards in one unbroken scroll:
+   connection, budget, intervals, estimates, footprint, import, export,
+   disconnect, welcome replay and the version — finding any of it meant
+   reading all of it. */
+.settings-jump {
+  display: flex; gap: 0.4rem; flex-wrap: wrap;
+  margin: 0 0 1rem;
+}
+.settings-jump a {
+  padding: 0.3rem 0.7rem; border: 1px solid var(--border); border-radius: 999px;
+  font-size: 0.82rem; color: var(--text-muted); text-decoration: none;
+}
+.settings-jump a:hover { border-color: var(--accent); color: var(--text); }
+.settings-section { margin-bottom: 2rem; }
+.settings-section > h2 { margin: 0 0 0.2rem; }
+/* The jump links move focus here, and an outline on a heading that was
+   scrolled to rather than tabbed to is noise. */
+.settings-section > h2:focus { outline: none; }
+.settings-section > h2:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.settings-section > p { margin: 0 0 0.9rem; }
+.settings-section .card h3 { font-size: 1rem; margin: 0 0 0.35rem; }
+/* Scrolled-to headings shouldn't land under the sticky header. */
+.settings-section > h2 { scroll-margin-top: 5rem; }

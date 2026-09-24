@@ -61,7 +61,7 @@ one-line title is not enough to pick the work up again a week later.
   gets to the real event, and it leaves no account of itself.
   *Done:* a mock can be looked back at.
 
-- [ ] **38. Settings is one long column.**
+- [x] **38. Settings is one long column.** _(1.5.0)_
   Connection, daily budget, box intervals, difficulty estimates, sync
   footprint, import, export, disconnect, the welcome replay and the version,
   in one unbroken scroll. Finding any of it means reading all of it.

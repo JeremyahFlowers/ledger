@@ -128,25 +128,25 @@ export function renderSettings(root, store, actions) {
   const cfg = JSON.parse(localStorage.getItem("ledger.config") || "{}");
 
   root.innerHTML = `
-    <div class="card version-card">
-      <div class="row space-between" style="align-items:baseline;flex-wrap:wrap;gap:0.5rem">
-        <h2 style="margin:0">Ledger <span class="version-number">v${esc(APP_VERSION)}</span></h2>
-        <span class="muted small">released ${esc(RELEASED)}</span>
-      </div>
-      <p class="muted small" style="margin:0.4rem 0 0">What changed in this version, and every one
-      before it, is in <a href="https://github.com/JeremyahFlowers/ledger/blob/main/CHANGELOG.md"
-      target="_blank" rel="noopener noreferrer">the changelog</a>.</p>
-      <button class="btn btn-ghost btn-sm" id="replay-welcome" style="margin-top:0.6rem">What is this app for?</button>
-    </div>
-
+    <!-- Anything wrong sits above the sections, unheaded, because it is a
+         state of the app rather than something you came here to change.
+         All three render nothing when there is nothing to say. -->
     ${syncCardHtml(store)}
-
     ${footprintCardHtml(store.state)}
-
     ${faultLogHtml()}
 
-    <div class="card">
-      <h2>Daily budget</h2>
+    <nav class="settings-jump" aria-label="Settings sections">
+      <a href="#set-practice">How practice works</a>
+      <a href="#set-data">Your data</a>
+      <a href="#set-app">This app</a>
+    </nav>
+
+    <section class="settings-section">
+      <h2 id="set-practice" tabindex="-1">How practice works</h2>
+      <p class="muted small">The two numbers the schedule is built out of. Changing either affects
+      what comes up next; nothing already recorded is altered.</p>
+<div class="card">
+      <h3>Daily budget</h3>
       <p class="muted small">A ceiling, not a target. Today's plan is filled up to this many minutes
       with whatever you find hardest and haven't seen in longest, and the rest is left for the refresher
       queue rather than onto today. Finishing the plan is a complete day — the app will say so and
@@ -158,26 +158,8 @@ export function renderSettings(root, store, actions) {
         <button class="btn btn-primary" type="submit">Save</button>
       </form>
     </div>
-    <div class="card">
-      <h2>GitHub connection</h2>
-      <p class="muted">${esc(cfg.owner)}/${esc(cfg.repo)} @ ${esc(cfg.branch)} — <code>${esc(cfg.path)}</code></p>
-      <p class="muted small">Every change is written straight to that file, which is what lets the
-      same log follow you between laptop and phone. Disconnecting only forgets the token on this
-      device — nothing on GitHub is touched, and reconnecting brings it all back.</p>
-      <button class="btn btn-ghost" id="disconnect">Disconnect this device</button>
-    </div>
-    <div class="card">
-      <h2>Backup</h2>
-      <p class="muted small">Your prep log already lives in version control, so this is for moving it
-      somewhere else or keeping a copy outside GitHub. The export is the whole state — problems,
-      attempts, soul statements, streaks. Importing replaces everything currently here.</p>
-      <div class="row gap">
-        <button class="btn btn-ghost" id="export-json">Export JSON</button>
-        <label class="btn btn-ghost file-btn">Import JSON<input type="file" id="import-json" accept="application/json" hidden /></label>
-      </div>
-    </div>
-    <div class="card">
-      <h2>Review intervals</h2>
+<div class="card">
+      <h3>Review intervals</h3>
       <p class="muted small">How long each box waits before a problem comes round again. A clean
       solve moves up a box, a struggle holds, a failure drops back to the first. The defaults are
       a standard Leitner ladder; shorten them if things are fading before they come back, lengthen
@@ -192,15 +174,52 @@ export function renderSettings(root, store, actions) {
       boxes: ${state.settings.boxIntervalsDays.map((d, i) => `box ${i} after ${d} day${d === 1 ? "" : "s"}`).join(", ")}.
       Changing these affects when problems next come up; nothing already recorded is altered.</p>
     </div>
+    </section>
 
-    <div class="card">
-      <h2>Theme</h2>
+    <section class="settings-section">
+      <h2 id="set-data" tabindex="-1">Your data</h2>
+      <p class="muted small">Where the log lives, and how to get a copy of it.</p>
+<div class="card">
+      <h3>GitHub connection</h3>
+      <p class="muted">${esc(cfg.owner)}/${esc(cfg.repo)} @ ${esc(cfg.branch)} — <code>${esc(cfg.path)}</code></p>
+      <p class="muted small">Every change is written straight to that file, which is what lets the
+      same log follow you between laptop and phone. Disconnecting only forgets the token on this
+      device — nothing on GitHub is touched, and reconnecting brings it all back.</p>
+      <button class="btn btn-ghost" id="disconnect">Disconnect this device</button>
+    </div>
+<div class="card">
+      <h3>Backup</h3>
+      <p class="muted small">Your prep log already lives in version control, so this is for moving it
+      somewhere else or keeping a copy outside GitHub. The export is the whole state — problems,
+      attempts, soul statements, streaks. Importing replaces everything currently here.</p>
+      <div class="row gap">
+        <button class="btn btn-ghost" id="export-json">Export JSON</button>
+        <label class="btn btn-ghost file-btn">Import JSON<input type="file" id="import-json" accept="application/json" hidden /></label>
+      </div>
+    </div>
+    </section>
+
+    <section class="settings-section">
+      <h2 id="set-app" tabindex="-1">This app</h2>
+      <div class="card version-card">
+        <div class="row space-between" style="align-items:baseline;flex-wrap:wrap;gap:0.5rem">
+          <h3 style="margin:0">Ledger <span class="version-number">v${esc(APP_VERSION)}</span></h3>
+          <span class="muted small">released ${esc(RELEASED)}</span>
+        </div>
+        <p class="muted small" style="margin:0.4rem 0 0">What changed in this version, and every one
+        before it, is in <a href="https://github.com/JeremyahFlowers/ledger/blob/main/CHANGELOG.md"
+        target="_blank" rel="noopener noreferrer">the changelog</a>.</p>
+        <button class="btn btn-ghost btn-sm" id="replay-welcome" style="margin-top:0.6rem">What is this app for?</button>
+      </div>
+<div class="card">
+      <h3>Theme</h3>
       <select class="select" id="theme-select" style="max-width:12rem">
         <option value="system">System</option>
         <option value="light">Light</option>
         <option value="dark">Dark</option>
       </select>
-    </div>`;
+    </div>
+    </section>`;
 
   root.querySelector("#replay-welcome")?.addEventListener("click", () => {
     resetWelcome();
