@@ -9,6 +9,70 @@ one-line title is not enough to pick the work up again a week later.
 
 ---
 
+# Cycle 4
+
+## P0 — the app collects answers it never reads
+
+- [ ] **32. The model never finds out whether it was right.**
+  Analyze stores its ranked predictions on the problem. The problem then
+  records which pattern it actually turned out to be. Nothing has ever
+  compared the two. The most elaborate thing in this app has been graded on a
+  public benchmark and never once on your problems, which are the only ones
+  you care about.
+  *Done:* the app reports how often it named your problem's pattern, on your
+  own problems, and says plainly when there are too few to tell.
+
+- [ ] **33. There is no view of a week.**
+  The progress charts show twelve weeks of rates, which answers "am I
+  improving" and not "what did I do". Item 31 named this explicitly — "or to
+  share what you did this week" — and delivered only the half about one
+  problem.
+  *Done:* a week in review — what you practised, what moved, what you wrote —
+  readable on screen and exportable the way a problem's history is.
+
+## P1 — the same rot, one file along
+
+- [ ] **34. views.js is 2,534 lines and sixteen renderers.**
+  Setup, conflict, dashboard, queue, log, patterns, journal, system design,
+  topics, quiz, warmup, whiteboard, LeetCode, settings, problem detail and day
+  detail share a file because that is where they were each born. This is the
+  exact state logic.js was in at the start of cycle 3.
+  *Done:* split along the same kind of seams, no behaviour change.
+
+- [ ] **35. Destructive actions don't behave alike.**
+  Removing an attempt offers undo. Removing a problem from the bank offers
+  undo. Removing a resource link deletes it silently — no confirmation, no
+  undo, no toast. Disconnecting asks with a browser `confirm()`. Three
+  different rules for the same kind of act, and the quietest one is on the
+  action with no way back.
+  *Done:* one rule, applied everywhere something is destroyed.
+
+## P2 — features that stop one step short
+
+- [ ] **36. The quiz counts but doesn't teach.**
+  It keeps a lifetime score and reveals the right answer. It never says which
+  patterns you keep swapping for each other — which is the only part of it
+  that would change what you study next.
+  *Done:* the drill reports your own confusions, in its own terms.
+
+- [ ] **37. Mocks are logged and never reviewed.**
+  `state.mocks` accumulates and feeds exactly one thing: the ring that unlocks
+  system design. A 45-minute timed run with phases is the closest this app
+  gets to the real event, and it leaves no account of itself.
+  *Done:* a mock can be looked back at.
+
+- [ ] **38. Settings is one long column.**
+  Connection, daily budget, box intervals, difficulty estimates, sync
+  footprint, import, export, disconnect, the welcome replay and the version,
+  in one unbroken scroll. Finding any of it means reading all of it.
+  *Done:* structure a person can scan.
+
+- [ ] **39. The empty app is the least designed part of it.**
+  Every view has an empty state, each written where it sits, some offering the
+  action that would end it and some just saying there is nothing here. The
+  first hour is the one that decides whether there is a second.
+  *Done:* every empty state offers the one action that ends it.
+
 # Cycle 3
 
 ## P0 — the app can't answer its own best question
