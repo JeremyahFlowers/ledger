@@ -50,7 +50,7 @@ in passing and didn't stop for.
   It shows a year of counts and answers nothing about any of them.
   *Done:* a day can be opened to see what was actually practised.
 
-- [ ] **20. The quiz ignores the schedule it sits beside.**
+- [x] **20. The quiz ignores the schedule it sits beside.** _(1.3.0)_
   It cycles through problems while the whole app is built on a spacing
   algorithm. The one page purely about recall is the one not using it.
   *Done:* quiz selection is weighted by what's fading and what you've missed

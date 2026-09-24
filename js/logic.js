@@ -836,12 +836,68 @@ function shuffle(arr) {
 /** Picks a random already-attempted problem for the pattern-recognition
  * quiz, avoiding the last few asked where possible so it doesn't repeat the
  * same one twice in a row. */
-export function pickQuizProblem(state, excludeIds = []) {
+/**
+ * Score a problem's worth as a recall question. Higher is more worth asking.
+ *
+ * The quiz used to pick uniformly at random from everything ever attempted,
+ * while sitting inside an app built entirely on a spacing algorithm — the one
+ * page purely about recall was the one not using it.
+ *
+ * Three signals, in the order they matter:
+ *   fading   how far past its interval the problem is, which is the schedule's
+ *            own estimate of what you are closest to forgetting.
+ *   missed   whether you got this pattern wrong last time. A pattern you
+ *            misidentified is worth asking again long before one you nailed.
+ *   rested   how long since it was last asked *here*, so a short session
+ *            doesn't circle the same three problems.
+ *
+ * Exported for testing: weighting is the whole feature, and a weighting nobody
+ * can inspect is indistinguishable from the random pick it replaced.
+ */
+export function quizPriority(problem, today = todayISO()) {
+  if (!problem.attempts?.length) return 0;
+
+  const pastInterval = problem.nextReviewDate ? daysBetween(problem.nextReviewDate, today) : 0;
+  const fading = Math.max(0, pastInterval);
+
+  const last = problem.attempts[problem.attempts.length - 1];
+  const missed = last.patternGuess === "incorrect" ? 12 : 0;
+
+  const lastPractised = lastPracticedISO(problem);
+  const rested = lastPractised ? Math.min(30, Math.max(0, daysBetween(lastPractised, today))) : 30;
+
+  // A floor of 1 so nothing is ever unreachable: a problem you are on top of
+  // should be rare, not impossible, or the quiz stops being a quiz.
+  return 1 + fading + missed + rested * 0.5;
+}
+
+/**
+ * Choose the next quiz problem, weighted rather than uniform.
+ *
+ * Weighted sampling, not "take the highest": always asking the single most
+ * overdue problem would make the quiz a queue with extra steps, and the point
+ * of it is that the next question is not predictable.
+ */
+export function pickQuizProblem(state, excludeIds = [], pick = Math.random) {
   const candidates = state.problems.filter((p) => p.attempts.length > 0);
   if (candidates.length === 0) return null;
   const fresh = candidates.filter((p) => !excludeIds.includes(p.id));
+  // Falling back to the full set once everything has been asked is deliberate
+  // — the alternative is the quiz ending, which is not what anyone wants from
+  // a drill.
   const pool = fresh.length ? fresh : candidates;
-  return pool[Math.floor(Math.random() * pool.length)];
+
+  const today = todayISO();
+  const weights = pool.map((p) => quizPriority(p, today));
+  const total = weights.reduce((a, b) => a + b, 0);
+  if (total <= 0) return pool[Math.floor(pick() * pool.length)];
+
+  let target = pick() * total;
+  for (let i = 0; i < pool.length; i++) {
+    target -= weights[i];
+    if (target <= 0) return pool[i];
+  }
+  return pool[pool.length - 1];   // floating-point slack
 }
 
 /** Builds a shuffled multiple-choice option list for the quiz: the correct
