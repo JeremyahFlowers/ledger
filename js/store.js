@@ -3,7 +3,7 @@
 // nothing else touches persistence directly.
 import { GitHubStore } from "./github-client.js";
 import { buildSeedState, migrateState } from "./seed.js";
-import { syncFootprint, formatBytes, compareStates } from "./logic.js";
+import { syncFootprint, formatBytes, compareStates, inspectImport } from "./logic.js";
 
 const CONFIG_KEY = "ledger.config";
 const CACHE_KEY = "ledger.cache.state";
@@ -68,6 +68,9 @@ class Store {
     // Set when a reopen found work that had never reached GitHub. Read once
     // by the UI, which says so, and cleared.
     this.recovered = false;
+    // Set when the remote file could not be parsed. Blocks saving, because a
+    // save would overwrite the damaged file that is the only evidence left.
+    this.blocked = false;
   }
 
   onChange(fn) {
@@ -111,6 +114,7 @@ class Store {
     this._emit();
     try {
       const { exists, state } = await this.gh.fetchState();
+      if (exists) this._checkRemote(state);
       if (!exists) {
         this.state = buildSeedState();
         await this.gh.saveState(this.state, "Ledger: initialize prep-data/state.json");
@@ -127,11 +131,18 @@ class Store {
       this.error = null;
     } catch (err) {
       const cached = this._readCache();
-      if (cached) {
-        this.state = migrateState(cached);
-        this.status = "offline";
-      } else {
+      if (cached) this.state = migrateState(cached);
+      // A file that can't be read is not the same failure as a network that
+      // can't be reached, and must not be treated as one: "offline" means
+      // keep working, we'll save later, and saving later would write over
+      // whatever is actually in that file — which may be the only copy of
+      // something recoverable. So this one blocks saving until a person has
+      // looked.
+      if (err.code === "unreadable_remote") {
         this.status = "error";
+        this.blocked = true;
+      } else {
+        this.status = cached ? "offline" : "error";
       }
       this.error = err.message || String(err);
     }
@@ -148,6 +159,31 @@ class Store {
     } catch (_) {
       /* storage full or unavailable — sync still works, just no offline fallback */
     }
+  }
+
+  /**
+   * Check a state fetched from GitHub before letting it near the renderer.
+   *
+   * The import path has validated a chosen file since it was written, and the
+   * sync path — the one that runs every single time the app opens — trusted
+   * whatever came back. migrateState only backfills missing keys, so a
+   * truncated write, a hand edit or a bad merge went straight into the views
+   * and the first thing the user saw was a blank page.
+   *
+   * Throws rather than returning a flag, so no caller can adopt it by
+   * forgetting to check.
+   */
+  _checkRemote(state) {
+    const found = inspectImport(state);
+    if (found.ok) {
+      this.blocked = false;
+      return state;
+    }
+    const err = new Error(
+      `The log in your repo can't be read: ${found.errors.join(" ")} `
+      + `Nothing here has been changed — open ${loadConfig().path} in your repo to see what's in it.`);
+    err.code = "unreadable_remote";
+    throw err;
   }
 
   /** Did this browser close with work that never reached GitHub? */
@@ -228,6 +264,15 @@ class Store {
 
   async flush(message) {
     if (!this.dirty || !this.gh) return;
+
+    // Set when the file in the repo could not be parsed. Saving would replace
+    // it, and whatever is wrong with it is the only remaining evidence of
+    // what it held.
+    if (this.blocked) {
+      this.status = "error";
+      this._emit();
+      return;
+    }
 
     // Checked here rather than left to the API. Crossing the limit fails the
     // save and every save after it, and a raw "422 too large" gives no way to
@@ -320,7 +365,7 @@ class Store {
   async resolveConflictTakeTheirs() {
     try {
       const { state } = await this.gh.fetchState();
-      this.state = migrateState(state);
+      this.state = migrateState(this._checkRemote(state));
       this.dirty = false;
       this._cacheLocally();
       this.status = "synced";
@@ -391,7 +436,7 @@ class Store {
     this._emit();
     try {
       const { exists, state } = await this.gh.fetchState();
-      if (exists && state) this.state = migrateState(state);
+      if (exists && state) this.state = migrateState(this._checkRemote(state));
       this.status = "synced";
       this.lastSyncedAt = Date.now();
       this.error = null;

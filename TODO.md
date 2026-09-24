@@ -27,7 +27,7 @@ data-loss path that was reproduced in a browser before a line was changed.
   *Done:* a reopen finds that work, keeps it, sends it, and says so — and asks
   only when both sides genuinely have work the other hasn't seen.
 
-- [ ] **41. The sync path trusts what it loads; the import path doesn't.**
+- [x] **41. The sync path trusts what it loads; the import path doesn't.** _(1.6.0)_
   `inspectImport` validates a file you pick and refuses one that isn't a
   Ledger log. `migrateState` runs on whatever GitHub returns and only backfills
   missing keys, so a truncated or hand-edited state.json goes straight into the

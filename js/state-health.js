@@ -103,7 +103,7 @@ const REQUIRED_ARRAYS = ["problems", "patterns"];
 export function inspectImport(candidate) {
   const errors = [];
   if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
-    return { ok: false, errors: ["That file doesn't contain a Ledger backup."], problems: 0, attempts: 0 };
+    return { ok: false, errors: ["It isn't a Ledger log at all."], problems: 0, attempts: 0 };
   }
 
   for (const key of REQUIRED_ARRAYS) {
