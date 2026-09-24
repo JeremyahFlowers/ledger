@@ -31,14 +31,14 @@ quietly fails to keep it.
   is told what it contains ("41 problems, 96 attempts, last written by 1.0.1")
   and confirms against that, and a bad file is refused with a reason.
 
-- [ ] **3. An attempt can be corrected or removed.**
+- [x] **3. An attempt can be corrected or removed.** _(1.1.0)_
   Attempts are write-once. A wrong outcome, a mistyped soul statement, or a
   session logged against the wrong problem is permanent and silently skews
   every statistic downstream.
   *Done:* a problem's history is viewable, and any attempt can be edited or
   deleted, with the box/schedule recomputed from what remains.
 
-- [ ] **4. Destructive actions are undoable.**
+- [x] **4. Destructive actions are undoable.** _(1.1.0)_
   Removing from the bank and discarding a session are immediate. Discard is
   behind a `confirm()`, which is a speed bump, not a safety net.
   *Done:* a short-lived Undo on the toast for anything that removes data.
@@ -57,7 +57,7 @@ quietly fails to keep it.
   the button.
   *Done:* Cmd/Ctrl+Enter saves, and the hint says so.
 
-- [ ] **7. A problem's own page.**
+- [x] **7. A problem's own page.** _(1.1.0)_
   Every attempt is recorded and none of it is readable per problem — you can
   see aggregate stats but not "how have I done on 3Sum over time".
   *Done:* a per-problem view with its attempts, timings, notes and saved code.

@@ -931,6 +931,48 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 .budget-warn { color: var(--warn); font-weight: 600; }
 .budget-over { color: var(--bad); font-weight: 700; }
 
+/* ---------- Problem history ---------- */
+
+/* A button that reads as a link: it navigates, so it should look like it does,
+   but it is not an href and must not behave like one. */
+.link-button {
+  border: 0; background: none; padding: 0;
+  font: inherit; color: inherit; font-weight: inherit;
+  text-align: left; cursor: pointer;
+  text-decoration: underline; text-decoration-color: var(--border);
+  text-underline-offset: 3px;
+}
+.link-button:hover { text-decoration-color: var(--accent); }
+
+.attempt-list { list-style: none; margin: 0; padding: 0; }
+.attempt-row { padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
+.attempt-row:last-child { border-bottom: none; }
+.attempt-row-editing { background: var(--surface-alt); border-radius: var(--radius); padding: 0.85rem; }
+.attempt-soul {
+  margin: 0.4rem 0 0; padding-left: 0.7rem;
+  border-left: 3px solid var(--accent);
+  font-size: 0.88rem; white-space: pre-wrap;
+}
+.attempt-code { margin-top: 0.5rem; }
+.attempt-code summary { cursor: pointer; }
+.code-view-pre {
+  margin: 0.4rem 0 0; padding: 0.6rem 0.7rem;
+  background: var(--surface-alt); border-radius: 8px;
+  font-family: var(--font-mono); font-size: 0.78rem;
+  overflow-x: auto; white-space: pre;
+}
+
+/* The undo affordance on a toast. Deliberately looks like a control rather
+   than part of the sentence — it is the only thing on screen that can take an
+   action back. */
+.toast-undo {
+  margin-left: 0.75rem;
+  border: 1px solid currentColor; border-radius: 999px;
+  background: none; color: inherit;
+  font: inherit; font-weight: 700; font-size: 0.8rem;
+  padding: 0.1rem 0.6rem; cursor: pointer;
+}
+
 /* ---------- Errors ----------
 
    A banner rather than a toast, and it stays until dismissed. A message that

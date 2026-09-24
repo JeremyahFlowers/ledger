@@ -66,6 +66,9 @@ for (const [sectionId, section] of Object.entries(SECTIONS)) {
 // per pattern, decided at runtime) — it belongs to Learn for nav-highlight
 // purposes, and app.js dispatches its render directly (see renderAll).
 PAGE_TO_SECTION.topicDetail = "learn";
+// Same arrangement for a single problem's history: reachable from anywhere a
+// problem is listed, and it belongs under Practice for nav-highlight purposes.
+PAGE_TO_SECTION.problemDetail = "practice";
 
 // Entered only via a Dashboard/Workspace button, never from the tab bar —
 // rendering one of these swaps the full nav for a minimal exit bar so the
@@ -90,6 +93,7 @@ function currentViewName() {
   if (STANDALONE[activeTab]) return STANDALONE[activeTab].label;
   if (SECTIONS[activeTab]) return `${SECTIONS[activeTab].label} overview`;
   if (activeTab === "topicDetail") return "Pattern detail";
+  if (activeTab === "problemDetail") return "Problem history";
   const owner = PAGE_TO_SECTION[activeTab];
   const page = owner && SECTIONS[owner].pages.find((p) => p.id === activeTab);
   return page ? `${SECTIONS[owner].label}, ${page.label}` : "Ledger";
@@ -263,6 +267,7 @@ function celebrateGrowth() {
 // styles.css for why this is per-page rather than one width for everything.
 const PAGE_WIDTH = {
   workspace: "page-full",     // an IDE: statement, editor and board side by side
+  problemDetail: "page-read", // a history to read, not a dashboard
   dashboard: "page-wide",     // a grid of cards, and the more of them visible the better
   bank: "page-wide",          // ~2,500 rows to scan
   queue: "page-wide",         // a long list of rows, same as the bank
@@ -376,6 +381,7 @@ function renderAll() {
   // Navigation buttons are markup any view can emit, so they're bound here
   // rather than in each view that happens to have one.
   views.wireNavigationTargets(root, actions);
+  views.wireProblemLinks(root, actions);
   renderPlantWidget();
   applyGrowthAnimation();
 }
@@ -419,6 +425,7 @@ function renderView() {
 function renderViewInner() {
   if (SESSION_TABS[activeTab]) return SESSION_TABS[activeTab].render(root, store, actions);
   if (activeTab === "topicDetail") return views.renderTopicDetail(root, store, actions);
+  if (activeTab === "problemDetail") return views.renderProblemDetail(root, store, actions);
   if (STANDALONE[activeTab]) return STANDALONE[activeTab].render(root, store, actions);
   if (SECTIONS[activeTab]) return renderSectionIndex(root, SECTIONS[activeTab], actions);
 

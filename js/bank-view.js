@@ -12,7 +12,7 @@
 // 300 reviews behind — a problem only enters spaced repetition once you
 // actually work it. See STATUS_BACKLOG in logic.js.
 
-import { esc, toast, startSession } from "./views.js";
+import { esc, toast, startSession, offerUndo } from "./views.js";
 import { loadCatalog, PATTERN_CONFIDENCE, MAX_BANK_SIZE, problemFromCatalog, problemUrl, slugify, savedSlugs } from "./catalog.js";
 import { patternIcon } from "./icons.js";
 import { uid, backlogProblems, STATUS_BACKLOG } from "./logic.js";
@@ -233,7 +233,12 @@ function renderMine(root, store, actions, bank) {
         return;
       }
       store.mutate((s) => { s.problems = s.problems.filter((p) => p.id !== id); }, "Ledger: remove problem from bank");
-      toast(`Removed ${problem.name} from your bank.`);
+      // Offered rather than confirmed: an undo asks nothing up front and is
+      // still there once you have noticed, which is when people actually
+      // realise they clicked the wrong row.
+      offerUndo(store, `Removed ${problem.name} from your bank.`, (s) => {
+        if (!s.problems.some((p) => p.id === problem.id)) s.problems.push(problem);
+      }, `Ledger: restore ${problem.name} to the bank`);
     });
   });
 }

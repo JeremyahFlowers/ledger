@@ -57,6 +57,65 @@ export function applyOutcome(problem, outcome, settings) {
   problem.nextReviewDate = addDaysISO(todayISO(), intervals[box]);
 }
 
+/**
+ * Rebuild a problem's box and next date by replaying its whole history.
+ *
+ * applyOutcome advances the box one attempt at a time, which is right while
+ * attempts only ever arrive. The moment one can be corrected or removed, an
+ * incrementally-built box no longer follows from the record it claims to
+ * summarise — delete the failure that reset you to box 0 and the schedule
+ * still believes it happened.
+ *
+ * Replaying is cheap (a handful of attempts) and leaves no way for the two to
+ * disagree, so editing routes through here rather than trying to undo a step.
+ */
+export function recomputeSchedule(problem, settings) {
+  const intervals = settings.boxIntervalsDays;
+  const history = [...(problem.attempts || [])].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+
+  let box = 0;
+  for (const attempt of history) {
+    if (attempt.outcome === "solved-clean") box = Math.min(box + 1, intervals.length - 1);
+    else if (attempt.outcome === "failed") box = 0;
+    // "solved-struggled" holds the box where it is, same as applyOutcome.
+  }
+  problem.box = box;
+
+  // Scheduled from the last attempt rather than from today: the interval
+  // measures time since you last worked it, and a correction made weeks later
+  // must not quietly push the next refresher weeks further out.
+  const last = history[history.length - 1];
+  problem.nextReviewDate = last ? addDaysISO(last.date, intervals[box]) : todayISO();
+  return problem;
+}
+
+/**
+ * Remove one attempt and bring the schedule back in line with what is left.
+ *
+ * Returns the removed attempt so a caller can offer to put it back.
+ */
+export function removeAttempt(problem, attemptId, settings) {
+  const removed = (problem.attempts || []).find((a) => a.id === attemptId) || null;
+  problem.attempts = (problem.attempts || []).filter((a) => a.id !== attemptId);
+  recomputeSchedule(problem, settings);
+  return removed;
+}
+
+/** Fields an edit is allowed to change. Anything else about an attempt is a
+ * record of what happened and is not up for revision. */
+const EDITABLE_ATTEMPT_FIELDS = ["outcome", "patternGuess", "timeToInsightMin", "timeToSolveMin", "mistakeTags", "soulStatement"];
+
+/** Apply a correction to one attempt, then replay the schedule. */
+export function editAttempt(problem, attemptId, changes, settings) {
+  const attempt = (problem.attempts || []).find((a) => a.id === attemptId);
+  if (!attempt) return null;
+  for (const field of EDITABLE_ATTEMPT_FIELDS) {
+    if (field in changes) attempt[field] = changes[field];
+  }
+  recomputeSchedule(problem, settings);
+  return attempt;
+}
+
 // A saved problem is in one of two states, and the difference is the whole
 // reason a large problem bank doesn't wreck the review schedule:
 //
