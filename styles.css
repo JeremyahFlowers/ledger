@@ -1551,12 +1551,14 @@ input[type="checkbox"]:focus-visible {
     padding-inline: 0.85rem;
   }
   /* The checkbox itself can't grow much without looking odd, so the label row
-     carries the touch area instead. */
-  /* Padding rather than min-height: a short label in a 44px row that aligns to
-     the top would leave half the row empty under it. Padding makes the row tall
-     enough to hit whatever the label's height turns out to be. */
+     carries the touch area instead. Padding does the work, because the row now
+     aligns its control to the top and a short label in a 44px min-height row
+     would leave half the row empty beneath it. min-height stays as the floor:
+     a label set in small text is under 44px even with the padding, and a touch
+     target is not something to leave to the length of a string. */
   .checkbox-field {
     padding-block: 0.7rem;
+    min-height: 44px;
   }
   .checkbox-field input[type="checkbox"] {
     width: 20px;

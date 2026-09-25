@@ -28,6 +28,76 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 2.0.1 — 2026-09-25
+
+A pass through every screen, opening each one and walking each flow end to
+end in a browser rather than reading the markup. Eleven fixes, all of them
+things that rendered, passed every test, and looked wrong.
+
+### The component library was unreadable
+
+`design-view.js` wrote `class="index-card"` where every other index writes
+`card index-card`. Without a surface the cards fell back to the browser's own
+button style: light-grey boxes in a dark theme, with near-white headings on
+them that could not be read at all. A bare `button` reset now makes that
+failure mode impossible — a button given no surface looks like the page
+rather than like the operating system.
+
+### The plant panel sat on top of things
+
+It reserved the height it floats over and never the width, so on a page-wide
+view it covered the Start button on every refresher row it passed and clipped
+the right-hand words of a paragraph on Analyze. Clicks went through, so
+nothing was unreachable; it was unreadable, which for a readout of text is
+the same failure. Only the intrusion is reserved, so a narrow page or a wide
+screen is unaffected.
+
+In a session it was worse: with the whiteboard pane open it landed directly
+on the drawing canvas. The number matters most while you are head down in a
+problem, so the number moved and the panel went — both session bars now carry
+the day budget under the question clock.
+
+### Reopening on a session that wasn't there
+
+With `workspace` as the remembered tab and no session behind it, the
+workspace render threw and the error boundary took the whole page, on an app
+whose saved state was perfectly fine. The guard for this existed and sat
+three lines below the two statements that dereference the session, so it
+never ran.
+
+### Layout and theme
+
+- Index cards laid out with the button's own vertical centring, so a
+  three-line card's heading sat 10px above its four-line neighbour's. They
+  align now, and every card's stat sits on the same baseline.
+- Checkboxes, radios and sliders had no `accent-color` and rendered in the
+  browser's blue throughout a dark teal theme.
+- A radio centred against its whole label drifts as the label wraps, so the
+  System-design-share group had its four controls on two different lines.
+- The design session's board gave its canvas the full height of the host
+  without making the host a column, so the toolbar and canvas overflowed the
+  pane — and the first stroke near the top scrolled the toolbar out of sight,
+  on the screen whose whole purpose is drawing. Both boards now share one
+  rule.
+- A checklist row's name and description were separate flex items that each
+  wrapped at their own width, so the component list's nine descriptions
+  started in nine different places.
+- The whiteboard's selected-colour ring was drawn in `--text`, and the first
+  swatch *is* `--text`: the selected colour was the one you couldn't see was
+  selected.
+- The design pre-start ran the full width of the window with its text against
+  the left edge, instead of the reading column the coding pre-start uses.
+- The interviewer's header drew the phase rule with no phase beside it.
+
+### Kept from happening again
+
+`scripts/check-styles.mjs` joins the check suite: it parses every rendered
+class attribute and fails the build on one the stylesheet never defines.
+`scripts/demo-state.mjs` extracts the populated log out of the render check
+so a check and a browser pass look at the same state.
+
+---
+
 ## 2.0.0 — 2026-09-25
 
 System design, built as the other half of the same app rather than a second one.
