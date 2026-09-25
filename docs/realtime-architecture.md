@@ -140,8 +140,12 @@ repo, using the sync machinery that already exists.
 - **Not in `state.json`.** That document syncs as one file against a 1 MB
   ceiling, and measurement puts a realistic log at 97% of it around 300
   problems (`npm run measure`). Session scratch has no business in there.
-- **On a `sessions` branch,** so `main`'s history stays a record of releases
-  rather than of every drawing.
+- **On the configured branch, not a separate one.** The design originally said a
+  `sessions` branch, to keep `main` a record of releases. That was written
+  thinking of the app repo; session logs go to the *data* repo, whose history is
+  already a log of practice ("Ledger: session pattern-recall answer"). A branch
+  there buys nothing and costs the Git refs API, which the Contents API cannot
+  create a branch through.
 
 This alone gives handoff: open any device, replay the log, carry on.
 

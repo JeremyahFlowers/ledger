@@ -91,6 +91,63 @@ export class GitHubStore {
   }
 
   /**
+   * Read a JSON file, with the sha needed to write it back.
+   *
+   * fetchPublicFile already reads one, and deliberately throws its sha away —
+   * it is for files a scheduled job writes and the app only ever reads. A file
+   * the app updates needs the sha, because without it GitHub refuses the write
+   * on anything that already exists.
+   */
+  async readJsonFile(path) {
+    const res = await fetch(`${this._urlFor(path)}?ref=${encodeURIComponent(this.branch)}`, {
+      headers: this._headers(),
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) throw await this._errorFrom(res);
+    const json = await res.json();
+    return { data: JSON.parse(base64ToUtf8(json.content)), sha: json.sha };
+  }
+
+  /**
+   * Write a JSON file, creating or updating it.
+   *
+   * `sha` omitted means "this should not exist yet"; passing a stale one is how
+   * GitHub tells two writers apart, and the 409 it returns is surfaced as a
+   * conflict rather than a generic failure so a caller can re-read and retry.
+   */
+  async writeJsonFile(path, data, { sha = null, message } = {}) {
+    const res = await fetch(this._urlFor(path), {
+      method: "PUT",
+      headers: { ...this._headers(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: message || `Ledger: update ${path}`,
+        content: utf8ToBase64(JSON.stringify(data)),
+        branch: this.branch,
+        ...(sha ? { sha } : {}),
+      }),
+    });
+    if (res.status === 409 || res.status === 422) {
+      const err = await this._errorFrom(res);
+      err.code = "conflict";
+      throw err;
+    }
+    if (!res.ok) throw await this._errorFrom(res);
+    return (await res.json()).content?.sha ?? null;
+  }
+
+  /** Remove a file. Used when a session ends and its scratch log is no longer
+   *  worth keeping — the attempt and the board PNG are the durable record. */
+  async deleteFile(path, sha, message) {
+    const res = await fetch(this._urlFor(path), {
+      method: "DELETE",
+      headers: { ...this._headers(), "Content-Type": "application/json" },
+      body: JSON.stringify({ message: message || `Ledger: remove ${path}`, sha, branch: this.branch }),
+    });
+    // Already gone is the outcome we wanted.
+    if (!res.ok && res.status !== 404) throw await this._errorFrom(res);
+  }
+
+  /**
    * Ask the statements workflow to run now.
    *
    * Statements arrive from a scheduled job that fetches twenty per run, so a
