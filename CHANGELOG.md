@@ -28,6 +28,90 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 1.6.0 — 2026-09-24
+
+Cycle 5 of TODO.md, found by probing the app rather than reading it. The first
+item is a data-loss path that was reproduced in a browser before a line was
+changed.
+
+### Losing work
+
+- **Work done offline was discarded on the next open.** The scenario this app
+  is built for: a phone with no signal, a problem worked, the save fails, the
+  work goes to localStorage, the tab closes. On the next open `init()` fetched
+  the remote, adopted it, and overwrote the cache — the cached copy was read
+  only when the fetch *failed*. `dirty` lived in memory and did not survive the
+  reload, so nothing even knew there had been anything to keep. An hour of
+  practice, gone, with the app working exactly as written.
+
+  A reopen now finds that work and pushes it, and says so, because a silent
+  save is indistinguishable from nothing having been at stake. When both sides
+  hold attempts the other has never seen it goes to the conflict screen, which
+  already exists to show what each choice discards.
+
+- **A fetched problem statement never persisted.** It was assigned straight
+  onto the problem object — the same object that lives in state — so it changed
+  the app's data without going through `mutate`. Never cached, never synced,
+  gone when the tab closed, and fetched again next session. Whether it survived
+  depended on whether some unrelated mutation happened to write the cache
+  afterwards.
+
+### Trusting less
+
+- **The sync path checks what it loads.** `inspectImport` had guarded the
+  import path since it was written; the path that runs every single time the
+  app opens trusted whatever came back, and `migrateState` only backfills
+  missing keys. A truncated write or a hand edit went straight into the views.
+  A file that cannot be read is deliberately *not* reported as offline —
+  offline means carry on and save later, and saving later would overwrite the
+  damaged file that is the only evidence left of what it held. It blocks
+  saving, shows your cached copy, and names the path to go and open.
+
+### Finding and correcting things
+
+- **Search finds journal entries.** Soul statements were made findable in
+  1.5.0; weekly retros are the harder thing to find again, being loose prose in
+  a list that only grows. The ranking also moved out of `runSearch` into a pure
+  `collectResults`, so what is findable is finally a testable question.
+
+- **Today's clock can be corrected.** It feeds the budget ring and the plant's
+  health and could only run or pause. The correction is stored apart from the
+  reading, with an undo, so the clock keeps what it measured and the correction
+  stays visible as one. It will not drive the day below zero, and it will not
+  subtract time that has not elapsed.
+
+- **A statement says where it came from** — fetched or pasted, with the date —
+  and can be replaced, which is the only way back from one synced against the
+  wrong problem.
+
+### Knowing where you stand
+
+- **A session shows what you did last time**, split by what it gives away. The
+  outcome, the timings and the mistakes you tagged lead: "off by one, edge case
+  missed" is a thing to watch for. Your note is not — "the window only shrinks
+  from the left" is the answer written down — so it joins the code behind the
+  same closed fold.
+
+- **Your record on a pattern is in its topic header**, one line, instead of
+  only at the bottom below two diagrams and a practice ladder.
+
+- **One list keyboard, applied to every list.** The bank had arrow keys and
+  nothing else did, because the bank kept a private copy. Home and End are new.
+
+### Fixed
+
+- `scripts/check-views.mjs` joins `npm run check`: forty render calls, each
+  view against an empty log and a populated one. Loading a module proves its
+  imports resolve and says nothing about whether its render body runs, which is
+  the failure that reaches people — a view nobody opens during a test run is
+  first opened by the user.
+- The pattern-history empty state predated 1.5.0's rule that every empty state
+  offers the way out of it, and the audit missed it because it did not use the
+  shared helper.
+- A correction of `-0` minutes could render as "-0 min".
+
+---
+
 ## 1.5.0 — 2026-09-24
 
 Cycle 4 of TODO.md. Both of the P0s turned out to be the same shape: the app
