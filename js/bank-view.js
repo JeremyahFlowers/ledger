@@ -14,6 +14,7 @@
 
 import { esc, toast, offerUndo } from "./ui.js";
 import { startSession } from "./session-view.js";
+import { wireListRows } from "./chrome.js";
 import {
   loadCatalog, PATTERN_CONFIDENCE, MAX_BANK_SIZE, problemFromCatalog, problemUrl, slugify,
   savedSlugs,
@@ -333,44 +334,15 @@ function rowHtml(problem, saved) {
     </li>`;
 }
 
-/**
- * Arrow-key movement through the results, with Enter to start one.
- *
- * The filters were reachable from the keyboard and the 2,500-row list beneath
- * them was not, which is the wrong way round: the filters are three controls
- * and the list is everything.
- *
- * Bound on the list rather than the document so it cannot swallow arrow keys
- * meant for the search box or the page, and the rows are made focusable so
- * the browser's own focus ring does the highlighting.
- */
+/** The shared row keyboard, with the bank's own idea of what Enter means: a
+ *  catalog problem has to be saved into your list before a session can be
+ *  logged against it, which the shared default knows nothing about. */
 function wireListKeyboard(root, store, actions, page) {
-  const list = root.querySelector("#bank-list");
-  if (!list) return;
-  const rows = [...list.querySelectorAll(".queue-item")];
-  rows.forEach((row, i) => {
-    row.tabIndex = 0;
-    row.dataset.rowIndex = String(i);
-  });
-
-  list.addEventListener("keydown", (e) => {
-    const row = e.target.closest(".queue-item");
-    if (!row) return;
-    const i = Number(row.dataset.rowIndex);
-
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-      e.preventDefault();
-      const next = rows[i + (e.key === "ArrowDown" ? 1 : -1)];
-      if (next) next.focus();
-      return;
-    }
-    if (e.key === "Enter") {
-      // Enter on the row starts it; a button inside the row handles its own.
-      if (e.target !== row) return;
-      e.preventDefault();
+  wireListRows(root.querySelector("#bank-list"), {
+    onActivate: (row, i) => {
       const entry = page[i];
       if (entry) startCatalogProblem(entry, store, actions);
-    }
+    },
   });
 }
 

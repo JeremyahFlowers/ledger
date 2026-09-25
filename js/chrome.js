@@ -494,3 +494,65 @@ export function wireBoardViewers(root, store, boards) {
     });
   });
 }
+
+/**
+ * Arrow-key movement through a list of rows, with Enter to act on one.
+ *
+ * Written for the problem bank, where the filters were reachable from the
+ * keyboard and the 2,500-row list beneath them was not — the wrong way round,
+ * since the filters are three controls and the list is everything. Then left
+ * there, so the refresher queue, the dashboard's plan and a topic's practice
+ * ladder stayed mouse-only while the one list that already worked kept its own
+ * private copy of the behaviour.
+ *
+ * Three decisions that are easy to get wrong:
+ *
+ *  * Bound on the list, not the document, so it cannot swallow an arrow key
+ *    meant for the search box or for scrolling the page.
+ *  * Rows are made focusable and the browser's own focus ring does the
+ *    highlighting. A hand-rolled "active row" class is a second source of
+ *    truth about where you are, and it drifts.
+ *  * Enter is ignored unless the row itself has focus. Inside a row the
+ *    buttons are real buttons and Enter is already theirs.
+ *
+ * `onActivate` is optional. Without it, Enter clicks the row's primary
+ * control, found in the markup rather than named by every caller.
+ */
+export function wireListRows(list, { rowSelector = ".queue-item", onActivate = null } = {}) {
+  if (!list) return;
+  const rows = [...list.querySelectorAll(rowSelector)];
+  if (!rows.length) return;
+
+  rows.forEach((row, i) => {
+    row.tabIndex = 0;
+    row.dataset.rowIndex = String(i);
+  });
+
+  const primaryControl = (row) =>
+    row.querySelector("[data-start-problem], [data-open-problem], button, a");
+
+  list.addEventListener("keydown", (event) => {
+    const row = event.target.closest(rowSelector);
+    if (!row) return;
+    const i = Number(row.dataset.rowIndex);
+
+    const moveTo = (index) => {
+      const next = rows[Math.max(0, Math.min(rows.length - 1, index))];
+      if (next && next !== row) next.focus();
+    };
+
+    if (event.key === "ArrowDown") { event.preventDefault(); moveTo(i + 1); return; }
+    if (event.key === "ArrowUp") { event.preventDefault(); moveTo(i - 1); return; }
+    // A long list is the reason this exists; getting to the end of one should
+    // not mean holding a key down.
+    if (event.key === "Home") { event.preventDefault(); moveTo(0); return; }
+    if (event.key === "End") { event.preventDefault(); moveTo(rows.length - 1); return; }
+
+    if (event.key === "Enter") {
+      if (event.target !== row) return;
+      event.preventDefault();
+      if (onActivate) onActivate(row, i);
+      else primaryControl(row)?.click();
+    }
+  });
+}

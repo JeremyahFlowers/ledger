@@ -79,11 +79,13 @@ data-loss path that was reproduced in a browser before a line was changed.
   *Done:* the header answers "how am I doing on this" without a scroll, and the
   full history stays where a chart belongs.
 
-- [ ] **47. Keyboard support stops at the door of every list.**
-  `g`-shortcuts reach any page and `?` explains them. Once you are on the
-  queue, the bank or the journal, there is no way to move through the list or
-  act on a row without a mouse.
-  *Done:* the lists you actually work from are navigable from the keyboard.
+- [x] **47. One list is navigable from the keyboard; the rest aren't.** _(1.6.0)_
+  As first written this named the bank among the lists you can't navigate. Wrong
+  — the bank is the only one you can, and it got that by keeping a private copy
+  of the behaviour. The refresher queue, today's plan, a topic's practice ladder
+  and the mock list are all mouse-only.
+  *Done:* one implementation, applied to every list, with Home and End since a
+  long list is the reason it exists.
 
 # Cycle 4
 

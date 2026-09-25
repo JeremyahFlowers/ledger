@@ -4,7 +4,9 @@ import { renderSetup, renderConflict } from "./setup-view.js";
 import { renderQuiz, renderWarmup } from "./drill-view.js";
 import { renderSettings } from "./settings-view.js";
 import { renderProblemDetail, renderDayDetail, showProblem } from "./detail-view.js";
-import { plantWidgetHtml, updatePlantWidget, wireNavigationTargets } from "./chrome.js";
+import {
+  plantWidgetHtml, updatePlantWidget, wireNavigationTargets, wireListRows,
+} from "./chrome.js";
 import { toast, showTopic } from "./ui.js";
 import {
   startSession, discardSession, hasActiveSession, restoreSession, checkpointSession,
@@ -451,6 +453,12 @@ function renderAll() {
   wireNavigationTargets(root, actions);
   views.wireProblemLinks(root, actions);
   views.wireHeatmapDays(root, actions);
+  // Every `.queue-list` on the page, wherever it came from: the refresher
+  // queue, today's plan, a topic's practice ladder, the mock list. The bank
+  // keeps its own because Enter there has to save the problem first. Bound
+  // here for the same reason the navigation buttons are — a list is markup any
+  // view can emit, and it should not need each one to remember.
+  root.querySelectorAll(".queue-list").forEach((list) => wireListRows(list));
   renderPlantWidget();
   applyGrowthAnimation();
 }
