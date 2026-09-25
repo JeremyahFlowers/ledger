@@ -1185,3 +1185,153 @@ export function recommendSession(state) {
   return { type: "none", problem: null, patternId: null, message: "You've covered today's queue. That's a real stopping point." };
 }
 
+
+// ---------- Timeboxing one question ----------
+//
+// The daily budget is a ceiling for the day. It said nothing about one problem,
+// so a single medium could absorb the whole seventy-five minutes — which is not
+// how the thing being practised works. An interview gives you forty-five
+// minutes and takes the laptop away, and the skill being trained is partly
+// deciding, inside that box, when to stop planning and start typing.
+//
+// So each difficulty gets its own box, and the box is divided into the phases
+// the process actually has. The division is not proportional, because the real
+// process is not: understanding the problem takes about five minutes whether
+// it is easy or hard, and what scales with difficulty is how long you should
+// be willing to spend planning before committing to code.
+//
+// These are guardrails and not gates. Nothing stops when a phase ends; the app
+// says where you are and what the phase is for, and running over is reported
+// rather than hidden — an app that quietly stops counting teaches the opposite
+// of the lesson.
+
+/** Minutes for one question, by difficulty. Overridable in Settings. */
+export const DEFAULT_QUESTION_MINUTES = { Easy: 30, Medium: 45, Hard: 60, Unrated: 45 };
+
+/**
+ * How long to be willing to plan before writing code, by difficulty.
+ *
+ * The number that matters most here. Too low and you train yourself to start
+ * typing before you know the shape of the answer, which is the single most
+ * common way a solvable interview problem goes wrong. Too high and you run out
+ * of clock with a good plan and nothing to show.
+ */
+export const DEFAULT_PLAN_MINUTES = { Easy: 10, Medium: 15, Hard: 25, Unrated: 15 };
+
+/** Reading the problem and working out what it is actually asking. Flat,
+ *  because it does not scale with difficulty — a hard problem is not harder to
+ *  read, it is harder to solve. */
+export const READ_MINUTES = 5;
+
+/** Held back at the end for writing down what happened while it is still
+ *  fresh. Reserved rather than hoped for: the reflection is the part this whole
+ *  app is built to collect, and it is the first thing to be squeezed out. */
+export const REFLECT_MINUTES = 5;
+
+/** Below this there is no room to divide anything, so the plan is one phase. */
+const MIN_DIVISIBLE_MINUTES = 12;
+
+export function questionMinutes(state, difficulty) {
+  const table = state?.settings?.questionMinutes || DEFAULT_QUESTION_MINUTES;
+  return table[difficulty] ?? table.Unrated ?? DEFAULT_QUESTION_MINUTES.Unrated;
+}
+
+export function planMinutes(state, difficulty) {
+  const table = state?.settings?.planMinutes || DEFAULT_PLAN_MINUTES;
+  return table[difficulty] ?? table.Unrated ?? DEFAULT_PLAN_MINUTES.Unrated;
+}
+
+/**
+ * The phases of one question, with real minute boundaries.
+ *
+ * Returns `{ totalMin, phases: [{ key, label, prompt, startMin, endMin, minutes }] }`,
+ * contiguous and covering the whole box.
+ *
+ * When the box is too small to hold read + plan + reflect at their stated
+ * sizes, every phase shrinks by the same factor rather than code going
+ * negative. A fifteen-minute box is a legitimate thing to want — a warm-up on
+ * an easy problem — and it should produce a small version of the same shape,
+ * not a broken one.
+ */
+export function questionPlan(state, difficulty) {
+  const totalMin = Math.max(1, Math.round(questionMinutes(state, difficulty)));
+
+  if (totalMin < MIN_DIVISIBLE_MINUTES) {
+    return {
+      totalMin,
+      phases: [{
+        key: "solve", label: "Solve", startMin: 0, endMin: totalMin, minutes: totalMin,
+        prompt: "Short box — read it, decide on an approach and write it. Reflect afterwards.",
+      }],
+    };
+  }
+
+  // Allocated, not scaled. An earlier version scaled the three fixed phases by
+  // a factor and let code take the remainder, and rounding could push the last
+  // boundary a minute or two *past* the box — a 15-minute box reporting itself
+  // as 16. The sum is now correct by construction: read, plan and reflect are
+  // whatever they can be, and code is exactly what is left.
+  let read = READ_MINUTES;
+  let plan = Math.max(1, Math.round(planMinutes(state, difficulty)));
+  let reflect = REFLECT_MINUTES;
+
+  // Code needs a minute at minimum, and what it borrows comes from planning
+  // first. Planning is the elastic one: you can decide on an approach in less
+  // time than you would like, but you cannot read the problem in no time and
+  // you cannot write down what happened in no time.
+  const MIN_CODE = 1;
+  while (read + plan + reflect + MIN_CODE > totalMin) {
+    if (plan > 1) plan -= 1;
+    else if (read > 1) read -= 1;
+    else if (reflect > 1) reflect -= 1;
+    else break;
+  }
+  const code = Math.max(MIN_CODE, totalMin - read - plan - reflect);
+
+  const spec = [
+    ["read", "Read", read,
+      "What is it actually asking? Note the constraints, the edge cases, and the questions you'd ask an interviewer."],
+    ["plan", "Plan", plan,
+      "Decide the approach and say why, before typing. Name the invariant and the complexity you expect."],
+    ["code", "Code", code,
+      "Write it. If the approach is wrong you'll find out here — that's information, not lost time."],
+    ["reflect", "Reflect", reflect,
+      "Stop coding. Write down what happened while it's fresh; that sentence is the part you'll reread."],
+  ];
+
+  let cursor = 0;
+  const phases = spec.map(([key, label, minutes, prompt]) => {
+    const startMin = cursor;
+    cursor += minutes;
+    return { key, label, prompt, startMin, endMin: cursor, minutes };
+  });
+  return { totalMin, phases };
+}
+
+/**
+ * Where you are in the plan, given minutes elapsed.
+ *
+ * `overrun` counts past the end of the box rather than clamping, for the same
+ * reason mockPhase does: going over is the information.
+ */
+export function questionPhase(elapsedMin, plan) {
+  const { phases, totalMin } = plan;
+  const current = phases.find((p) => elapsedMin < p.endMin) || phases[phases.length - 1];
+  const remainingInPhase = current.endMin - elapsedMin;
+  const remainingMin = totalMin - elapsedMin;
+  const next = phases[phases.indexOf(current) + 1] || null;
+  return {
+    key: current.key,
+    label: current.label,
+    prompt: current.prompt,
+    index: phases.indexOf(current),
+    remainingInPhase,
+    remainingMin,
+    fraction: totalMin > 0 ? elapsedMin / totalMin : 0,
+    overrun: remainingMin < 0,
+    // Said a minute before the boundary rather than at it, so the nudge lands
+    // while there is still time to act on it.
+    endingSoon: remainingInPhase <= 1 && remainingInPhase > 0,
+    nextLabel: next ? next.label : null,
+  };
+}

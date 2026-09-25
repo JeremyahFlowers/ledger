@@ -1648,3 +1648,32 @@ input[type="checkbox"]:focus-visible {
 /* And a hairline down the whole window, so it reads as dev even when the
    header has scrolled away. */
 :root[data-channel="dev"] body { box-shadow: inset 0 0 0 2px var(--warn); }
+
+/* The timebox, before and during a session. Widths in proportion to minutes,
+   because the shape of the box is the information — that planning is a quarter
+   of a hard problem and reading is five minutes of anything. */
+.box-preview { margin: 0.9rem 0; }
+.box-phases {
+  list-style: none; margin: 0.5rem 0; padding: 0;
+  display: flex; gap: 2px; align-items: stretch;
+}
+.box-phases li {
+  flex-basis: 0; min-width: 0;
+  padding: 0.4rem 0.5rem; border-radius: 3px;
+  background: var(--surface-2, var(--border)); overflow: hidden;
+}
+.box-phases li:first-child { border-radius: 4px 3px 3px 4px; }
+.box-phases li:last-child { border-radius: 3px 4px 4px 3px; }
+.box-phase-label { display: block; font-weight: 600; font-size: 0.8rem; white-space: nowrap; }
+/* The nudge a minute before a phase ends. Only appears then, so it can afford
+   to be loud. */
+.mock-phase-next {
+  margin-left: 0.5rem; padding: 0.1rem 0.4rem; border-radius: 3px;
+  background: var(--warn); color: #1b1300;
+  font-size: 0.7rem; font-weight: 700; white-space: nowrap;
+}
+
+/* The per-difficulty time table. Narrow number inputs, because a minute count
+   is two digits and a full-width field invites a paragraph. */
+.timebox-table td { vertical-align: middle; }
+.input-xs { max-width: 5rem; }

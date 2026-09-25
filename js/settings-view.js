@@ -8,7 +8,8 @@
 
 import {
   parseBoxIntervals, validateBoxIntervals, syncFootprint, formatBytes,
-  dayTimerElapsedMs, dayTimerAdjustmentMin, adjustDayTimer, inspectImport,
+  dayTimerElapsedMs, dayTimerAdjustmentMin, adjustDayTimer,
+  questionMinutes, planMinutes, questionPlan, READ_MINUTES, REFLECT_MINUTES, inspectImport,
   describeState,
 } from "./logic.js";
 import { APP_VERSION, RELEASED } from "./version.js";
@@ -133,6 +134,58 @@ function faultLogHtml() {
 }
 
 /**
+ * How long one question gets, and how much of it is for planning.
+ *
+ * Two tables rather than one, because they answer different questions. The
+ * total is how long you are giving yourself; the planning share is the
+ * judgement call — too low trains you to type before you know the shape of the
+ * answer, which is the commonest way a solvable problem goes wrong, and too
+ * high leaves you with a good plan and no clock.
+ *
+ * Reading and reflecting are not settable. Reading is five minutes whether the
+ * problem is easy or hard, and the reflection is the thing this app exists to
+ * collect — making it adjustable would make it the first thing to be set to
+ * zero.
+ */
+const TIMEBOX_DIFFICULTIES = ["Easy", "Medium", "Hard", "Unrated"];
+
+function timeboxCardHtml(state) {
+  const total = (d) => questionMinutes(state, d);
+  const planning = (d) => planMinutes(state, d);
+  return `
+    <div class="card">
+      <h3>Time per question</h3>
+      <p class="muted small">A box for one problem, so a single medium can't absorb the whole day.
+      Nothing stops when a phase ends — the session says where you are and what the phase is for,
+      and going over is counted rather than hidden. ${READ_MINUTES} minutes for reading and
+      ${REFLECT_MINUTES} for writing down what happened come off the top of every box.</p>
+      <form id="timebox-form">
+        <div class="table-wrap">
+          <table class="table timebox-table">
+            <thead><tr><th>Difficulty</th><th>Total</th><th>Of that, planning</th><th>Leaves for code</th></tr></thead>
+            <tbody>
+              ${TIMEBOX_DIFFICULTIES.map((d) => {
+                const phases = questionPlan(state, d).phases;
+                const code = phases.find((x) => x.key === "code");
+                return `
+                <tr>
+                  <td>${esc(d)}</td>
+                  <td><input class="input input-xs" type="number" min="1" max="240"
+                        name="total-${esc(d)}" value="${total(d)}" aria-label="${esc(d)} total minutes" /></td>
+                  <td><input class="input input-xs" type="number" min="1" max="240"
+                        name="plan-${esc(d)}" value="${planning(d)}" aria-label="${esc(d)} planning minutes" /></td>
+                  <td class="num muted">${code ? `${code.minutes} min` : "—"}</td>
+                </tr>`;
+              }).join("")}
+            </tbody>
+          </table>
+        </div>
+        <button class="btn btn-primary btn-sm" type="submit">Save times</button>
+      </form>
+    </div>`;
+}
+
+/**
  * Today's clock, and the ability to correct it.
  *
  * It feeds the budget ring and the plant's health, and until now it could only
@@ -202,6 +255,7 @@ export function renderSettings(root, store, actions) {
         <button class="btn btn-primary" type="submit">Save</button>
       </form>
     </div>
+${timeboxCardHtml(store.state)}
 ${clockCardHtml(store.state)}
 <div class="card">
       <h3>Review intervals</h3>
@@ -265,6 +319,39 @@ ${clockCardHtml(store.state)}
       </select>
     </div>
     </section>`;
+
+  root.querySelector("#timebox-form")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const read = (prefix, d) => {
+      const raw = Number(f.get(`${prefix}-${d}`));
+      return Number.isFinite(raw) && raw >= 1 ? Math.min(240, Math.round(raw)) : null;
+    };
+    const totals = {};
+    const plans = {};
+    for (const d of TIMEBOX_DIFFICULTIES) {
+      const t = read("total", d);
+      const p = read("plan", d);
+      if (t == null || p == null) {
+        toast(`${d} needs a number of minutes, at least 1.`);
+        return;
+      }
+      totals[d] = t;
+      // Clamped against its own total rather than refused: planning longer than
+      // the whole box is a typo, and the useful response is the largest thing
+      // they could have meant.
+      plans[d] = Math.min(p, Math.max(1, t - READ_MINUTES - REFLECT_MINUTES - 1));
+    }
+    store.mutate((st) => {
+      st.settings.questionMinutes = totals;
+      st.settings.planMinutes = plans;
+    }, "Ledger: update time per question");
+    const clamped = TIMEBOX_DIFFICULTIES.filter((d) => plans[d] !== read("plan", d));
+    toast(clamped.length
+      ? `Saved. Planning time trimmed for ${clamped.join(", ")} to leave room to code.`
+      : "Saved.");
+    actions.rerender();
+  });
 
   root.querySelectorAll("[data-adjust-clock]").forEach((btn) => {
     btn.addEventListener("click", () => {

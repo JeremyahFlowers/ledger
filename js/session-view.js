@@ -17,6 +17,7 @@ import {
   todayISO, applyOutcome, activateProblem, uid, MISTAKE_TAGS, MOCK_CHECKLIST,
   quizOptions, updateStreak, computePlantState, recommendSession, allAttempts,
   normalizeStatement, MAX_STATEMENT_CHARS, lastAttemptWithCode, mockPhase, MOCK_MINUTES,
+  questionPlan, questionPhase,
   priorAttemptSummary,
 } from "./logic.js";
 import {
@@ -112,6 +113,11 @@ export function restoreSession(state, now = Date.now()) {
 export function startSession(problem, { isMock = false } = {}) {
   session = {
     problem, isMock,
+    // Resolved on first mount by renderWorkspace, which has the store — eight
+    // call sites start a session and none of them should have to know about
+    // timeboxing. Fixed once and then left alone: changing the box in Settings
+    // mid-session must not move the boundaries under someone inside them.
+    plan: null,
     startedAt: null, insightAt: null, endedAt: null,
     intervalId: null, whiteboardCtl: null, whiteboardShown: false,
     cm: null, codeLang: "cpp", checklist: {},
@@ -169,6 +175,13 @@ function fmtClock(ms) {
 }
 
 export function renderWorkspace(root, store, actions) {
+  // The box for this question, from this user's settings, decided once.
+  if (!session.plan) {
+    session.plan = session.isMock
+      ? { totalMin: MOCK_MINUTES, phases: [] }
+      : questionPlan(store.state, session.problem.difficulty);
+  }
+
   if (!session) {
     actions.switchTab("dashboard");
     return;
@@ -198,6 +211,7 @@ export function renderWorkspace(root, store, actions) {
           <li>Start the clock when you begin thinking about a solution.</li>
         </ol>` : `
         <p class="muted small">No link for this one — open it wherever you keep it.</p>`}
+        ${session.isMock ? "" : boxPreviewHtml(session.plan, p.difficulty)}
         <label class="field checkbox-field">
           <input type="checkbox" id="ws-mock-toggle" ${session.isMock ? "checked" : ""} />
           Verbalized mock — ${MOCK_MINUTES} minutes, counting down, with the prompts an
@@ -226,7 +240,7 @@ export function renderWorkspace(root, store, actions) {
       <div class="ws-bar">
         <div class="ws-bar-id">${header}</div>
         <div class="session-clock" id="ws-clock">00:00</div>
-        ${session.isMock ? `<div class="mock-phase" id="ws-mock-phase"></div>` : ""}
+        <div class="mock-phase" id="ws-mock-phase"></div>
         <div class="ws-bar-actions">
           <button type="button" class="btn btn-ghost btn-sm" id="ws-mark-insight" ${session.insightAt ? "disabled" : ""}>
             ${session.insightAt ? `Insight at ${Math.round((session.insightAt - session.startedAt) / 60000)} min` : "I've got my approach"}
@@ -309,26 +323,32 @@ export function renderWorkspace(root, store, actions) {
       clearInterval(session.intervalId);
       return;
     }
-    const elapsedMs = Date.now() - session.startedAt;
-    // A mock counts down. The clock in a real interview is the constraint, not
-    // a stopwatch, and showing elapsed time makes it easy to lose track of how
-    // much is left — which is exactly the thing worth practising.
-    if (session.isMock) {
-      const phase = mockPhase(elapsedMs / 60000);
-      clock.textContent = (phase.overrun ? "+" : "") + fmtClock(Math.abs(phase.remainingMin) * 60000);
-      clock.classList.toggle("clock-urgent", phase.urgent && !phase.overrun);
-      clock.classList.toggle("clock-overrun", phase.overrun);
-      const host = document.getElementById("ws-mock-phase");
-      if (host && host.dataset.phase !== String(phase.index)) {
-        // Written only when the phase changes, not 4 times a second: replacing
-        // this text continuously would make it unreadable and fight a screen
-        // reader announcing it.
-        host.dataset.phase = String(phase.index);
-        host.innerHTML = `<span class="mock-phase-label">${esc(phase.label)}</span>
-          <span class="mock-phase-prompt">${esc(phase.prompt)}</span>`;
-      }
-    } else {
-      clock.textContent = fmtClock(elapsedMs);
+    const elapsedMin = (Date.now() - session.startedAt) / 60000;
+
+    // Every session counts down now, not only a mock. The clock in an
+    // interview is the constraint rather than a stopwatch, and a session with
+    // no box could absorb the whole day's budget on one medium — which is not
+    // the thing being practised.
+    const phase = session.isMock
+      ? mockPhase(elapsedMin)
+      : questionPhase(elapsedMin, session.plan);
+
+    clock.textContent = (phase.overrun ? "+" : "") + fmtClock(Math.abs(phase.remainingMin) * 60000);
+    clock.classList.toggle("clock-urgent", !phase.overrun
+      && (phase.urgent ?? phase.remainingMin <= session.plan.totalMin * 0.15));
+    clock.classList.toggle("clock-overrun", phase.overrun);
+
+    const host = document.getElementById("ws-mock-phase");
+    // Written only when the phase or the ending-soon nudge changes, not four
+    // times a second: replacing this text continuously would make it
+    // unreadable and would fight a screen reader trying to announce it.
+    const stamp = `${phase.index}:${phase.endingSoon ? 1 : 0}`;
+    if (host && host.dataset.phase !== stamp) {
+      host.dataset.phase = stamp;
+      const nudge = phase.endingSoon && phase.nextLabel
+        ? `<span class="mock-phase-next">${esc(phase.nextLabel)} next</span>` : "";
+      host.innerHTML = `<span class="mock-phase-label">${esc(phase.label)}</span>
+        <span class="mock-phase-prompt">${esc(phase.prompt)}</span>${nudge}`;
     }
   }, 250);
 
@@ -557,6 +577,32 @@ function priorHtml(problem) {
         ? `<p class="muted small">What you wrote and the code you got to are in the code pane,
            behind a fold — worth opening after you have had a go, not before.</p>`
         : ""}
+    </div>`;
+}
+
+/**
+ * The box you are about to enter, before you enter it.
+ *
+ * Shown up front on purpose. The point of a timebox is that you know its shape
+ * while you are inside it — a countdown that turns out to have been divided
+ * into phases you were never told about is a surprise, not a guardrail.
+ */
+function boxPreviewHtml(plan, difficulty) {
+  if (!plan || !plan.phases.length) return "";
+  return `
+    <div class="box-preview">
+      <p class="muted small"><strong>${plan.totalMin} minutes</strong> for
+        ${esc(String(difficulty).toLowerCase())}. Nothing stops when a phase ends — the app just
+        says where you are, so a good approach doesn't eat the time you needed to write it.</p>
+      <ol class="box-phases">
+        ${plan.phases.map((ph) => `
+          <li style="flex-grow:${ph.minutes}">
+            <span class="box-phase-label">${esc(ph.label)}</span>
+            <span class="muted small">${ph.minutes}m</span>
+          </li>`).join("")}
+      </ol>
+      <p class="muted small"><button type="button" class="link-button" data-goto="settings">Change
+        these times</button> per difficulty in Settings.</p>
     </div>`;
 }
 

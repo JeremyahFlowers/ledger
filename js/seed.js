@@ -1,7 +1,9 @@
 // The starting state, built fresh on first connect from what's actually in
 // the leetcode repo today. Every problem starts due immediately (box 0) so
 // day one already has a real review queue instead of an empty app.
-import { todayISO, newDayTimer } from "./logic.js";
+import {
+  todayISO, newDayTimer, DEFAULT_QUESTION_MINUTES, DEFAULT_PLAN_MINUTES,
+} from "./logic.js";
 import { APP_VERSION } from "./version.js";
 
 const PATTERNS = [
@@ -70,6 +72,10 @@ export function buildSeedState() {
       dailyBudgetMin: 75,
       boxIntervalsDays: [0, 1, 3, 7, 16, 35],
       estimateMinByDifficulty: { Easy: 20, Medium: 30, Hard: 45, Unrated: 30 },
+      // How long one question gets, and how much of that is for planning
+      // before writing code. See questionPlan() in logic.js.
+      questionMinutes: { ...DEFAULT_QUESTION_MINUTES },
+      planMinutes: { ...DEFAULT_PLAN_MINUTES },
       systemDesignUnlockThreshold: { minMocks: 10, minSolvedCleanRate: 0.7 },
     },
     patterns: PATTERNS,
@@ -91,6 +97,16 @@ export function migrateState(state) {
   if (!state.resources) state.resources = {};
   if (!state.whiteboards) state.whiteboards = [];
   if (!state.quiz) state.quiz = { totalAsked: 0, totalCorrect: 0, recent: [] };
+  // Backfilled rather than only defaulted at read time, so the Settings table
+  // has something to show and a saved value is distinguishable from an absent
+  // one.
+  //
+  // `settings` itself is created if missing. It has always been assumed to
+  // exist here, and this function runs on whatever GitHub returns — the first
+  // line to actually reach into it found a file without one.
+  if (!state.settings) state.settings = {};
+  if (!state.settings.questionMinutes) state.settings.questionMinutes = { ...DEFAULT_QUESTION_MINUTES };
+  if (!state.settings.planMinutes) state.settings.planMinutes = { ...DEFAULT_PLAN_MINUTES };
   // Deliberately not backfilled with today's date: newDayTimer() stamps the
   // day it was made, and logic.js treats a timer from another date as an empty
   // day, so an absent one and a stale one behave identically.
