@@ -17,10 +17,11 @@ import {
   todayISO, applyOutcome, activateProblem, uid, MISTAKE_TAGS, MOCK_CHECKLIST,
   quizOptions, updateStreak, computePlantState, recommendSession, allAttempts,
   normalizeStatement, MAX_STATEMENT_CHARS, lastAttemptWithCode, mockPhase, MOCK_MINUTES,
+  priorAttemptSummary,
 } from "./logic.js";
 import {
   esc, richText, fmtDate, patternName, toast, OUTCOME_GLYPH, showTopic, outcomeOptions,
-  confirmLoss,
+  confirmLoss, outcomeLabel,
 } from "./ui.js";
 import { TOPICS } from "./topics-content.js";
 import { loadCodeMirror, CODE_MODES } from "./codemirror-loader.js";
@@ -247,7 +248,7 @@ export function renderWorkspace(root, store, actions) {
             <button type="button" class="btn btn-ghost btn-xs" id="ws-edit-statement"
               ${p.statement ? "" : "hidden"}>Edit</button>
           </header>
-          <div class="ws-pane-body" id="ws-statement-body">${statementHtml(p)}</div>
+          <div class="ws-pane-body" id="ws-statement-body">${priorHtml(p)}${statementHtml(p)}</div>
         </section>
         <div class="ws-splitter" data-splitter="0" role="separator" tabindex="0"
              aria-orientation="vertical" aria-label="Resize problem and code panes"></div>
@@ -272,6 +273,7 @@ export function renderWorkspace(root, store, actions) {
                 <details class="ws-prior-code">
                   <summary class="muted small">Show what you wrote on ${fmtDate(prior.date)}
                     — only worth opening once you've had a go</summary>
+                  ${prior.soulStatement ? `<blockquote class="ws-prior-note">${esc(prior.soulStatement)}</blockquote>` : ""}
                   <pre class="code-view-pre">${esc(prior.code)}</pre>
                 </details>`;
             })()}
@@ -515,6 +517,57 @@ function statementHtml(problem, { loading = false } = {}) {
   }
   return `<div class="ws-statement">${richText(problem.statement)}</div>
     ${statementSourceHtml(problem)}`;
+}
+
+/**
+ * What you did last time, above the statement.
+ *
+ * Only the half that cannot hand you the answer: the outcome, how long it
+ * took, whether you named the pattern, and which mistakes you tagged. That
+ * last one is the most useful and the least dangerous — "off by one, edge case
+ * missed" is a thing to watch for, not a solution.
+ *
+ * Your note and your code stay in the closed `<details>` in the code pane. A
+ * soul statement is usually the insight itself, which is exactly what you are
+ * here to reproduce.
+ */
+function priorHtml(problem) {
+  const prior = priorAttemptSummary(problem);
+  if (!prior) return "";
+
+  const facts = [
+    prior.timeToInsightMin != null ? `${prior.timeToInsightMin} min to the approach` : null,
+    prior.timeToSolveMin != null ? `${prior.timeToSolveMin} min in total` : null,
+    prior.recalledPattern ? "you named the pattern" : "you missed the pattern",
+  ].filter(Boolean);
+
+  return `
+    <div class="ws-prior">
+      <p class="ws-prior-head">
+        <span class="pill ${esc(outcomePill(prior.outcome))}">${esc(outcomeLabel(prior.outcome))}</span>
+        <span class="muted small">last time, ${esc(fmtDate(prior.date))}${
+          prior.attemptNumber > 1 ? ` · attempt ${prior.attemptNumber + 1} coming up` : ""}</span>
+      </p>
+      <p class="muted small">${esc(facts.join(" · "))}.</p>
+      ${prior.mistakeTags.length
+        ? `<p class="small ws-prior-watch">Worth watching for:
+           ${prior.mistakeTags.map((t) => `<span class="pill pill-warn">${esc(t.replace(/-/g, " "))}</span>`).join(" ")}</p>`
+        : ""}
+      ${prior.note || prior.hasCode
+        ? `<p class="muted small">What you wrote and the code you got to are in the code pane,
+           behind a fold — worth opening after you have had a go, not before.</p>`
+        : ""}
+    </div>`;
+}
+
+const OUTCOME_PILL = {
+  "solved-clean": "pill-good",
+  "solved-struggled": "pill-muted",
+  "ran-out-of-time": "pill-muted",
+  failed: "pill-warn",
+};
+function outcomePill(outcome) {
+  return OUTCOME_PILL[outcome] || "pill-muted";
 }
 
 function wireStatementPane(root, store, problem) {

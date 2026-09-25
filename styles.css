@@ -1599,3 +1599,19 @@ input[type="checkbox"]:focus-visible {
   margin: 0.8rem 0 0; padding-top: 0.6rem;
   border-top: 1px solid var(--border);
 }
+
+/* What you did last time, above the statement. Set apart from the statement
+   below it, because it is about you and the statement is about the problem. */
+.ws-prior {
+  margin: 0 0 1rem; padding-bottom: 0.8rem;
+  border-bottom: 1px solid var(--border);
+}
+.ws-prior > p { margin: 0 0 0.35rem; }
+.ws-prior-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.ws-prior-watch { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+/* Your own note, behind the same fold as the code: it is usually the insight
+   itself, which is the thing you are here to reproduce. */
+.ws-prior-note {
+  margin: 0.5rem 0; padding-left: 0.7rem;
+  border-left: 2px solid var(--border); color: var(--text);
+}

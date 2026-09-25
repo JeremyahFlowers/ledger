@@ -62,7 +62,7 @@ data-loss path that was reproduced in a browser before a line was changed.
   looking at.
   *Done:* today's time can be adjusted, with the correction visible as one.
 
-- [ ] **45. Nothing carries between a session and the next one on the same
+- [x] **45. Nothing carries between a session and the next one on the same
   problem.**
   Reopening a problem you failed last week gives you the statement and an
   empty editor. Your last attempt's code is reachable from the detail page and

@@ -442,6 +442,44 @@ export function lastAttemptWithCode(problem) {
   return withCode.reduce((latest, a) => ((a.date || "") >= (latest.date || "") ? a : latest), withCode[0]);
 }
 
+/**
+ * What you did last time on this problem — the part that is safe to show.
+ *
+ * Reopening a problem you failed last week gave you the statement and an empty
+ * editor. Your old code was already here behind a `<details>`, deliberately
+ * shut, because handing you your own solution before you have tried is the one
+ * thing this app exists to prevent.
+ *
+ * The same reasoning splits the rest in two, and the split is the whole point
+ * of this function. What you *scored* — the outcome, how long it took, which
+ * mistakes you tagged — tells you what to watch for without telling you the
+ * approach, so it leads. "Last time: off by one, edge case missed" is a warning.
+ * Your soul statement is not: "the window only shrinks from the left" is the
+ * answer written down, so it stays behind the same closed door as the code.
+ *
+ * Returns null when there is no previous attempt, so a first rep shows nothing
+ * rather than an empty frame.
+ */
+export function priorAttemptSummary(problem) {
+  const attempts = (problem?.attempts || []).filter((a) => a.date);
+  if (!attempts.length) return null;
+  const last = attempts.reduce((latest, a) => (a.date >= latest.date ? a : latest), attempts[0]);
+  return {
+    date: last.date,
+    attemptNumber: attempts.length,
+    outcome: last.outcome,
+    timeToInsightMin: typeof last.timeToInsightMin === "number" ? last.timeToInsightMin : null,
+    timeToSolveMin: typeof last.timeToSolveMin === "number" && last.timeToSolveMin > 0
+      ? last.timeToSolveMin : null,
+    mistakeTags: Array.isArray(last.mistakeTags) ? last.mistakeTags : [],
+    recalledPattern: last.patternGuess === "correct",
+    // Behind the same door as the code, and named here only so the view knows
+    // whether the door is worth showing.
+    note: last.soulStatement || "",
+    hasCode: !!(last.code && last.code.trim()),
+  };
+}
+
 // ---------- Box intervals ----------
 //
 // boxIntervalsDays decides when each box comes back round, and was honoured
