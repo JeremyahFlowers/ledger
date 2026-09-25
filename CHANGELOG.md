@@ -28,6 +28,40 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 1.10.0 — 2026-09-25
+
+### Someone can watch you practise
+
+`interview.html`, opened from a link the Share button in your session copies.
+They see the problem, your whiteboard and your code as you work, and the timer
+with the phase you are in. They tick the five verbalization behaviours as they
+happen, rate communication, and can send you a note mid-session.
+
+**This is the point of it:** those five behaviours were previously ticked by
+the person being assessed, about themselves, after the fact, and
+`communicationRating` was a self-score. An observation is better evidence than
+a memory of one, so it wins — and the attempt records which kind it was, since
+a rate computed over a mix of the two with no way to tell them apart is a
+number that quietly means two things.
+
+**What they cannot see** is the rest of your log. The page never imports the
+store, so it holds no GitHub config, no token and no practice history — prior
+attempts, soul statements and older code have nowhere to leak from because on
+that side they do not exist. That is structural, not a rule a view remembers,
+and a test pins it.
+
+The link carries the relay and the room in its fragment, which is never sent to
+a server — so the room stays out of access logs and out of whatever scans a
+link pasted into a chat. It needs a relay configured; without one the Share
+button says so rather than copying a dead link.
+
+Joining late works. The relay stores nothing, so whoever is already in the room
+answers a newcomer with the problem, the board as it stands, the code, and the
+clock re-sent with its original instant — not the moment of re-sending, or a
+watcher joining at minute ten would see a timer starting from zero.
+
+---
+
 ## 1.9.0 — 2026-09-24
 
 ### The whiteboard has tools worth having
