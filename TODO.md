@@ -55,7 +55,7 @@ data-loss path that was reproduced in a browser before a line was changed.
 
 ## P2 — the parts that only show up in use
 
-- [ ] **44. The day clock can't be corrected.**
+- [x] **44. The day clock can't be corrected.** _(1.6.0)_
   It runs, it pauses, and it is the input to the budget ring and the plant's
   health. Leave it running over lunch and the day is spent, with no way to say
   so. A number you can't correct is a number you stop trusting, and then stop

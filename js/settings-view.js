@@ -7,7 +7,8 @@
 // something goes wrong you can see what, rather than being told to try again.
 
 import {
-  parseBoxIntervals, validateBoxIntervals, syncFootprint, formatBytes, inspectImport,
+  parseBoxIntervals, validateBoxIntervals, syncFootprint, formatBytes,
+  dayTimerElapsedMs, dayTimerAdjustmentMin, adjustDayTimer, inspectImport,
   describeState,
 } from "./logic.js";
 import { APP_VERSION, RELEASED } from "./version.js";
@@ -123,6 +124,41 @@ function faultLogHtml() {
     </div>`;
 }
 
+/**
+ * Today's clock, and the ability to correct it.
+ *
+ * It feeds the budget ring and the plant's health, and until now it could only
+ * run or pause — leave it going over lunch and the day was spent, with no way
+ * to say otherwise. A number you cannot correct is a number you stop trusting,
+ * and then stop looking at, which costs more than the wrong forty minutes did.
+ *
+ * Here rather than on the widget, which the plant deliberately keeps to a
+ * visual cue and one pause button, and rather than on the Dashboard, where a
+ * budget card was tried and disliked. The correction belongs beside the number
+ * it corrects.
+ */
+function clockCardHtml(state) {
+  const used = Math.round(dayTimerElapsedMs(state) / 60000);
+  const correction = Math.round(dayTimerAdjustmentMin(state));
+  return `
+    <div class="card">
+      <h3>Today's clock</h3>
+      <p class="muted small">What the day clock has counted so far. Correct it if it ran while you
+      weren't working — the reading it measured is kept, and the correction is shown as one.</p>
+      <div class="row gap-sm" style="align-items:baseline">
+        <span class="stat-num">${used}</span><span class="stat-label">min today</span>
+        <span class="row gap-sm" style="margin-left:auto">
+          ${[-30, -15, -5, 5].map((d) => `<button type="button" class="btn btn-ghost btn-xs"
+            data-adjust-clock="${d}">${d > 0 ? "+" : ""}${d}</button>`).join("")}
+        </span>
+      </div>
+      ${correction
+        ? `<p class="muted small">Includes a correction of ${correction > 0 ? "+" : ""}${correction}
+           min. <button type="button" class="link-button" id="clear-clock-correction">Undo it</button></p>`
+        : ""}
+    </div>`;
+}
+
 export function renderSettings(root, store, actions) {
   const state = store.state;
   const cfg = JSON.parse(localStorage.getItem("ledger.config") || "{}");
@@ -158,6 +194,7 @@ export function renderSettings(root, store, actions) {
         <button class="btn btn-primary" type="submit">Save</button>
       </form>
     </div>
+${clockCardHtml(store.state)}
 <div class="card">
       <h3>Review intervals</h3>
       <p class="muted small">How long each box waits before a problem comes round again. A clean
@@ -220,6 +257,27 @@ export function renderSettings(root, store, actions) {
       </select>
     </div>
     </section>`;
+
+  root.querySelectorAll("[data-adjust-clock]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const asked = Number(btn.dataset.adjustClock);
+      let applied = 0;
+      store.mutate((s) => { applied = adjustDayTimer(s, asked); }, "Ledger: correct today's clock");
+      // Says what happened rather than what was asked for: subtracting half an
+      // hour from a ten-minute day removes ten minutes, because the rest of it
+      // never happened.
+      toast(applied === asked
+        ? `${applied > 0 ? "Added" : "Removed"} ${Math.abs(Math.round(applied))} min.`
+        : `Removed ${Math.abs(Math.round(applied))} min — that was all there was on the clock.`);
+      actions.rerender();
+    });
+  });
+
+  root.querySelector("#clear-clock-correction")?.addEventListener("click", () => {
+    store.mutate((s) => { s.dayTimer.adjustmentMs = 0; }, "Ledger: undo clock correction");
+    toast("Correction removed.");
+    actions.rerender();
+  });
 
   root.querySelector("#replay-welcome")?.addEventListener("click", () => {
     resetWelcome();

@@ -579,7 +579,11 @@ export function recencyText(days) {
  * today — the date is stored alongside rather than the timer being cleared by
  * something that has to remember to run at midnight. */
 export function newDayTimer(dateISO = todayISO()) {
-  return { date: dateISO, running: false, startedAt: null, accumulatedMs: 0 };
+  // `adjustmentMs` is kept apart from `accumulatedMs` on purpose. The clock's
+  // own reading stays exactly what it measured, and a correction stays
+  // visible as a correction — a single merged number would quietly become the
+  // thing you remember editing and stop being either.
+  return { date: dateISO, running: false, startedAt: null, accumulatedMs: 0, adjustmentMs: 0 };
 }
 
 /**
@@ -594,7 +598,9 @@ export function dayTimerElapsedMs(state, now = Date.now()) {
   // `!= null` rather than a truthiness check: a startedAt of 0 is a real
   // instant, and treating it as "never started" silently reports an empty day.
   const open = timer.running && timer.startedAt != null ? Math.max(0, now - timer.startedAt) : 0;
-  return timer.accumulatedMs + open;
+  // Never negative: a correction larger than the clock means "none of this
+  // was practice", which is zero, not a debt carried into tomorrow.
+  return Math.max(0, timer.accumulatedMs + open + (timer.adjustmentMs || 0));
 }
 
 /** Start today's clock. Rolls over to a new day's timer if the stored one is
@@ -618,6 +624,42 @@ export function stopDayTimer(state, now = Date.now()) {
 
 export function resetDayTimer(state) {
   state.dayTimer = newDayTimer();
+}
+
+/**
+ * Add or subtract minutes from today's clock.
+ *
+ * The clock is the input to the budget ring and to the plant's health, and it
+ * could not be corrected: leave it running over lunch and the day was spent,
+ * with no way to say otherwise. A number you cannot correct is a number you
+ * stop trusting, and then stop looking at — which would cost more than the
+ * wrong forty minutes did.
+ *
+ * Returns the correction actually applied, which is not always the one asked
+ * for: subtracting an hour from a twenty-minute day removes twenty minutes,
+ * because the rest never happened.
+ */
+export function adjustDayTimer(state, deltaMin, now = Date.now()) {
+  const today = todayISO();
+  if (!state.dayTimer || state.dayTimer.date !== today) state.dayTimer = newDayTimer(today);
+  const timer = state.dayTimer;
+
+  const before = dayTimerElapsedMs(state, now);
+  const wanted = Math.round(deltaMin * 60000);
+  // Clamped against the total, not against the adjustment, so two successive
+  // corrections can't drive the reported time below zero between them.
+  const applied = Math.max(wanted, -before);
+  timer.adjustmentMs = (timer.adjustmentMs || 0) + applied;
+  // `|| 0` normalises -0, which is what Math.max produces when it clamps a
+  // subtraction to nothing, and which would render as "-0 min".
+  return applied / 60000 || 0;
+}
+
+/** The running correction on today's clock, in minutes. Zero when untouched. */
+export function dayTimerAdjustmentMin(state) {
+  const timer = state.dayTimer;
+  if (!timer || timer.date !== todayISO()) return 0;
+  return (timer.adjustmentMs || 0) / 60000;
 }
 
 /** Past this multiple of the budget the day counts as a real overrun — the
