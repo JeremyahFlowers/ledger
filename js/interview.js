@@ -92,7 +92,7 @@ function shell() {
       being assessed, about themselves.</p>
       <ul class="checklist" id="iv-rubric">
         ${MOCK_CHECKLIST.map((item, i) => `<li><label>
-          <input type="checkbox" data-observed="${i}" /> ${esc(item)}</label></li>`).join("")}
+          <input type="checkbox" data-observed="${i}" /><span>${esc(item)}</span></label></li>`).join("")}
       </ul>
       <label class="field inline" style="margin-top:0.6rem"><span class="label">Communication, 1–5</span>
         <input class="input input-xs" type="number" min="1" max="5" id="iv-rating" /></label>

@@ -341,7 +341,15 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 }
 .mock-timer.overtime { color: var(--bad); }
 .checklist li { padding: 0.35rem 0; }
-.checklist label { display: flex; align-items: center; gap: 0.5rem; }
+/* The box is one flex item and everything said about it is the other, so a
+   name and its description flow as one paragraph. Left as bare text nodes they
+   were two items that each wrapped at their own width, and the design
+   session's component list — a name plus a sentence on every row — came out as
+   nine rows whose descriptions started at nine different places.
+   flex-start rather than center, because a row that wraps should start level
+   with its box instead of straddling it. */
+.checklist label { display: flex; align-items: flex-start; gap: 0.5rem; }
+.checklist label input { flex: none; margin-top: 0.2rem; }
 
 #toast {
   position: fixed; left: 50%; bottom: 1.2rem; transform: translate(-50%, 12px);

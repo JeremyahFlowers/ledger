@@ -328,7 +328,7 @@ export function renderWorkspace(root, store, actions) {
             <div class="ws-checklist">
               <p class="label">Verbalization checklist</p>
               <ul class="checklist">
-                ${MOCK_CHECKLIST.map((item, i) => `<li><label><input type="checkbox" data-ws-check="${i}" ${session.checklist[i] ? "checked" : ""} /> ${esc(item)}</label></li>`).join("")}
+                ${MOCK_CHECKLIST.map((item, i) => `<li><label><input type="checkbox" data-ws-check="${i}" ${session.checklist[i] ? "checked" : ""} /><span>${esc(item)}</span></label></li>`).join("")}
               </ul>
             </div>` : ""}
           </div>

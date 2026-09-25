@@ -249,8 +249,9 @@ export function renderDesignCompare(root, store, actions) {
       failure, it is the list of what to read next.</p>
       <ul class="checklist" id="ds-covered">
         ${components.map((c) => `<li><label>
-          <input type="checkbox" data-covered="${esc(c.id)}" /> ${esc(c.name)}
-          <span class="muted small">— ${esc(c.hook)}</span></label></li>`).join("")}
+          <input type="checkbox" data-covered="${esc(c.id)}" />
+          <span>${esc(c.name)} <span class="muted small">— ${esc(c.hook)}</span></span>
+        </label></li>`).join("")}
       </ul>
     </div>
 
