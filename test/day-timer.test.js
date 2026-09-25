@@ -31,9 +31,19 @@ function makeState({ budget = 75, attempts = [], dayTimer = undefined } = {}) {
   };
 }
 
+/** A rep logged by hand for work done elsewhere. `onClock: false` because the
+ *  day clock never saw it — see budgetProgress for why that distinction is the
+ *  difference between counting a session once and counting it twice. */
 function loggedAttempt(solveMin, date = todayISO()) {
   return { id: "a1", date, outcome: "solved-clean", patternGuess: "correct",
-    timeToInsightMin: 5, timeToSolveMin: solveMin, mistakeTags: [], soulStatement: "" };
+    timeToInsightMin: 5, timeToSolveMin: solveMin, mistakeTags: [],
+    soulStatement: "", onClock: false };
+}
+
+/** A session done in the app while the day clock was running, so the clock has
+ *  already counted these minutes. */
+function clockedAttempt(solveMin, date = todayISO()) {
+  return { ...loggedAttempt(solveMin, date), id: "a2", onClock: true };
 }
 
 describe("day timer", () => {
@@ -115,8 +125,9 @@ describe("budgetProgress", () => {
     assert.equal(p.over, false);
   });
 
-  test("test_budgetProgress_countsLoggedAttemptsAndTheClockTogether", () => {
-    // Both are practice; counting only one would under-report the day.
+  test("test_budgetProgress_countsWorkDoneElsewhereOnTopOfTheClock", () => {
+    // A rep done on paper and a clock running at the desk are different
+    // minutes, so they add.
     const state = makeState({ budget: 75, attempts: [loggedAttempt(30)], dayTimer: newDayTimer() });
     startDayTimer(state, 0);
     const p = budgetProgress(state, 20 * MIN);
@@ -124,6 +135,20 @@ describe("budgetProgress", () => {
     assert.equal(p.clockMin, 20);
     assert.equal(p.usedMin, 50);
     assert.equal(p.remainingMin, 25);
+  });
+
+  test("test_budgetProgress_doesNotCountAClockedSessionTwice", () => {
+    // This test previously asserted the opposite, with the comment "both are
+    // practice; counting only one would under-report the day" — true of a paper
+    // rep and false of a session the clock was already watching. It was the bug
+    // written down: saving a 45-minute problem moved the day from 30 minutes
+    // left to 15 minutes over, with no time having passed.
+    const state = makeState({ budget: 75, attempts: [clockedAttempt(20)], dayTimer: newDayTimer() });
+    startDayTimer(state, 0);
+    const p = budgetProgress(state, 20 * MIN);
+    assert.equal(p.loggedMin, 0, "the session's minutes are the clock's minutes");
+    assert.equal(p.usedMin, 20);
+    assert.equal(p.remainingMin, 55);
   });
 
   test("test_budgetProgress_ignoresAttemptsFromOtherDays", () => {

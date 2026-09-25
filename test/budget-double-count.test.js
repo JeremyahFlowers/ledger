@@ -59,15 +59,18 @@ describe("the reported bug", () => {
 describe("what still counts", () => {
   test("test_budget_aRepLoggedFromPaperCountsInFull", () => {
     // Never on the clock, so it is additional practice and the budget should
-    // say so.
-    const p = budgetProgress(state({ clockMin: 20, attempts: [attempt({ timeToSolveMin: 30 })] }), NOW);
+    // say so. It records `onClock: false` outright — an unmarked attempt is
+    // the ambiguous case, and the manual log path does not leave it ambiguous.
+    const p = budgetProgress(state({
+      clockMin: 20, attempts: [attempt({ onClock: false, timeToSolveMin: 30 })],
+    }), NOW);
     assert.equal(Math.round(p.usedMin), 50);
   });
 
-  test("test_budget_anOlderAttemptWithNoFlagStillCounts", () => {
-    // Every attempt recorded before this fix has no flag. Treating absent as
-    // "not on the clock" keeps them counted, which is what they were.
-    const p = budgetProgress(state({ clockMin: 0, attempts: [attempt()] }), NOW);
+  test("test_budget_anOlderAttemptWithNoFlagCountsWhenNoClockRan", () => {
+    // Every attempt recorded before this fix has no flag. With no clock today
+    // there is nothing it could have been double-counted against, so it counts.
+    const p = budgetProgress(state({ clockMin: 0, running: false, attempts: [attempt()] }), NOW);
     assert.equal(Math.round(p.usedMin), 45);
   });
 
@@ -81,7 +84,7 @@ describe("what still counts", () => {
   test("test_budget_aClockedSessionPlusAPaperRepCountBoth", () => {
     const p = budgetProgress(state({
       clockMin: 45,
-      attempts: [attempt({ onClock: true }), attempt({ id: "a2", timeToSolveMin: 20 })],
+      attempts: [attempt({ onClock: true }), attempt({ id: "a2", onClock: false, timeToSolveMin: 20 })],
     }), NOW);
     assert.equal(Math.round(p.usedMin), 65);
   });
@@ -101,5 +104,50 @@ describe("the flag is set from what was actually true", () => {
     // Not "a session happened", which would exclude the minutes of anyone who
     // never uses the day clock and make their budget read as empty all day.
     assert.match(src, /onClock: !!\(s\.dayTimer\?\.running && s\.dayTimer\.date === date\)/);
+  });
+});
+
+describe("the attempt that was already saved before the fix existed", () => {
+  // The first fix only marked *new* sessions, so the attempt already in
+  // today's log kept double-counting and the day stayed wrong until midnight —
+  // which is exactly what "it's still showing +15 minutes past budget" meant.
+  //
+  // There is no way to know after the fact whether the clock was running
+  // through an unmarked attempt. When the clock has meaningfully run today,
+  // it is assumed to have been, because the session workspace was the only
+  // thing creating attempts and it is the case that broke.
+
+  test("test_budget_anUnmarkedAttemptFromTodayIsAssumedToHaveBeenOnTheClock", () => {
+    const p = budgetProgress(state({ clockMin: 45, attempts: [attempt()] }), NOW);
+    assert.equal(Math.round(p.remainingMin), 30);
+    assert.equal(p.over, false);
+  });
+
+  test("test_budget_withNoClockTodayAnUnmarkedAttemptStillCountsInFull", () => {
+    // The assumption must not eat the minutes of someone who never starts the
+    // day clock — their budget would read empty all day.
+    const p = budgetProgress(state({ clockMin: 0, running: false, attempts: [attempt()] }), NOW);
+    assert.equal(Math.round(p.usedMin), 45);
+  });
+
+  test("test_budget_aClockStartedSecondsAgoDoesNotSwallowASession", () => {
+    // A bare `clockMin > 0` made a clock started two milliseconds ago absorb a
+    // 45-minute rep, reporting a day of work as zero.
+    const p = budgetProgress(state({ clockMin: 0.01, attempts: [attempt()] }), NOW);
+    assert.equal(Math.round(p.usedMin), 45);
+  });
+
+  test("test_budget_anExplicitFalseIsNeverAssumedAway", () => {
+    // A manually logged rep says so outright, so the assumption cannot reach
+    // it however long the clock has run.
+    const p = budgetProgress(state({
+      clockMin: 45, attempts: [attempt({ onClock: false, timeToSolveMin: 20 })],
+    }), NOW);
+    assert.equal(Math.round(p.usedMin), 65);
+  });
+
+  test("test_budget_theManualLogPathSaysSoOutright", () => {
+    const views = readFileSync(new URL("../js/views.js", import.meta.url), "utf8");
+    assert.match(views, /onClock: false/);
   });
 });

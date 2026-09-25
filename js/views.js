@@ -459,6 +459,9 @@ export function renderLog(root, store, actions) {
         date: f.get("date") || todayISO(),
         outcome,
         patternGuess: f.get("patternGuess"),
+        // Stated rather than left absent: this is work done elsewhere, so the
+        // day clock never saw it and it always counts toward the budget.
+        onClock: false,
         timeToInsightMin: f.get("timeToInsightMin") ? Number(f.get("timeToInsightMin")) : null,
         timeToSolveMin: f.get("timeToSolveMin") ? Number(f.get("timeToSolveMin")) : null,
         mistakeTags: f.getAll("mistakeTags"),

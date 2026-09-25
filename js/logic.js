@@ -790,17 +790,35 @@ export const OVERRUN_MULTIPLE = 1.5;
  * left to the clock. A rep logged manually for something you did on paper is
  * not marked, and still counts — it was never on the clock.
  *
+ * Attempts recorded before this fix carry no mark at all, and there is no way
+ * to know after the fact whether the clock was running through them. When the
+ * clock has run today they are assumed to have been on it — which is what an
+ * unmarked attempt dated today overwhelmingly is, since the session workspace
+ * was the only thing creating them. Without that assumption the day this
+ * shipped stays wrong until midnight for anyone who had already practised.
+ *
+ * It only ever applies to that data: a manually logged rep now records
+ * `onClock: false` outright and keeps counting, and every new session records
+ * a real boolean.
+ *
  * Where the clock covered only part of a session this slightly under-counts.
  * That is the right direction to be wrong in: the budget is a ceiling, and
  * over-reporting tells you to stop when you have not yet started.
  */
+/** Below this the day clock has not meaningfully run, and an unmarked attempt
+ *  cannot have been covered by it. A bare `> 0` made a clock started two
+ *  milliseconds ago swallow a 45-minute rep. */
+const CLOCK_RAN_MIN = 1;
+
 export function budgetProgress(state, now = Date.now()) {
   const budgetMin = state.settings.dailyBudgetMin || 75;
   const today = todayISO();
-  const loggedMin = allAttempts(state)
-    .filter((a) => a.date === today && !a.onClock)
-    .reduce((sum, a) => sum + (a.timeToSolveMin || 0), 0);
   const clockMin = dayTimerElapsedMs(state, now) / 60000;
+  const clockRan = clockMin >= CLOCK_RAN_MIN;
+  const coveredByClock = (a) => (a.onClock === undefined ? clockRan : a.onClock === true);
+  const loggedMin = allAttempts(state)
+    .filter((a) => a.date === today && !coveredByClock(a))
+    .reduce((sum, a) => sum + (a.timeToSolveMin || 0), 0);
   const usedMin = loggedMin + clockMin;
   return {
     budgetMin,
