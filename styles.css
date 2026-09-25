@@ -261,9 +261,29 @@ button { background: transparent; color: inherit; }
 .form > .btn { align-self: flex-start; }
 .two-col { display: grid; grid-template-columns: 1fr; gap: 0.85rem; }
 @media (min-width: 560px) { .two-col { grid-template-columns: 1fr 1fr; } }
+/* Checkboxes, radios and range sliders are drawn by the browser, and left to
+   themselves they are drawn in the browser's blue — which in a dark teal theme
+   reads as a control belonging to some other application. One property themes
+   every one of them. */
+:root { accent-color: var(--accent); }
+
 .field { display: flex; flex-direction: column; gap: 0.3rem; }
 .field.inline { flex-direction: row; align-items: center; gap: 0.6rem; }
-.checkbox-field { flex-direction: row; align-items: center; gap: 0.5rem; }
+/* `flex-start`, not `center`: a control centred against its whole label drifts
+   down as the label wraps, so the four options of one radio group sat at three
+   different heights the moment two of the descriptions ran to a second line.
+   Aligning to the top puts every control on its own first line. The margin is
+   what `center` was doing usefully — optically centring the box on that line
+   rather than hanging it off the cap height. */
+.checkbox-field { flex-direction: row; align-items: flex-start; gap: 0.5rem; }
+
+/* A row of choices, as opposed to a row of pills — which is what `.row` is for,
+   and why its `center` is right there and wrong here. Each label is as tall as
+   its own description, so centring them against the tallest one put the four
+   options of a radio group on two different lines. */
+.choice-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0.4rem; }
+.choice-row > .checkbox-field { flex: 1 1 12rem; }
+.checkbox-field input { margin-top: 0.2rem; flex: none; }
 .label { font-size: 0.78rem; font-weight: 600; color: var(--text-muted); }
 .input, .select, .textarea {
   font: inherit; color: var(--text); background: var(--surface);
@@ -737,7 +757,15 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 .wb-color {
   width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0;
 }
-.wb-color.active { border-color: var(--text); }
+/* The ring can't be drawn in --text: the first swatch is #e7efeb, which is
+   --text, so the selected colour was the one you couldn't tell was selected.
+   The border becomes a gap in the surface colour and the ring sits outside it,
+   which separates ring from fill whatever the fill happens to be — including
+   the swatch that is the accent. */
+.wb-color.active {
+  border-color: var(--surface);
+  outline: 2px solid var(--accent);
+}
 .wb-width-label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--text-muted); }
 .whiteboard-canvas {
   width: 100%; height: 360px; display: block; border: 1px solid var(--border); border-radius: 8px;
@@ -1497,9 +1525,11 @@ input[type="checkbox"]:focus-visible {
   }
   /* The checkbox itself can't grow much without looking odd, so the label row
      carries the touch area instead. */
+  /* Padding rather than min-height: a short label in a 44px row that aligns to
+     the top would leave half the row empty under it. Padding makes the row tall
+     enough to hit whatever the label's height turns out to be. */
   .checkbox-field {
-    min-height: 44px;
-    align-items: center;
+    padding-block: 0.7rem;
   }
   .checkbox-field input[type="checkbox"] {
     width: 20px;

@@ -163,9 +163,9 @@ function designCardHtml(state) {
       preparing in the same loop. This decides how much of your daily budget goes to it — the
       minutes are split, not added, so the day stays the length you set.</p>
       <form id="design-share-form" class="form">
-        <div class="row gap-sm" style="flex-wrap:wrap">
+        <div class="choice-row">
           ${DESIGN_PRESETS.map((preset) => `
-            <label class="field checkbox-field" style="flex:1 1 12rem">
+            <label class="field checkbox-field">
               <input type="radio" name="designShare" value="${preset.share}"
                 ${Math.abs(current - preset.share) < 0.001 ? "checked" : ""} />
               <span><strong>${esc(preset.label)}</strong><br />
