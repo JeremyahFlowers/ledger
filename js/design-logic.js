@@ -308,3 +308,55 @@ export function componentRecency(state, componentId, today = todayISO()) {
   const daysSince = daysBetween(attempts[attempts.length - 1].date, today);
   return { daysSince, tone: daysSince >= 30 ? "fading" : daysSince >= 14 ? "aWhile" : "recent" };
 }
+
+// ---------- drilling components ----------
+
+/**
+ * A recall question about a component: its own description, and three others
+ * from the same category to choose between.
+ *
+ * Same-category distractors on purpose. "Is this a cache or a load balancer"
+ * is not a question anybody gets wrong; "is this Redis or a CDN" is, and
+ * telling two things in the same family apart is what the interview actually
+ * tests.
+ */
+export function pickComponentQuestion(state, recentIds = []) {
+  const stats = componentStats(state);
+  const avoid = new Set(recentIds);
+  // Weighted toward what you have missed and away from what you have just been
+  // asked — the same priority the coding quiz uses.
+  const weighted = stats
+    .filter((s) => !avoid.has(s.component.id))
+    .map((s) => ({
+      component: s.component,
+      weight: 1 + (s.recallRate == null ? 1 : (1 - s.recallRate) * 3) + (s.seen === 0 ? 0.5 : 0),
+    }));
+  if (!weighted.length) return null;
+  const total = weighted.reduce((n, w) => n + w.weight, 0);
+  let roll = Math.random() * total;
+  for (const entry of weighted) {
+    roll -= entry.weight;
+    if (roll <= 0) return entry.component;
+  }
+  return weighted[weighted.length - 1].component;
+}
+
+export function componentOptions(component, count = 4) {
+  const siblings = COMPONENTS.filter((c) => c.category === component.category && c.id !== component.id);
+  // Falls back to the whole library when a category is too small to fill the
+  // options, rather than returning two choices and making it a coin flip.
+  const pool = siblings.length >= count - 1
+    ? siblings
+    : [...siblings, ...COMPONENTS.filter((c) => c.category !== component.category)];
+  const picked = shuffleLocal(pool).slice(0, count - 1);
+  return shuffleLocal([component, ...picked]).map((c) => c.id);
+}
+
+function shuffleLocal(items) {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}

@@ -13,6 +13,9 @@ import { pickQuizProblem, quizOptions, recommendSession, quizConfusions } from "
 import { patternIcon } from "./icons.js";
 import { esc, pct, patternName } from "./ui.js";
 import { emptyState, ringSvg } from "./chrome.js";
+import {
+  pickComponentQuestion, componentOptions, componentById,
+} from "./design-logic.js";
 import { startSession } from "./session-view.js";
 
 // ---------- Quiz ----------
@@ -24,7 +27,118 @@ const QUIZ_MEMORY = 50;
 
 let quizState = { current: null, options: [], answered: null, recentIds: [] };
 
+/** The design half's drill, on the same page as the coding one. Two drills in
+ *  two places would be two habits to build; one page with a switch is one. */
+let quizMode = "pattern";
+
 export function renderQuiz(root, store, actions) {
+  if (quizMode === "component") return renderComponentQuiz(root, store, actions);
+  return renderPatternQuiz(root, store, actions);
+}
+
+/**
+ * Which component is being described?
+ *
+ * The mirror of the pattern drill, and the same argument for existing: naming
+ * the thing from its properties is the recall an interview asks for, where
+ * reading its page is recognition.
+ */
+function renderComponentQuiz(root, store, actions) {
+  const state = store.state;
+  if (!componentQuiz.current) nextComponentQuestion(state);
+  const c = componentQuiz.current;
+  const total = state.designQuiz?.totalAsked || 0;
+  const correct = state.designQuiz?.totalCorrect || 0;
+
+  root.innerHTML = `
+    ${modeSwitchHtml("component")}
+    <div class="card">
+      <div class="row space-between" style="align-items:center">
+        <h2>Component recall</h2>
+        <span class="muted small">${correct}/${total} lifetime</span>
+      </div>
+      <p class="muted">Which component is this? The wrong answers are from the same family on
+      purpose — telling two things in the same family apart is what the interview tests.</p>
+      <div class="quiz-prompt"><div class="queue-name">${esc(c.concept)}</div></div>
+      <div class="quiz-options">
+        ${componentQuiz.options.map((id) => {
+          const option = componentById(id);
+          let cls = "quiz-option";
+          if (componentQuiz.answered) {
+            if (id === c.id) cls += " correct";
+            else if (id === componentQuiz.answered) cls += " incorrect";
+          }
+          return `<button type="button" class="${cls}" data-answer="${esc(id)}"
+            ${componentQuiz.answered ? "disabled" : ""}>${esc(option.name)}</button>`;
+        }).join("")}
+      </div>
+      ${componentQuiz.answered ? `
+        <p class="quiz-feedback">${componentQuiz.answered === c.id
+          ? "Correct."
+          : `It was <strong>${esc(c.name)}</strong>.`} ${esc(c.hook)}</p>
+        <div class="row gap-sm">
+          <button class="btn btn-primary" id="quiz-next">Next</button>
+          <button class="btn btn-ghost" data-goto-component="${esc(c.id)}">Read its page</button>
+        </div>` : ""}
+    </div>`;
+
+  root.querySelectorAll("[data-answer]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      componentQuiz.answered = btn.dataset.answer;
+      const right = componentQuiz.answered === c.id;
+      store.mutate((s) => {
+        if (!s.designQuiz) s.designQuiz = { totalAsked: 0, totalCorrect: 0, recent: [] };
+        s.designQuiz.totalAsked += 1;
+        if (right) s.designQuiz.totalCorrect += 1;
+        s.designQuiz.recent.push({ correct: right, actual: c.id, said: componentQuiz.answered });
+        if (s.designQuiz.recent.length > 50) s.designQuiz.recent.shift();
+      }, "Ledger: component recall answer");
+      actions.rerender();
+    });
+  });
+  root.querySelector("#quiz-next")?.addEventListener("click", () => {
+    nextComponentQuestion(state);
+    actions.rerender();
+  });
+  wireModeSwitch(root, actions);
+}
+
+function modeSwitchHtml(active) {
+  return `
+    <div class="card">
+      <div class="row gap-sm" role="tablist" aria-label="Which drill">
+        <button type="button" class="btn ${active === "pattern" ? "btn-primary" : "btn-ghost"} btn-sm"
+          data-quiz-mode="pattern" aria-pressed="${active === "pattern"}">Patterns</button>
+        <button type="button" class="btn ${active === "component" ? "btn-primary" : "btn-ghost"} btn-sm"
+          data-quiz-mode="component" aria-pressed="${active === "component"}">Components</button>
+      </div>
+    </div>`;
+}
+
+function wireModeSwitch(root, actions) {
+  root.querySelectorAll("[data-quiz-mode]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      quizMode = btn.dataset.quizMode;
+      actions.rerender();
+    });
+  });
+  root.querySelectorAll("[data-goto-component]").forEach((btn) => {
+    btn.addEventListener("click", () => actions.openComponent(btn.dataset.gotoComponent));
+  });
+}
+
+let componentQuiz = { current: null, options: [], answered: null, recentIds: [] };
+
+function nextComponentQuestion(state) {
+  const component = pickComponentQuestion(state, componentQuiz.recentIds);
+  componentQuiz.current = component;
+  componentQuiz.answered = null;
+  if (!component) return;
+  componentQuiz.options = componentOptions(component);
+  componentQuiz.recentIds = [component.id, ...componentQuiz.recentIds].slice(0, 6);
+}
+
+function renderPatternQuiz(root, store, actions) {
   const state = store.state;
   if (!quizState.current) nextQuizQuestion(state);
 
@@ -33,17 +147,24 @@ export function renderQuiz(root, store, actions) {
 
   if (!quizState.current) {
     root.innerHTML = `
+      ${modeSwitchHtml("pattern")}
       <div class="card">
         <h2>Pattern-recognition drill</h2>
         ${emptyState("quiz", "Nothing to drill yet",
           "This drill shows a problem you've already solved and asks which pattern it used — the recall step that makes a pattern stick. It needs a few logged attempts to draw from.",
           { tab: "queue", label: "See what is ready for a refresher" })}
       </div>`;
+    // Wired before returning. The switch to the component drill is on this
+    // screen too, and on a fresh account this is the *only* screen — so an
+    // early return here made it a button that did nothing, on the one page a
+    // new user sees.
+    wireModeSwitch(root, actions);
     return;
   }
 
   const p = quizState.current;
   root.innerHTML = `
+    ${modeSwitchHtml("pattern")}
     <div class="card">
       <div class="row space-between" style="align-items:center">
         <h2>Pattern-recognition drill</h2>
@@ -95,6 +216,7 @@ export function renderQuiz(root, store, actions) {
       actions.rerender();
     });
   });
+  wireModeSwitch(root, actions);
   const nextBtn = root.querySelector("#quiz-next");
   if (nextBtn) {
     nextBtn.addEventListener("click", () => {

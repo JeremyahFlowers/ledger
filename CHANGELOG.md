@@ -28,6 +28,85 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 2.0.0 — 2026-09-25
+
+System design, built as the other half of the same app rather than a second one.
+Major because the shape of a practice day changed: it now has two halves that
+share one budget, and the old locked System Design page is gone.
+
+### The answer bank
+
+**34 components** — load balancer, Redis cache, message queue, sharding,
+consistent hashing, WebSockets, CDC, and the rest — each answering the six
+questions an interviewer asks after you name one, in the order they ask them:
+why this here, what it buys and costs, what else you considered and when each
+wins instead, what it does badly and how it fails, what choosing it forces you
+to design next, and what they ask once you have said it.
+
+This is the premise the whole feature rests on: there is a finite number of
+these decisions and their tradeoffs barely change, so "why Redis here" has the
+same answer in a rate limiter as in a news feed. Writing it once and
+referencing it means the tenth problem teaches less new material than the
+first — which is what learning a field is supposed to feel like.
+
+Every alternative links to a real component, so "consider X instead" is never a
+dead end mid-study.
+
+### The problems, and the walkthrough
+
+**Five problems** with functional and non-functional requirements stated
+separately, a back-of-envelope estimate that derives its numbers, a staged
+reference answer, a coverage rubric and follow-up questions.
+
+The walkthrough reveals one stage at a time and will not open until you ask.
+Each stage says what it adds, why that pressure forced it, and which components
+it reached for. A finished diagram is a picture to admire; the same
+architecture arrived at in six steps is an argument you can reconstruct, which
+is what the interview asks for.
+
+### The practice format
+
+A design session is the whiteboard with the brief beside it on request,
+timeboxed into clarify / estimate / high level / deep dive / bottlenecks. It
+reuses the coding session's parts — the same board, the same event log, the
+same two sync channels — so a design session can be picked up on another device
+and watched by an interviewer without any of that being built twice.
+
+It ends in a comparison. You read the reference, tick what you actually had, and
+the unticked list is what to read next. The self-score maps onto the outcomes
+the scheduler already knows, so a design problem moves through the Leitner
+boxes exactly as a coding one does.
+
+### One day, two halves
+
+A share in Settings decides how much of the daily budget goes to design — **45
+coding and 30 design in a 75-minute day** is the preset. Expressed as a share
+so it survives changing the budget. **Off for everybody until asked for,
+including every existing log**: the two halves belong in the same day, and
+taking minutes from somebody who never asked is not how that happens.
+
+- The dashboard gets one design card, below the coding recommendation rather
+  than beside it.
+- Progress covers both halves on one page.
+- Components are drilled on the same page as patterns, asked from the
+  description rather than the name.
+- Both halves are searchable from one bar.
+- Component mastery means what pattern recall means: you produced it cold,
+  before reading the reference.
+
+### Removed
+
+The System Design page that was locked behind ten mock interviews. It made
+design something you earned after coding, which is the opposite of preparing
+for both in one loop. Sessions logged under it are kept in state.
+
+### Fixed
+
+- The pattern drill's empty state returned before wiring its controls, so on a
+  fresh account the switch to the component drill did nothing.
+
+---
+
 ## 1.10.0 — 2026-09-25
 
 ### Someone can watch you practise

@@ -23,6 +23,9 @@ import {
 } from "./ui.js";
 import { emptyState } from "./chrome.js";
 import {
+  designAttempts, componentStats, blindSpots, splitBudget,
+} from "./design-logic.js";
+import {
   weeklyProgress, patternMovement, progressSummary, PROGRESS_WEEKS, allAttempts, weekInReview,
   todayISO, isCleanSolve,
 } from "./logic.js";
@@ -78,7 +81,8 @@ export function renderProgress(root, store, actions) {
       ${volumeChart(summary.weeks)}
     </div>
 
-    ${moversHtml(movers)}`;
+    ${moversHtml(movers)}
+    ${designProgressHtml(store.state)}`;
 
   wireWeek(root, store, week, actions);
 }
@@ -238,6 +242,60 @@ function wireWeek(root, store, week, actions) {
   root.querySelectorAll(".card [data-open-problem]").forEach((btn) => {
     btn.addEventListener("click", () => actions.openProblem(btn.dataset.openProblem));
   });
+}
+
+/**
+ * The design half's record, on the same page as the coding half's.
+ *
+ * Here rather than on its own page because the question — am I getting better —
+ * is one question about one person, and answering it in two places invites
+ * reading one and forgetting the other.
+ *
+ * Silent when design is off, rather than showing an empty section to somebody
+ * who has not turned it on.
+ */
+function designProgressHtml(state) {
+  const attempts = designAttempts(state);
+  if (!splitBudget(state).enabled && !attempts.length) return "";
+
+  const stats = componentStats(state).filter((s) => s.seen > 0);
+  const reached = new Set(attempts.flatMap((a) => a.covered || [])).size;
+  const spots = blindSpots(state);
+
+  if (!attempts.length) {
+    return `
+      <div class="card">
+        <h2>System design</h2>
+        ${emptyState("systemDesign", "No design attempts yet",
+          "Each attempt records which components you reached for unprompted and which the reference "
+          + "used that you did not. That gap is what this section becomes.",
+          { tab: "designBank", label: "Pick a problem" })}
+      </div>`;
+  }
+
+  const weakest = [...stats].sort((a, b) => (a.recallRate ?? 1) - (b.recallRate ?? 1)).slice(0, 5);
+  return `
+    <div class="card">
+      <h2>System design</h2>
+      <div class="stat-row">
+        <div class="stat"><span class="stat-num">${attempts.length}</span>
+          <span class="stat-label">attempts</span></div>
+        <div class="stat"><span class="stat-num">${reached}</span>
+          <span class="stat-label">components reached for</span></div>
+        ${spots.length ? `<div class="stat"><span class="stat-num">${spots.length}</span>
+          <span class="stat-label">recurring gaps</span></div>` : ""}
+      </div>
+      <p class="muted small">Reached for means you produced it cold, before reading the reference —
+      the same thing pattern recall measures on the coding half.</p>
+      ${weakest.length ? `
+        <h3 class="week-heading">Least reliable so far</h3>
+        <ul class="week-list">
+          ${weakest.map((s) => `<li>
+            <button type="button" class="link-button" data-open-component="${esc(s.component.id)}">${esc(s.component.name)}</button>
+            <span class="muted small">— ${s.recalled} of ${s.seen}</span>
+          </li>`).join("")}
+        </ul>` : ""}
+    </div>`;
 }
 
 function headlineText(summary) {

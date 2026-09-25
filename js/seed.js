@@ -99,6 +99,7 @@ export function buildSeedState() {
     resources: {}, // { [patternId]: [{ id, title, url, addedAt }] } — user-curated video/article links
     whiteboards: [], // [{ id, date, problemId, path, caption }] — index of saved drawings (images live as separate repo files)
     quiz: { totalAsked: 0, totalCorrect: 0, recent: [] }, // last 50 answers: {correct, actual, said, problemId}
+    designQuiz: { totalAsked: 0, totalCorrect: 0, recent: [] }, // the same, for components
     dayTimer: newDayTimer(),
   };
 }
@@ -119,6 +120,7 @@ export function migrateState(state) {
   if (!state.resources) state.resources = {};
   if (!state.whiteboards) state.whiteboards = [];
   if (!state.quiz) state.quiz = { totalAsked: 0, totalCorrect: 0, recent: [] };
+  if (!state.designQuiz) state.designQuiz = { totalAsked: 0, totalCorrect: 0, recent: [] };
   // Backfilled rather than only defaulted at read time, so the Settings table
   // has something to show and a saved value is distinguishable from an absent
   // one.
