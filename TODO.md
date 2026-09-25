@@ -27,8 +27,8 @@ and then copied by hand into another, which is how the copies stop agreeing.
 
 ## P1 — copies that have stopped agreeing
 
-- [ ] **55. Two hand-written outcome appearance maps, both disagreeing with
-  the table they copy.**
+- [x] **55. Two hand-written outcome appearance maps, both disagreeing with
+  the table they copy.** _(1.8.0)_
   `OUTCOMES` carries a `cls` per outcome precisely so this can't happen — its
   own comment says it replaced five separate lists because that was "four
   chances for a new outcome to be half-added". Cycle 4 then added
@@ -38,7 +38,7 @@ and then copied by hand into another, which is how the copies stop agreeing.
   and warning.
   *Done:* one table, every appearance derived from it.
 
-- [ ] **56. Two difficulty orderings that disagree about Unrated.**
+- [x] **56. Two difficulty orderings that disagree about Unrated.** _(1.8.0)_
   `DIFFICULTY_RANK` in the bank has no entry for it, so it falls back to 9 and
   sorts to the far end. `DIFFICULTY_ORDER` in views puts it at 1.5, between
   Medium and Hard. The same problem sits in two places in a list depending on
@@ -46,7 +46,7 @@ and then copied by hand into another, which is how the copies stop agreeing.
   *Done:* one ordering, with Unrated placed deliberately rather than twice by
   accident.
 
-- [ ] **57. `"solved-clean"` is written out fifteen times outside logic.js.**
+- [x] **57. `"solved-clean"` is written out fifteen times outside logic.js.** _(1.8.0)_
   Counting clean solves is a real domain idea and every one of those is a
   string literal. Renaming the value — or adding an outcome that should also
   count — means finding all fifteen.

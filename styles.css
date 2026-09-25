@@ -225,6 +225,11 @@ main.page-full { --page-max: none; padding: 0; }
 .pill-muted { background: var(--surface-alt); color: var(--text-muted); }
 .pill-warn { background: var(--warn-bg); color: var(--warn); }
 .pill-good { background: var(--good-bg); color: var(--good); }
+/* Missing until the outcome pills stopped being hand-written: the table has
+   said "failed" is bad since it was written, and the hand-copied pill map
+   quietly called it a warning instead, which is why nothing ever asked for
+   this rule. */
+.pill-bad { background: var(--bad-bg); color: var(--bad); }
 
 .badge { display: inline-block; font-size: 0.78rem; font-weight: 700; padding: 0.3rem 0.7rem; border-radius: 6px; }
 .badge-good { background: var(--good-bg); color: var(--good); }

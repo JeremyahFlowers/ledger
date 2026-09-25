@@ -69,6 +69,22 @@ function declaredIn(src) {
   return names;
 }
 
+/** Names a module re-exports from elsewhere: `export { a, b } from "./x.js"`.
+ *  They are in scope for the module's consumers without being in scope for its
+ *  own body, so they are neither imports nor local — but they are also not
+ *  references, and reading them as such made logic.js look like it used ten
+ *  things it had only forwarded. */
+function reExportedIn(src) {
+  const names = new Set();
+  for (const m of src.matchAll(/export\s*\{([^}]*)\}\s*from/g)) {
+    for (const part of m[1].split(",")) {
+      const name = part.includes(" as ") ? part.split(" as ")[0] : part;
+      if (name.trim()) names.add(name.trim());
+    }
+  }
+  return names;
+}
+
 function importedIn(src) {
   const names = new Set([
     ...matchAll(src, /import\s+([A-Za-z_$][\w$]*)\s+from/g),
@@ -119,12 +135,16 @@ const exportsByFile = new Map([...sources].map(([f, src]) => [f, exportedIn(src)
 const problems = [];
 for (const [file, src] of sources) {
   const code = strip(src);
-  const known = new Set([...declaredIn(code), ...importedIn(src), ...AMBIENT]);
+  const known = new Set([...declaredIn(code), ...importedIn(src), ...reExportedIn(src), ...AMBIENT]);
   const used = new Set([
     ...matchAll(code, /(?<![.\w$])([A-Za-z_$][\w$]*)\s*(?=\()/g),   // calls
     ...matchAll(code, /\$\{\s*([A-Za-z_$][\w$]*)/g),                // template holes
     ...matchAll(code, /(?<![.\w$])([A-Za-z_$][\w$]*)\s*\[/g),       // table lookups
     ...matchAll(code, /(?<![.\w$])([A-Za-z_$][\w$]*)\s*\./g),       // member reads
+    // A bare reference passed as an argument: `filter(isCleanSolve)`. Missed
+    // until it shipped twice — `isCleanSolve` went unimported in two files and
+    // this said all clear, because nothing here was followed by a `(`.
+    ...matchAll(code, /[(,]\s*([A-Za-z_$][\w$]*)\s*[),]/g),
   ]);
   for (const name of [...used].sort()) {
     if (known.has(name)) continue;

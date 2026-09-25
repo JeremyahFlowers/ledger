@@ -59,7 +59,7 @@ export function patternStats(state) {
   return state.patterns.map((pat) => {
     const attempts = allAttempts(state, pat.id);
     const n = attempts.length;
-    const solvedClean = attempts.filter((a) => a.outcome === "solved-clean").length;
+    const solvedClean = attempts.filter(isCleanSolve).length;
     const guessedCorrect = attempts.filter((a) => a.patternGuess === "correct").length;
     const times = attempts.map((a) => a.timeToInsightMin).filter((t) => typeof t === "number" && !Number.isNaN(t));
     const avgInsight = times.length ? times.reduce((s, t) => s + t, 0) / times.length : null;
@@ -169,6 +169,34 @@ export const MOCK_CHECKLIST = [
 // and collapsing them made the clean-solve rate say less than it could. It
 // steps back one box rather than resetting: you didn't finish, so you lose
 // ground, but not all of it.
+/**
+ * Easiest to hardest, with Unrated placed on purpose.
+ *
+ * There were two of these. The bank's had no entry for Unrated and fell back
+ * to 9, sorting it to the far end; views' put it at 1.5, between Medium and
+ * Hard. So the same problem sat in two different places in a list depending on
+ * which page was drawing it.
+ *
+ * 1.5 is the deliberate choice of the two. An unrated problem is usually one
+ * you typed in or pasted from Analyze, and burying it at the end of an
+ * easiest-first list hides the problems you cared about enough to add by hand.
+ */
+export const DIFFICULTY_ORDER = { Easy: 0, Medium: 1, Unrated: 1.5, Hard: 2 };
+
+export function difficultyRank(difficulty) {
+  return DIFFICULTY_ORDER[difficulty] ?? DIFFICULTY_ORDER.Unrated;
+}
+
+/** The one outcome that counts as having solved it properly, and the question
+ *  asked about it. It was written out as a string literal in fifteen places
+ *  across six files — fifteen to find if the value is renamed, or if a second
+ *  outcome should ever start counting. */
+export const CLEAN_SOLVE = "solved-clean";
+
+export function isCleanSolve(attempt) {
+  return attempt?.outcome === CLEAN_SOLVE;
+}
+
 export const OUTCOMES = [
   { value: "solved-clean",     label: "Solved clean",      symbol: "✓", cls: "outcome-good", box: "up" },
   { value: "solved-struggled", label: "Solved, struggled", symbol: "~", cls: "outcome-warn", box: "hold" },
@@ -455,7 +483,7 @@ export function streakGraceInfo(state, today = todayISO()) {
 export function systemDesignUnlock(state) {
   const { minMocks, minSolvedCleanRate } = state.settings.systemDesignUnlockThreshold;
   const recent = state.mocks.slice(-10);
-  const rate = recent.length ? recent.filter((m) => m.outcome === "solved-clean").length / recent.length : 0;
+  const rate = recent.length ? recent.filter(isCleanSolve).length / recent.length : 0;
   const meetsAuto = state.mocks.length >= minMocks && rate >= minSolvedCleanRate;
   return {
     unlocked: state.systemDesign.manualUnlock || meetsAuto,

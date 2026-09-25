@@ -21,7 +21,7 @@ import {
 } from "./logic.js";
 import {
   esc, richText, fmtDate, patternName, toast, OUTCOME_GLYPH, showTopic, outcomeOptions,
-  confirmLoss, outcomeLabel,
+  confirmLoss, outcomeLabel, outcomePill,
 } from "./ui.js";
 import { TOPICS } from "./topics-content.js";
 import { loadCodeMirror, CODE_MODES } from "./codemirror-loader.js";
@@ -558,16 +558,6 @@ function priorHtml(problem) {
            behind a fold — worth opening after you have had a go, not before.</p>`
         : ""}
     </div>`;
-}
-
-const OUTCOME_PILL = {
-  "solved-clean": "pill-good",
-  "solved-struggled": "pill-muted",
-  "ran-out-of-time": "pill-muted",
-  failed: "pill-warn",
-};
-function outcomePill(outcome) {
-  return OUTCOME_PILL[outcome] || "pill-muted";
 }
 
 function wireStatementPane(root, store, problem) {

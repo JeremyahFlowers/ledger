@@ -20,11 +20,10 @@ import {
   savedSlugs,
 } from "./catalog.js";
 import { patternIcon } from "./icons.js";
-import { uid, backlogProblems, STATUS_BACKLOG } from "./logic.js";
+import { uid, backlogProblems, STATUS_BACKLOG, difficultyRank } from "./logic.js";
 
 const PAGE_SIZE = 40;
 const DIFFICULTIES = ["Easy", "Medium", "Hard"];
-const DIFFICULTY_RANK = { Easy: 0, Medium: 1, Hard: 2 };
 
 /**
  * How the list can be ordered.
@@ -37,8 +36,8 @@ const DIFFICULTY_RANK = { Easy: 0, Medium: 1, Hard: 2 };
  */
 export const SORTS = {
   number:     { label: "Problem number",  compare: (a, b) => (a.number ?? 1e9) - (b.number ?? 1e9) },
-  difficulty: { label: "Easiest first",   compare: (a, b) => (DIFFICULTY_RANK[a.difficulty] ?? 9) - (DIFFICULTY_RANK[b.difficulty] ?? 9) || (a.number ?? 1e9) - (b.number ?? 1e9) },
-  hardest:    { label: "Hardest first",   compare: (a, b) => (DIFFICULTY_RANK[b.difficulty] ?? -1) - (DIFFICULTY_RANK[a.difficulty] ?? -1) || (a.number ?? 1e9) - (b.number ?? 1e9) },
+  difficulty: { label: "Easiest first",   compare: (a, b) => difficultyRank(a.difficulty) - difficultyRank(b.difficulty) || (a.number ?? 1e9) - (b.number ?? 1e9) },
+  hardest:    { label: "Hardest first",   compare: (a, b) => difficultyRank(b.difficulty) - difficultyRank(a.difficulty) || (a.number ?? 1e9) - (b.number ?? 1e9) },
   confidence: { label: "Best match for the pattern", compare: null }, // needs the pattern; see sortMatches
   title:      { label: "Title A-Z",       compare: (a, b) => a.title.localeCompare(b.title) },
 };

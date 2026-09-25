@@ -8,7 +8,7 @@
 
 import {
   isBacklog, refresherStatus, removeAttempt, editAttempt, recomputeSchedule, todayISO,
-  allAttempts, MISTAKE_TAGS,
+  allAttempts, MISTAKE_TAGS, isCleanSolve,
 } from "./logic.js";
 import { problemUrl } from "./catalog.js";
 import { patternIcon } from "./icons.js";
@@ -335,7 +335,7 @@ export function renderDayDetail(root, store, actions) {
   }
 
   const minutes = attempts.reduce((n, a) => n + (a.timeToSolveMin || 0), 0);
-  const clean = attempts.filter((a) => a.outcome === "solved-clean").length;
+  const clean = attempts.filter(isCleanSolve).length;
   const recalled = attempts.filter((a) => a.patternGuess === "correct").length;
   const boards = (state.whiteboards || []).filter((b) => b.date === iso);
   const journal = (state.journal || []).filter((j) => j.date === iso);

@@ -124,6 +124,32 @@ export function confirmLoss({ action, lost, kept }) {
 export const OUTCOME_GLYPH = Object.fromEntries(
   OUTCOMES.map((o) => [o.value, { symbol: o.symbol, cls: o.cls, title: o.label }]));
 
+/**
+ * What an outcome looks like, derived rather than retyped.
+ *
+ * OUTCOMES carries a `cls` per outcome for exactly this, and its own comment
+ * says it replaced five separate lists because that was four chances for a new
+ * outcome to be half-added. Two more were then added by hand anyway — an
+ * OUTCOME_CLASS in progress-view and an OUTCOME_PILL in session-view — and
+ * they had already drifted: the table called `ran-out-of-time` a warning and
+ * `failed` bad, while the pill copy called them muted and warning.
+ *
+ * `outcomeClass` is the plain `outcome-*` name for a dot or an icon;
+ * `outcomePill` is the same judgement in the pill vocabulary. Both fall back
+ * to the neutral one, because an outcome nobody has heard of is not a failure.
+ */
+export function outcomeClass(outcome) {
+  return OUTCOMES.find((o) => o.value === outcome)?.cls || "outcome-warn";
+}
+
+const PILL_FOR_CLASS = { "outcome-good": "pill-good", "outcome-warn": "pill-warn", "outcome-bad": "pill-bad" };
+
+export function outcomePill(outcome) {
+  return PILL_FOR_CLASS[outcomeClass(outcome)] || "pill-muted";
+}
+
+
+
 /** The <option> list for any outcome picker. */
 export function outcomeOptions(selected) {
   return OUTCOMES.map((o) =>
@@ -173,4 +199,3 @@ export function downloadFile(filename, text, type = "application/json") {
 export function downloadState(state) {
   downloadFile(`ledger-export-${todayISO()}.json`, JSON.stringify(state, null, 2));
 }
-

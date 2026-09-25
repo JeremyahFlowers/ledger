@@ -19,6 +19,7 @@
 import {
   todayISO, applyOutcome, activateProblem, dueProblems, planToday, allAttempts, patternStats,
   updateStreak, systemDesignUnlock, uid, MISTAKE_TAGS, activityByDate, patternTrend,
+  difficultyRank, isCleanSolve,
   refresherBands,
   MOCK_CHECKLIST, mockReview,
   recommendSession, computePlantState, streakGraceInfo, refresherStatus, STATUS_ACTIVE,
@@ -614,7 +615,7 @@ export function renderJournal(root, store) {
               ${outcomeIcon(m.outcome)}
               <div>
                 <div class="row gap-sm">
-                  <span class="pill ${m.outcome === "solved-clean" ? "pill-good" : "pill-muted"}">${esc(m.outcome)}</span>
+                  <span class="pill ${isCleanSolve(m) ? "pill-good" : "pill-muted"}">${esc(m.outcome)}</span>
                   <span class="pill pill-muted">${fmtDate(m.date)}</span>
                 </div>
                 <div class="queue-name">${esc(state.problems.find((p) => p.id === m.problemId)?.name || "Untitled")}${m.communicationRating ? ` · comms ${m.communicationRating}/5` : ""}${m.durationActualMin != null ? ` · ${m.durationActualMin} min` : ""}</div>
@@ -820,7 +821,6 @@ let topicDiagramPlayers = [];
 // page it was loading for is still the one on screen.
 let topicRenderToken = 0;
 
-const DIFFICULTY_ORDER = { Easy: 0, Medium: 1, Hard: 2, Unrated: 1.5 };
 
 /** The Topics index — a table of contents, not an accordion: one card per
  * pattern (icon, name, mastery, the plain-language hook) that links to its
@@ -919,7 +919,7 @@ export function renderTopicDetail(root, store, actions) {
   }
   const t = TOPICS[pat.id];
   const problems = state.problems.filter((p) => p.patternId === pat.id)
-    .sort((a, b) => (a.difficulty === b.difficulty ? 0 : DIFFICULTY_ORDER[a.difficulty] - DIFFICULTY_ORDER[b.difficulty]));
+    .sort((a, b) => difficultyRank(a.difficulty) - difficultyRank(b.difficulty));
   const resources = state.resources[pat.id] || [];
 
   root.innerHTML = `

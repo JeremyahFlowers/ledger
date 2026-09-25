@@ -14,13 +14,15 @@
 // attempts on both sides of a split is left out rather than drawn as flat. A
 // chart that misleads is worse than no chart, because it gets believed.
 
-import { todayISO, addDaysISO, daysBetween, allAttempts, activityByDate } from "./logic.js";
+import {
+  todayISO, addDaysISO, daysBetween, allAttempts, activityByDate, isCleanSolve, CLEAN_SOLVE,
+} from "./logic.js";
 
 export function patternTrend(state, patternId, window = 10) {
   const attempts = allAttempts(state, patternId).slice(-window);
   let solved = 0;
   return attempts.map((a, i) => {
-    if (a.outcome === "solved-clean") solved += 1;
+    if (isCleanSolve(a)) solved += 1;
     return solved / (i + 1);
   });
 }
@@ -86,7 +88,7 @@ export function weeklyProgress(state, weeks = PROGRESS_WEEKS, patternId = null) 
   }
 
   return [...buckets.entries()].map(([weekStart, rows]) => {
-    const clean = rows.filter((a) => a.outcome === "solved-clean").length;
+    const clean = rows.filter(isCleanSolve).length;
     const insights = rows.map((a) => a.timeToInsightMin).filter((n) => typeof n === "number");
     return {
       weekStart,
@@ -118,7 +120,7 @@ export function patternMovement(state, { recent = 5, minEach = 2 } = {}) {
     const after = attempts.slice(split);
     if (before.length < minEach || after.length < minEach) continue;
 
-    const rate = (rows) => rows.filter((a) => a.outcome === "solved-clean").length / rows.length;
+    const rate = (rows) => rows.filter(isCleanSolve).length / rows.length;
     const beforeRate = rate(before);
     const afterRate = rate(after);
     out.push({
@@ -282,13 +284,13 @@ export function weekInReview(state, endISO = todayISO(), days = REVIEW_DAYS) {
   // week was twenty minutes long when it was ten sessions with two timed.
   const timed = sessions.filter((a) => typeof a.timeToSolveMin === "number" && a.timeToSolveMin > 0);
   const minutes = timed.reduce((sum, a) => sum + a.timeToSolveMin, 0);
-  const clean = outcomes["solved-clean"] || 0;
+  const clean = outcomes[CLEAN_SOLVE] || 0;
 
   // Only problems whose most recent attempt landed in the window: a box
   // reached last month is not something that moved this week.
   const promoted = (state.problems || []).filter((p) => {
     const last = (p.attempts || [])[p.attempts.length - 1];
-    return last && inWindow(last.date) && p.box > 0 && last.outcome === "solved-clean";
+    return last && inWindow(last.date) && p.box > 0 && isCleanSolve(last);
   }).map((p) => ({ id: p.id, name: p.name, box: p.box }));
 
   const notes = sessions
@@ -330,7 +332,7 @@ function countOnly(state, endISO, days) {
     startISO, endISO,
     sessionCount: sessions.length,
     activeDays: new Set(sessions.map((a) => a.date)).size,
-    cleanCount: sessions.filter((a) => a.outcome === "solved-clean").length,
+    cleanCount: sessions.filter(isCleanSolve).length,
   };
 }
 

@@ -18,10 +18,13 @@
 // left out rather than drawn as flat. A chart that misleads is worse than no
 // chart, because it gets believed.
 
-import { esc, pct, mins, fmtDate, toast, outcomeLabel, downloadFile } from "./ui.js";
+import {
+  esc, pct, mins, fmtDate, toast, outcomeLabel, downloadFile, outcomeClass,
+} from "./ui.js";
 import { emptyState } from "./chrome.js";
 import {
   weeklyProgress, patternMovement, progressSummary, PROGRESS_WEEKS, allAttempts, weekInReview,
+  todayISO, isCleanSolve,
 } from "./logic.js";
 import { patternIcon } from "./icons.js";
 
@@ -178,16 +181,6 @@ function comparisonText(week) {
   if (diff === 0) return `The same number of sessions as the week before.`;
   return `${Math.abs(diff)} ${diff > 0 ? "more" : "fewer"} session${Math.abs(diff) === 1 ? "" : "s"} `
     + `than the week before, which had ${prev.sessionCount}.`;
-}
-
-const OUTCOME_CLASS = {
-  "solved-clean": "outcome-good",
-  "solved-struggled": "outcome-warn",
-  "ran-out-of-time": "outcome-warn",
-  failed: "outcome-bad",
-};
-function outcomeClass(outcome) {
-  return OUTCOME_CLASS[outcome] || "outcome-warn";
 }
 
 /**
@@ -460,7 +453,7 @@ export function patternProgressHtml(state, patternId) {
   }
 
   const summary = progressSummary(state, PROGRESS_WEEKS, patternId);
-  const clean = attempts.filter((a) => a.outcome === "solved-clean").length;
+  const clean = attempts.filter(isCleanSolve).length;
   const recalled = attempts.filter((a) => a.patternGuess === "correct").length;
 
   return `
