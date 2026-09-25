@@ -57,7 +57,16 @@ export function renderDashboard(root, store, actions) {
   const stats = patternStats(state).filter((s) => s.attempts > 0).sort((a, b) => a.solvedCleanRate - b.solvedCleanRate);
   const weakest = stats.slice(0, 2);
   const sd = systemDesignUnlock(state);
-  const REC_LABEL = { "first-rep": "Recommended", "deep-dive": "Recommended — repeated weak spot", "stale-nudge": "Recommended — review", due: "Up next", none: "" };
+  const REC_LABEL = {
+    "first-rep": "Recommended",
+    "deep-dive": "Recommended — repeated weak spot",
+    // Not "Recommended". The whole point of this one is that the app is not
+    // recommending another attempt.
+    stuck: "This one isn't going in",
+    "stale-nudge": "Recommended — review",
+    due: "Up next",
+    none: "",
+  };
 
   root.innerHTML = `
     ${plantCardHtml(plant)}
@@ -83,7 +92,13 @@ export function renderDashboard(root, store, actions) {
         <div class="row gap-sm">
           <button class="btn btn-ghost" id="cta-warmup">5-min warmup</button>
           ${rec.type === "deep-dive" || rec.type === "stale-nudge" ? `<button class="btn btn-ghost" data-tab="topics">Review pattern</button>` : ""}
-          ${rec.problem ? `<button class="btn btn-primary" id="cta-start">${rec.type === "deep-dive" ? "Drill it" : "Start session"}</button>` : ""}
+          ${rec.type === "stuck" ? `
+            <button class="btn btn-primary" data-goto-topic="${esc(rec.patternId)}">Read the pattern</button>
+            <button class="btn btn-ghost" data-open-problem="${esc(rec.problem.id)}">See what I tried</button>
+            <!-- Still offered, and deliberately last and plain. The app has
+                 said what it thinks; it does not get to refuse. -->
+            <button class="btn btn-ghost" id="cta-start">Try it anyway</button>`
+          : rec.problem ? `<button class="btn btn-primary" id="cta-start">${rec.type === "deep-dive" ? "Drill it" : "Start session"}</button>` : ""}
         </div>
       </div>
     </div>

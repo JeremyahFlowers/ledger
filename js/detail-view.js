@@ -189,11 +189,6 @@ export function renderProblemDetail(root, store, actions) {
   });
   wireBoardViewers(root, store, boards);
   wireStartButtons(root, store, actions);
-  root.querySelector("[data-goto-topic]")?.addEventListener("click", (e) => {
-    showTopic(e.currentTarget.dataset.gotoTopic);
-    actions.switchTab("topicDetail");
-  });
-
   root.querySelectorAll("[data-edit-attempt]").forEach((btn) => {
     btn.addEventListener("click", () => {
       editingAttemptId = btn.dataset.editAttempt;

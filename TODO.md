@@ -9,6 +9,56 @@ one-line title is not enough to pick the work up again a week later.
 
 ---
 
+# Cycle 7
+
+Mostly drift — four of these are things an earlier cycle got right in one place
+and then copied by hand into another, which is how the copies stop agreeing.
+
+## P0 — the failure mode the app exists to prevent
+
+- [x] **54. A problem you keep failing comes back tomorrow, forever.** _(1.8.0)_
+  Three failed attempts in a row resets it to box 0 each time, so it reappears
+  the next day, and nothing anywhere notices. `recommendSession` has a
+  deep-dive for a weak *pattern* and no equivalent for a problem that is not
+  working — which is grinding harder and calling it progress, the exact thing
+  this app's own source comments say it exists to prevent.
+  *Done:* the app notices, says so, and suggests something other than another
+  attempt at the same wall.
+
+## P1 — copies that have stopped agreeing
+
+- [ ] **55. Two hand-written outcome appearance maps, both disagreeing with
+  the table they copy.**
+  `OUTCOMES` carries a `cls` per outcome precisely so this can't happen — its
+  own comment says it replaced five separate lists because that was "four
+  chances for a new outcome to be half-added". Cycle 4 then added
+  `OUTCOME_CLASS` to progress-view and cycle 5 added `OUTCOME_PILL` to
+  session-view, by hand. They already disagree: the table calls
+  `ran-out-of-time` a warning and `failed` bad; the pill map calls them muted
+  and warning.
+  *Done:* one table, every appearance derived from it.
+
+- [ ] **56. Two difficulty orderings that disagree about Unrated.**
+  `DIFFICULTY_RANK` in the bank has no entry for it, so it falls back to 9 and
+  sorts to the far end. `DIFFICULTY_ORDER` in views puts it at 1.5, between
+  Medium and Hard. The same problem sits in two places in a list depending on
+  which page is drawing it.
+  *Done:* one ordering, with Unrated placed deliberately rather than twice by
+  accident.
+
+- [ ] **57. `"solved-clean"` is written out fifteen times outside logic.js.**
+  Counting clean solves is a real domain idea and every one of those is a
+  string literal. Renaming the value — or adding an outcome that should also
+  count — means finding all fifteen.
+  *Done:* the question "was this a clean solve" is asked in one place.
+
+## P2
+
+- [ ] **58. Dead exports.**
+  `TOP_EVIDENCE` in pattern-model.js and `REGIONS` in featurize.js are exported
+  and used by nothing, including the tests.
+  *Done:* gone, or used.
+
 # Cycle 6
 
 Found by rendering a brand-new account and reading what it says, and by

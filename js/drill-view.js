@@ -11,7 +11,7 @@
 
 import { pickQuizProblem, quizOptions, recommendSession, quizConfusions } from "./logic.js";
 import { patternIcon } from "./icons.js";
-import { esc, pct, patternName, showTopic } from "./ui.js";
+import { esc, pct, patternName } from "./ui.js";
 import { emptyState, ringSvg } from "./chrome.js";
 import { startSession } from "./session-view.js";
 
@@ -93,12 +93,6 @@ export function renderQuiz(root, store, actions) {
         if (s.quiz.recent.length > QUIZ_MEMORY) s.quiz.recent.shift();
       }, "Ledger: quiz answer");
       actions.rerender();
-    });
-  });
-  root.querySelectorAll("[data-goto-topic]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      showTopic(btn.dataset.gotoTopic);
-      actions.switchTab("topicDetail");
     });
   });
   const nextBtn = root.querySelector("#quiz-next");

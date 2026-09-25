@@ -1003,6 +1003,51 @@ const STALE_DAYS = 21;
 const WEAK_CLEAN_RATE = 0.6;
 const WEAK_MIN_ATTEMPTS = 2;
 
+// How many attempts in a row have to go badly before the app says something.
+//
+// Three, not two. Two bad attempts on a hard problem is normal and being told
+// to stop after them would be wrong and irritating. Three in a row on the same
+// problem is a pattern, and the schedule's own answer to it — reset to box 0,
+// so it comes back tomorrow — is the grinding this app's source comments say
+// it exists to prevent, prescribed by the app itself.
+export const STUCK_ATTEMPTS = 3;
+
+/** Outcomes that mean the attempt did not get there. "Solved, struggled" is
+ *  not one of them: struggling through it is the thing working. */
+const STUCK_OUTCOMES = new Set(["failed", "ran-out-of-time"]);
+
+/**
+ * Problems whose last few attempts all went badly, worst first.
+ *
+ * Deliberately about a *problem*, where the existing deep-dive is about a
+ * pattern. They are different failures with different answers: a weak pattern
+ * means you have not learned the technique, and a stuck problem often means
+ * you have, and this particular one is not the way to practise it today.
+ */
+export function stuckProblems(state, run = STUCK_ATTEMPTS) {
+  const out = [];
+  for (const problem of state.problems || []) {
+    const attempts = (problem.attempts || []).filter((a) => a.date);
+    if (attempts.length < run) continue;
+    const ordered = [...attempts].sort((a, b) => a.date.localeCompare(b.date));
+    const last = ordered.slice(-run);
+    if (!last.every((a) => STUCK_OUTCOMES.has(a.outcome))) continue;
+    out.push({
+      problem,
+      run: countTrailing(ordered, (a) => STUCK_OUTCOMES.has(a.outcome)),
+      since: last[0].date,
+      lastTried: last[last.length - 1].date,
+    });
+  }
+  return out.sort((a, b) => b.run - a.run || b.lastTried.localeCompare(a.lastTried));
+}
+
+function countTrailing(list, predicate) {
+  let n = 0;
+  for (let i = list.length - 1; i >= 0 && predicate(list[i]); i--) n += 1;
+  return n;
+}
+
 /** The single thing to do next, so opening the app never means deciding
  * where to go — just what today calls for:
  *   1. Haven't practiced yet today -> do one rep (due first, else a stale pattern).
@@ -1074,6 +1119,19 @@ export function recommendSession(state) {
     const fresh = freshFromBank(state);
     if (fresh) return fresh;
     return { type: "none", problem: null, patternId: null, message: "Nothing has gone stale. Free day — browse Topics, or take it." };
+  }
+
+  // Before the pattern deep-dive: a named problem that has gone nowhere three
+  // times is more actionable than a rate across a whole pattern, and it is the
+  // one case where the right recommendation is not another attempt.
+  const stuck = stuckProblems(state)[0];
+  if (stuck) {
+    return {
+      type: "stuck", problem: stuck.problem, patternId: stuck.problem.patternId,
+      message: `${stuck.problem.name} hasn't gone in ${stuck.run} attempts, the last on `
+        + `${stuck.lastTried}. Another go at it today is unlikely to be the thing that works — `
+        + `read the pattern, or look at what you wrote last time, and come back to it.`,
+    };
   }
 
   const weak = patternStats(state)

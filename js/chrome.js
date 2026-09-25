@@ -243,6 +243,13 @@ function actionHtml(action) {
  * and no second mechanism to remember. Safe on a view with none.
  */
 export function wireNavigationTargets(root, actions) {
+  // `data-goto-topic` opens a pattern's topic page. Three views emit one — the
+  // dashboard's stuck recommendation, a problem's detail header, the quiz's
+  // confusion list — and each had wired its own, so a fourth would have had to
+  // know to.
+  root.querySelectorAll("[data-goto-topic]").forEach((btn) => {
+    btn.addEventListener("click", () => actions.openTopic(btn.dataset.gotoTopic));
+  });
   root.querySelectorAll("[data-goto-focus]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const target = root.querySelector(btn.dataset.gotoFocus);

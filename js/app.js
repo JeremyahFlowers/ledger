@@ -169,6 +169,14 @@ const actions = {
   rerender() {
     renderAll();
   },
+  openTopic(patternId) {
+    showTopic(patternId);
+    actions.switchTab("topicDetail");
+  },
+  openProblem(problemId) {
+    showProblem(problemId);
+    actions.switchTab("problemDetail");
+  },
 };
 
 function exitSession() {
@@ -567,18 +575,12 @@ document.getElementById("shortcut-hint")?.addEventListener("click", toggleHelp);
 installSearch({
   store,
   actions: {
-    openTopic(patternId) {
-      showTopic(patternId);
-      actions.switchTab("topicDetail");
-    },
+    openTopic: actions.openTopic,
+    openProblem: actions.openProblem,
     startProblem(problem) {
       if (hasActiveSession()) { actions.switchTab("workspace"); return; }
       startSession(problem);
       actions.switchTab("workspace");
-    },
-    openProblem(problemId) {
-      showProblem(problemId);
-      actions.switchTab("problemDetail");
     },
     openJournal() {
       actions.switchTab("journal");
