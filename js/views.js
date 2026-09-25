@@ -26,6 +26,9 @@ import {
 } from "./logic.js";
 
 import { migrateState } from "./seed.js";
+import {
+  splitBudget, recommendDesign, planDesignToday, designAttempts,
+} from "./design-logic.js";
 
 import { patternProgressHtml } from "./progress-view.js";
 
@@ -49,6 +52,44 @@ import {
   leetcodeCalendarToDateCounts, emptyState, trendLineHtml, sparklineSvg, ringSvg, outcomeIcon,
   weekStripSvg, wireBoardViewers,
 } from "./chrome.js";
+
+/**
+ * Today's system design, if it is switched on.
+ *
+ * Deliberately a second card rather than a competing headline. The coding
+ * recommendation owns the top of this page; two things telling you what to do
+ * next is two people talking over each other, and the point of comingling the
+ * two halves is that the day has one shape, not two.
+ */
+function designCardHtml(state) {
+  const split = splitBudget(state);
+  if (!split.enabled) return "";
+  const rec = recommendDesign(state);
+  const today = planDesignToday(state);
+  const doneToday = designAttempts(state).filter((a) => a.date === todayISO()).length;
+
+  return `
+    <div class="card design-card">
+      <div class="row space-between session-cta-row">
+        <div>
+          <h2>System design${doneToday ? " — done for today" : ""}</h2>
+          <p class="muted">${doneToday
+            ? `${doneToday} design problem${doneToday === 1 ? "" : "s"} worked today. `
+              + `That is the ${split.designMin} minutes of the day this half gets.`
+            : rec ? esc(rec.message)
+            : `${split.designMin} of today's ${split.budgetMin} minutes are set aside for design.`}</p>
+        </div>
+        ${!doneToday && rec ? `
+          <div class="row gap-sm">
+            ${rec.componentId ? `<button class="btn btn-ghost" data-open-component="${esc(rec.componentId)}">Read it first</button>` : ""}
+            <button class="btn btn-primary" data-start-design="${esc(rec.problemId)}">Work it</button>
+          </div>` : `
+          <button class="btn btn-ghost" data-goto="designBank">Design problems</button>`}
+      </div>
+      ${today.plan.length > 1 ? `<p class="muted small">Today's design plan:
+        ${today.plan.map((x) => esc(x.problem.name)).join(", ")}.</p>` : ""}
+    </div>`;
+}
 
 export function renderDashboard(root, store, actions) {
   const state = store.state;
@@ -103,6 +144,8 @@ export function renderDashboard(root, store, actions) {
         </div>
       </div>
     </div>
+
+    ${designCardHtml(state)}
 
     <div class="grid dashboard-grid">
       <div class="card streak-card">

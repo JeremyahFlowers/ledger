@@ -5,6 +5,19 @@ import { renderQuiz, renderWarmup } from "./drill-view.js";
 import { renderSettings } from "./settings-view.js";
 import { renderProblemDetail, renderDayDetail, showProblem } from "./detail-view.js";
 import {
+  renderDesignBank, renderComponents, renderComponentDetail, renderDesignProblem,
+  showComponent, showDesignProblem,
+} from "./design-view.js";
+import { designAttempts } from "./design-logic.js";
+import {
+  renderDesignSession, renderDesignCompare, startDesignSession,
+  hasActiveDesignSession, discardDesignSession, currentDesignProblemName,
+} from "./design-session.js";
+import { COMPONENTS } from "./design-components.js";
+
+/** Read once for the nav's index card, which runs on every render. */
+const COMPONENT_COUNT = COMPONENTS.length;
+import {
   plantWidgetHtml, updatePlantWidget, wireNavigationTargets, wireListRows,
 } from "./chrome.js";
 import { toast, showTopic } from "./ui.js";
@@ -64,6 +77,21 @@ const SECTIONS = {
       { id: "analyze", label: "Analyze", icon: "analyze", render: renderAnalyze, blurb: "Paste a problem you don't recognize and see which patterns it resembles — and exactly which words and bounds say so.", stat: () => "Runs in your browser" },
     ],
   },
+  design: {
+    label: "System Design",
+    icon: "systemDesign",
+    blurb: "The other half of the same interview loop, prepared in the same day.",
+    pages: [
+      { id: "designBank", label: "Problems", icon: "bank", render: renderDesignBank,
+        blurb: "Draw your own answer against the clock, then compare it with a reference built one pressure at a time.",
+        stat: (state) => { const done = (state.designProblems || []).filter((p) => (p.attempts || []).length).length;
+          return done ? `${done} of ${(state.designProblems || []).length} attempted` : "None attempted yet"; } },
+      { id: "components", label: "Components", icon: "topics", render: renderComponents,
+        blurb: "The decisions a design interview turns on — what each buys, what it costs, and what they ask next.",
+        stat: (state) => { const reached = new Set(designAttempts(state).flatMap((a) => a.covered || [])).size;
+          return reached ? `${reached} of ${COMPONENT_COUNT} reached for` : `${COMPONENT_COUNT} to learn`; } },
+    ],
+  },
   track: {
     label: "Track",
     icon: "track",
@@ -72,7 +100,6 @@ const SECTIONS = {
       { id: "progress", label: "Progress", icon: "progress", render: renderProgress, blurb: "Whether you're actually improving — clean solves and time-to-insight over the last two months, and which patterns moved.", stat: (state) => { const s = progressSummary(state); return s.hasEnoughData ? (s.cleanRateDelta > 0.03 ? "Trending up" : s.cleanRateDelta < -0.03 ? "Trending down" : "Holding steady") : "Needs more data"; } },
       { id: "journal", label: "Journal", icon: "journal", render: views.renderJournal, blurb: "Every soul statement and mock interview, plus freeform weekly retros.", stat: (state) => `${allAttempts(state).filter((a) => a.soulStatement).length} soul statements` },
       { id: "leetcode", label: "LeetCode", icon: "leetcode", render: views.renderLeetCode, blurb: "Solved counts, activity, and recent submissions from your real profile.", stat: (state, store) => store.leetcode?.data?.solvedByDifficulty ? `${store.leetcode.data.solvedByDifficulty.All ?? 0} solved on LeetCode` : "Not synced yet" },
-      { id: "systemDesign", label: "System Design", icon: "systemDesign", render: views.renderSystemDesign, blurb: "A separate track, unlocked once coding fundamentals are solid.", stat: (state) => systemDesignUnlock(state).unlocked ? "Unlocked" : "Locked" },
     ],
   },
 };
@@ -90,12 +117,19 @@ PAGE_TO_SECTION.topicDetail = "learn";
 PAGE_TO_SECTION.problemDetail = "practice";
 // A single day's practice, opened from the activity heatmap.
 PAGE_TO_SECTION.dayDetail = "track";
+// One component, and one design problem with its walkthrough — reachable from
+// anywhere either is named, and belonging to the design section for
+// nav-highlight purposes.
+PAGE_TO_SECTION.componentDetail = "design";
+PAGE_TO_SECTION.designProblem = "design";
 
 // Entered only via a Dashboard/Workspace button, never from the tab bar —
 // rendering one of these swaps the full nav for a minimal exit bar so the
 // session stays the focus.
 const SESSION_TABS = {
   workspace: { render: renderWorkspace, label: "Session" },
+  designSession: { render: renderDesignSession, label: "Design session" },
+  designCompare: { render: renderDesignCompare, label: "Compare" },
   reflect: { render: renderReflect, label: "Reflect" },
   warmup: { render: renderWarmup, label: "Warmup" },
   sessionSummary: { render: renderSessionSummary, label: "Session complete" },
@@ -125,6 +159,8 @@ function currentViewName() {
   if (STANDALONE[activeTab]) return STANDALONE[activeTab].label;
   if (SECTIONS[activeTab]) return `${SECTIONS[activeTab].label} overview`;
   if (activeTab === "topicDetail") return "Pattern detail";
+  if (activeTab === "componentDetail") return "A component";
+  if (activeTab === "designProblem") return "A design problem";
   if (activeTab === "problemDetail") return "Problem history";
   if (activeTab === "dayDetail") return "That day's practice";
   const owner = PAGE_TO_SECTION[activeTab];
@@ -196,6 +232,10 @@ const actions = {
 function exitSession() {
   if (hasActiveSession()) {
     discardSession(actions);   // asks, and switches tabs itself if answered yes
+    return;
+  }
+  if (hasActiveDesignSession()) {
+    discardDesignSession(actions);
     return;
   }
   actions.switchTab("dashboard");
@@ -366,6 +406,8 @@ const PAGE_WIDTH = {
   workspace: "page-full",     // an IDE: statement, editor and board side by side
   problemDetail: "page-read", // a history to read, not a dashboard
   dayDetail: "page-read",
+  componentDetail: "page-read",
+  designProblem: "page-read",
   dashboard: "page-wide",     // a grid of cards, and the more of them visible the better
   bank: "page-wide",          // ~2,500 rows to scan
   queue: "page-wide",         // a long list of rows, same as the bank
@@ -514,6 +556,15 @@ function renderAll() {
   // here for the same reason the navigation buttons are — a list is markup any
   // view can emit, and it should not need each one to remember.
   root.querySelectorAll(".queue-list").forEach((list) => wireListRows(list));
+  // `data-start-design` appears on the bank and on a problem's own page, and
+  // will appear on the dashboard — bound here for the same reason every other
+  // cross-view control is.
+  root.querySelectorAll("[data-start-design]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (hasActiveDesignSession()) { actions.switchTab("designSession"); return; }
+      if (startDesignSession(btn.dataset.startDesign)) actions.switchTab("designSession");
+    });
+  });
   moveFocusToView();
   renderPlantWidget();
   applyGrowthAnimation();
@@ -560,6 +611,8 @@ function renderViewInner() {
   if (activeTab === "topicDetail") return views.renderTopicDetail(root, store, actions);
   if (activeTab === "problemDetail") return renderProblemDetail(root, store, actions);
   if (activeTab === "dayDetail") return renderDayDetail(root, store, actions);
+  if (activeTab === "componentDetail") return renderComponentDetail(root, store, actions);
+  if (activeTab === "designProblem") return renderDesignProblem(root, store, actions);
   if (STANDALONE[activeTab]) return STANDALONE[activeTab].render(root, store, actions);
   if (SECTIONS[activeTab]) return renderSectionIndex(root, SECTIONS[activeTab], actions);
 
@@ -598,6 +651,14 @@ installSearch({
     },
     openJournal() {
       actions.switchTab("journal");
+    },
+    openComponent(id) {
+      showComponent(id);
+      actions.switchTab("componentDetail");
+    },
+    openDesignProblem(id) {
+      showDesignProblem(id);
+      actions.switchTab("designProblem");
     },
   },
 });

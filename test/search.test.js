@@ -9,6 +9,7 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
 import { score, groupByKind, collectResults } from "../js/search.js";
+import { COMPONENTS } from "../js/design-components.js";
 
 describe("score", () => {
   test("test_score_exactTitle_outranksEverythingElse", () => {
@@ -153,9 +154,11 @@ describe("what is findable", () => {
   });
 
   test("test_search_anEmptyJournalEntry_isNotAResult", () => {
+    // Filtered to notes: titles are searched at one letter, so a bare "a" now
+    // legitimately matches component and design-problem names.
     const hits = collectResults(state({
       journal: [{ id: "j1", date: "2026-09-20", type: "note", text: "" }],
-    }), null, "a");
+    }), null, "a").filter((h) => h.kind === "note");
     assert.deepEqual(hits, []);
   });
 
@@ -190,5 +193,46 @@ describe("what is findable", () => {
       journal: [{ id: "j1", date: "2026-09-20", type: "note", text: "dp is still the weak one" }],
     }), null, "dp");
     assert.equal(hits.length, 1);
+  });
+});
+
+describe("both halves are findable from one bar", () => {
+  // "What was a consistent hash again" is the same question as "what was
+  // sliding window again", and should not need a different place to ask it.
+  const bare = { patterns: [], problems: [], journal: [] };
+
+  test("test_search_findsAComponentByName", () => {
+    const hits = collectResults(bare, null, "consistent hashing");
+    assert.equal(hits[0].kind, "component");
+    assert.equal(hits[0].id, "consistent-hashing");
+  });
+
+  test("test_search_findsADesignProblemByName", () => {
+    const hits = collectResults(bare, null, "news feed");
+    assert.ok(hits.some((h) => h.kind === "design" && h.id === "news-feed"));
+  });
+
+  test("test_search_aComponentCarriesItsHookAsTheSubtitle", () => {
+    // So the result list is readable without opening anything.
+    const hit = collectResults(bare, null, "consistent hashing")[0];
+    assert.ok(hit.subtitle.length > 25);
+  });
+
+  test("test_search_aPatternStillOutranksAComponent", () => {
+    // Both halves are searchable; the coding half is still what most searches
+    // are about, and a tie should not reshuffle on every keystroke.
+    const withPattern = { ...bare, patterns: [{ id: "cache-me", name: "Cache", description: "" }] };
+    const hits = collectResults(withPattern, null, "cache");
+    assert.equal(hits[0].kind, "pattern");
+  });
+
+  test("test_search_componentsAreCappedLikeEveryOtherKind", () => {
+    // An exact catalog match should not be buried under every component there
+    // is. The cap is the app's existing per-group one rather than a number
+    // invented for this kind.
+    const hits = collectResults(bare, null, "e");
+    const components = hits.filter((h) => h.kind === "component").length;
+    assert.ok(components > 0, "nothing matched, so the cap is untested");
+    assert.ok(components < COMPONENTS.length, `all ${components} components came back uncapped`);
   });
 });

@@ -50,6 +50,8 @@ const SHELL = [
   "./js/design-components.js",
   "./js/design-problems.js",
   "./js/design-logic.js",
+  "./js/design-view.js",
+  "./js/design-session.js",
   "./js/interview.js",
   "./interview.html",
   "./js/detail-view.js",

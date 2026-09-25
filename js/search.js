@@ -15,6 +15,8 @@
 import { esc } from "./ui.js";
 import { loadCatalog, PATTERN_CONFIDENCE, slugify, problemUrl } from "./catalog.js";
 import { patternIcon, navIcon } from "./icons.js";
+import { COMPONENTS } from "./design-components.js";
+import { DESIGN_PROBLEMS } from "./design-problems.js";
 import { isBacklog } from "./logic.js";
 
 // Enough per kind that the ranking still interleaves fairly, but the list is
@@ -252,6 +254,23 @@ export function collectResults(state, catalog, rawQuery) {
     }
   }
 
+  // The design half is searchable from the same bar, because "what was a
+  // consistent hash again" is the same question as "what was sliding window
+  // again" and should not need a different place to ask it.
+  for (const component of COMPONENTS) {
+    const s = score(component.name, query);
+    if (s == null) continue;
+    results.push({ kind: "component", score: s + 35, id: component.id,
+      title: component.name, subtitle: component.hook });
+  }
+
+  for (const problem of DESIGN_PROBLEMS) {
+    const s = score(problem.name, query);
+    if (s == null) continue;
+    results.push({ kind: "design", score: s + 20, id: problem.id,
+      title: problem.name, subtitle: `${problem.difficulty} · system design` });
+  }
+
   if (catalog && query.length >= MIN_QUERY) {
     const owned = new Set(state.problems.map((p) => p.catalogSlug || slugify(p.name)));
     for (const entry of catalog.problems) {
@@ -298,7 +317,7 @@ function topPatternOf(entry) {
 /** Keep every kind represented — an exact catalog match shouldn't be buried
  * under six of your own near-misses, and vice versa. */
 function capPerGroup(list) {
-  const counts = { pattern: 0, mine: 0, note: 0, catalog: 0 };
+  const counts = { pattern: 0, component: 0, mine: 0, design: 0, note: 0, catalog: 0 };
   return list.filter((r) => ++counts[r.kind] <= MAX_PER_GROUP);
 }
 
@@ -324,8 +343,14 @@ export function groupByKind(list) {
   return order.flatMap((kind) => buckets.get(kind));
 }
 
-const KIND_LABEL = { pattern: "Pattern", mine: "Your problems", note: "Things you wrote", catalog: "Catalog" };
-const KIND_ICON = { pattern: "topics", mine: "queue", note: "journal", catalog: "bank" };
+const KIND_LABEL = {
+  pattern: "Pattern", component: "Component", mine: "Your problems",
+  design: "System design", note: "Things you wrote", catalog: "Catalog",
+};
+const KIND_ICON = {
+  pattern: "topics", component: "systemDesign", mine: "queue",
+  design: "systemDesign", note: "journal", catalog: "bank",
+};
 
 function paint(query) {
   const host = panel();
@@ -415,6 +440,14 @@ function choose(hit) {
   }
   if (hit.kind === "mine") {
     deps.actions.startProblem(hit.problem);
+    return;
+  }
+  if (hit.kind === "component") {
+    deps.actions.openComponent(hit.id);
+    return;
+  }
+  if (hit.kind === "design") {
+    deps.actions.openDesignProblem(hit.id);
     return;
   }
   if (hit.kind === "note") {

@@ -12,6 +12,7 @@ import {
   questionMinutes, planMinutes, questionPlan, READ_MINUTES, REFLECT_MINUTES, inspectImport,
   describeState,
 } from "./logic.js";
+import { splitBudget, designShare, designAttempts } from "./design-logic.js";
 import { APP_VERSION, RELEASED } from "./version.js";
 import { migrateState } from "./seed.js";
 import { resetWelcome } from "./welcome.js";
@@ -130,6 +131,52 @@ function faultLogHtml() {
         ${faults.map((f) => `<li>${esc(f.at.slice(11, 19))} · ${esc(f.code)}${f.context ? ` · ${esc(f.context)}` : ""} — ${esc(f.message)}</li>`).join("")}
       </ul>
       <button class="btn btn-ghost btn-sm" id="clear-faults" style="margin-top:0.6rem">Clear</button>
+    </div>`;
+}
+
+/**
+ * How much of the day goes to system design.
+ *
+ * Off by default, including for every log that existed before this shipped.
+ * The two halves belong in the same day — that is the whole premise — but
+ * taking minutes from somebody who never asked for it is not how it gets there.
+ *
+ * Expressed as a share rather than a number of minutes so it survives changing
+ * the daily budget: raise the day from 75 to 90 and the split moves with it,
+ * rather than quietly becoming a different ratio.
+ */
+const DESIGN_PRESETS = [
+  { share: 0, label: "Off", note: "Coding only." },
+  { share: 0.2, label: "A fifth", note: "A design problem every few days." },
+  { share: 0.4, label: "Two fifths", note: "45 coding / 30 design in a 75-minute day." },
+  { share: 0.5, label: "Half and half", note: "For when the design round is the one you are worried about." },
+];
+
+function designCardHtml(state) {
+  const split = splitBudget(state);
+  const current = designShare(state);
+  const worked = designAttempts(state).length;
+  return `
+    <div class="card">
+      <h3>System design share</h3>
+      <p class="muted small">System design is assessed in the same loop as coding and is worth
+      preparing in the same loop. This decides how much of your daily budget goes to it — the
+      minutes are split, not added, so the day stays the length you set.</p>
+      <form id="design-share-form" class="form">
+        <div class="row gap-sm" style="flex-wrap:wrap">
+          ${DESIGN_PRESETS.map((preset) => `
+            <label class="field checkbox-field" style="flex:1 1 12rem">
+              <input type="radio" name="designShare" value="${preset.share}"
+                ${Math.abs(current - preset.share) < 0.001 ? "checked" : ""} />
+              <span><strong>${esc(preset.label)}</strong><br />
+              <span class="muted small">${esc(preset.note)}</span></span>
+            </label>`).join("")}
+        </div>
+        <button class="btn btn-primary btn-sm" type="submit">Save</button>
+      </form>
+      <p class="muted small">${split.enabled
+        ? `Today: ${split.codingMin} minutes coding, ${split.designMin} design.`
+        : "Today: all of it is coding."}${worked ? ` ${worked} design attempt${worked === 1 ? "" : "s"} recorded.` : ""}</p>
     </div>`;
 }
 
@@ -292,6 +339,7 @@ export function renderSettings(root, store, actions) {
       </form>
     </div>
 ${timeboxCardHtml(store.state)}
+${designCardHtml(store.state)}
 ${liveSyncCardHtml(store.state)}
 ${clockCardHtml(store.state)}
 <div class="card">
@@ -356,6 +404,18 @@ ${clockCardHtml(store.state)}
       </select>
     </div>
     </section>`;
+
+  root.querySelector("#design-share-form")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const raw = Number(new FormData(e.target).get("designShare"));
+    const share = Number.isFinite(raw) && raw >= 0 && raw <= 1 ? raw : 0;
+    store.mutate((st) => { st.settings.designShare = share; }, "Ledger: set the design share");
+    const split = splitBudget({ settings: { ...store.state.settings, designShare: share } });
+    toast(share
+      ? `${split.codingMin} minutes coding, ${split.designMin} design.`
+      : "System design off — the whole day is coding.");
+    actions.rerender();
+  });
 
   root.querySelector("#relay-form")?.addEventListener("submit", (e) => {
     e.preventDefault();

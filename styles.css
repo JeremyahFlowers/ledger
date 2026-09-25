@@ -1710,3 +1710,36 @@ input[type="checkbox"]:focus-visible {
 .iv-board .whiteboard-canvas { width: 100%; height: 100%; }
 #iv-code { max-height: 22rem; overflow: auto; margin: 0; }
 .iv-problem .ws-statement { margin-top: 0.7rem; max-height: 12rem; overflow: auto; }
+
+/* System design. The walkthrough is a sequence rather than a diagram, so it
+   reads as numbered steps with the reasoning subordinate to each — the shape of
+   an argument, which is what an interview asks you to reconstruct. */
+.walk-stages { list-style: none; margin: 0.8rem 0 0; padding: 0; display: grid; gap: 1rem; }
+.walk-stage { padding-left: 0.9rem; border-left: 2px solid var(--border); }
+.walk-stage h3 { font-size: 0.95rem; margin: 0 0 0.35rem; }
+.walk-stage p { margin: 0 0 0.4rem; }
+/* The step just revealed, so a reader's eye lands on the new one rather than
+   re-reading from the top each time. */
+.walk-stage-current { border-left-color: var(--accent); }
+.walk-watch { color: var(--warn); }
+.walk-components { margin-top: 0.4rem; flex-wrap: wrap; }
+.walk-components .pill { cursor: pointer; border: 0; font: inherit; font-size: 0.72rem; }
+
+.alt-list, .depth-list { list-style: none; margin: 0.5rem 0 0; padding: 0; display: grid; gap: 0.45rem; }
+.alt-list li, .depth-list li { display: flex; align-items: baseline; gap: 0.4rem; flex-wrap: wrap; line-height: 1.45; }
+
+/* A design session is the whiteboard, with the brief beside it on request. */
+.ds-panes { display: flex; flex: 1; min-height: 0; gap: 0; }
+.ds-brief { flex: 0 0 22rem; max-width: 40%; border-right: 1px solid var(--border); overflow: auto; }
+.ds-board-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ds-board-pane #ds-board { flex: 1; min-height: 0; }
+.ds-board-pane #ds-board .whiteboard-canvas { width: 100%; height: 100%; }
+@media (max-width: 720px) {
+  .ds-panes { flex-direction: column; }
+  .ds-brief { flex: 0 0 auto; max-width: none; max-height: 40%; border-right: 0; border-bottom: 1px solid var(--border); }
+}
+
+/* The design card on the dashboard. Set apart from the coding recommendation
+   above it without competing with it — the two halves are one day, and the
+   coding one owns the headline. */
+.design-card { border-left: 3px solid var(--accent); }
