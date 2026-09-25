@@ -28,6 +28,53 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 1.9.0 — 2026-09-24
+
+### The whiteboard has tools worth having
+
+Eight, chosen for what a coding interview needs drawn rather than what a drawing
+app usually has: **select, pen, arrow, line, box, circle, text, and an
+array/grid**. Each has the keyboard letter its convention already gives it.
+There is no fill, no layers and no gradients, because none of them appear on a
+whiteboard in front of an interviewer.
+
+- **The array tool** is the one that earns its place. A row of boxes with index
+  labels underneath is the most-drawn thing in a coding interview and the most
+  tedious to produce freehand while somebody watches. It is one drag now.
+- **Arrows and lines straighten by default.** The reason to reach for an arrow
+  tool rather than freehand is that it comes out straight; a wobbly one between
+  two boxes reads as a mistake rather than as a pointer.
+- **Select, move, delete and redo** are all new. The board could previously do
+  exactly one thing to a stroke: undo the most recent one.
+
+Two bugs found while building it. Points were stored in **device pixels**, so a
+diagram drawn on a retina tablet would have rendered at half scale on a laptop
+and dragging the pane narrower squashed everything in it — which the handoff
+shipped in 1.8.0 would have made visible immediately. And undo pushed the
+inverse of the inverse, so redo re-applied the *undo*: delete a box, undo, redo,
+and you had two boxes.
+
+### Live sync between devices
+
+A stroke now appears on the other screen as you draw it — measured at 132ms end
+to end. Optional, and off unless you set a relay address in Settings.
+
+Without a relay nothing changes: a drawing still follows you between devices in
+a few seconds through your own repo, which is what 1.8.0 added. The relay only
+makes it immediate, which is what two screens at once needs — a tablet beside a
+laptop, or somebody watching.
+
+`relay/server.mjs` is one file of plain Node with no dependencies, it stores
+nothing, and it only ever carries the session in front of you. Your practice log
+never goes near it.
+
+### Fixed
+
+- A session's scratch log is cleaned up when the session is saved, rather than
+  accumulating one file per session forever.
+
+---
+
 ## 1.8.0 — 2026-09-24
 
 ### Fixed, and it was live
