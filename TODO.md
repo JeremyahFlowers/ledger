@@ -63,7 +63,7 @@ measuring the two things everyone guesses about instead of checking.
 
 ## P2
 
-- [ ] **53. The plant has no tests.**
+- [x] **53. The plant has no tests.** _(1.7.0)_
   It is the app's headline judgment and the thing most likely to be seen every
   day. `computePlantState` is tested thoroughly; `plantSvg`, which turns that
   into what you actually look at, is not tested at all — including the

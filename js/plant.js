@@ -83,7 +83,9 @@ function fallenLeaves(count, palette) {
   let out = "";
   for (let i = 0; i < Math.min(count, spots.length); i++) {
     const [x, y, a] = spots[i];
-    out += `<g opacity="0.85">${leaf(x, y, a, 0.7, palette)}</g>`;
+    // Named, because a dropped leaf is the drawing's one statement about
+    // health that isn't a colour, and nothing outside this file could see it.
+    out += `<g class="plant-fallen" opacity="0.85">${leaf(x, y, a, 0.7, palette)}</g>`;
   }
   return out;
 }
@@ -149,19 +151,24 @@ const STAGE_DRAWERS = {
 };
 
 export function plantSvg(stageKey, vitality, { size = 220, decorative = false } = {}) {
-  const p = PALETTE[vitality] || PALETTE.steady;
+  // Resolved once, and everything downstream uses the resolved name. The
+  // palette fell back and the class name did not, so an unrecognised vitality
+  // drew a steady plant inside `plant-vitality-nonsense` — which matches no
+  // rule, so the widget's frame lost its colour while the plant looked fine.
+  const tone = PALETTE[vitality] ? vitality : "steady";
+  const p = PALETTE[tone];
   const draw = STAGE_DRAWERS[stageKey] || STAGE_DRAWERS.seed;
   const body = draw(p);
   const fallen = p.fallen > 0 && stageKey !== "seed" ? fallenLeaves(p.fallen, p) : "";
   return `
-<svg viewBox="0 0 200 240" width="${size}" height="${size * 1.2}" class="plant-illustration plant-vitality-${vitality}"
+<svg viewBox="0 0 200 240" width="${size}" height="${size * 1.2}" class="plant-illustration plant-vitality-${tone}"
   ${decorative
     // Genuinely removed from the tree rather than given an empty name. An
     // <svg role="img"> with aria-label="" is still announced — as an image
     // with no description, which is worse than not being announced at all.
     // Every decorative use sits beside text that already says this.
     ? 'aria-hidden="true" focusable="false"'
-    : `role="img" aria-label="Practice plant, ${stageKey}, ${vitality}"`}>
+    : `role="img" aria-label="Practice plant, ${stageKey}, ${tone}"`}>
   <g class="plant-sway" style="--plant-sway-duration:${p.sway}; transform-origin: 100px 182px;">
     ${body}
     ${fallen}
