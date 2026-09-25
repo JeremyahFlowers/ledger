@@ -2,11 +2,12 @@
 // store.mutate() to change data and store.onChange() to know when to re-render;
 // nothing else touches persistence directly.
 import { GitHubStore } from "./github-client.js";
+import { storageKey } from "./channel.js";
 import { buildSeedState, migrateState } from "./seed.js";
 import { syncFootprint, formatBytes, compareStates, inspectImport } from "./logic.js";
 
-const CONFIG_KEY = "ledger.config";
-const CACHE_KEY = "ledger.cache.state";
+const CONFIG_KEY = storageKey("ledger.config");
+const CACHE_KEY = storageKey("ledger.cache.state");
 // Whether the cached copy holds changes that never reached GitHub.
 //
 // `dirty` lives in memory, so closing the tab forgot it. That made the whole
@@ -15,7 +16,7 @@ const CACHE_KEY = "ledger.cache.state";
 // adopted it, and overwrote the cache with it. The cached copy was read only
 // when the fetch *failed*. An hour of practice, discarded without a word, by
 // the app working correctly.
-const PENDING_KEY = "ledger.cache.unsynced";
+const PENDING_KEY = storageKey("ledger.cache.unsynced");
 const SAVE_DEBOUNCE_MS = 1200;
 
 // Retry schedule for a save that failed for a reason that might pass —

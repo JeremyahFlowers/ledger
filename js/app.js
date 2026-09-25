@@ -27,6 +27,9 @@ import { recommendSession } from "./logic.js";
 import { APP_VERSION } from "./version.js";
 import { installErrorHandling, report, guard } from "./errors.js";
 import { hasSeenWelcome, markWelcomeSeen, renderWelcome } from "./welcome.js";
+import { storageKey, IS_DEV, CHANNEL } from "./channel.js";
+
+const ACTIVE_TAB_KEY = storageKey("ledger.activeTab");
 
 // The nav reads like a table of contents, not a junk drawer: Home is the
 // cover page; everything else lives in one of a few named chapters, each
@@ -98,12 +101,23 @@ const SESSION_TABS = {
   sessionSummary: { render: renderSessionSummary, label: "Session complete" },
 };
 
-let activeTab = localStorage.getItem("ledger.activeTab") || "dashboard";
+let activeTab = localStorage.getItem(ACTIVE_TAB_KEY) || "dashboard";
 
 const nav = document.getElementById("tab-nav");
 const root = document.getElementById("view-root");
 const statusEl = document.getElementById("sync-status");
 const announcer = document.getElementById("view-announcer");
+
+// Said once at boot, and it stays said. A development build is a different app
+// with different data, and every minute spent not knowing which one is on
+// screen is a minute of conclusions drawn about the wrong thing.
+const channelBadge = document.getElementById("channel-badge");
+if (channelBadge && IS_DEV) {
+  channelBadge.textContent = CHANNEL.toUpperCase();
+  channelBadge.title = "A development copy, with its own data. Nothing here touches your real log.";
+  channelBadge.hidden = false;
+  document.documentElement.dataset.channel = CHANNEL;
+}
 
 /** Human-readable name of whatever is on screen, for the live region. */
 function currentViewName() {
@@ -163,7 +177,7 @@ function moveFocusToView() {
 const actions = {
   switchTab(id) {
     activeTab = id;
-    localStorage.setItem("ledger.activeTab", id);
+    localStorage.setItem(ACTIVE_TAB_KEY, id);
     renderAll();
   },
   rerender() {
@@ -297,7 +311,7 @@ function renderStatus() {
 }
 
 const PLANT_STAGE_ORDER = ["seed", "sprout", "seedling", "young", "budding", "flowering", "tree"];
-const PLANT_STAGE_KEY = "ledger.plant.lastStage";
+const PLANT_STAGE_KEY = storageKey("ledger.plant.lastStage");
 
 // The plant lives in the topbar too, not just the Dashboard, on purpose —
 // visible on every screen, the same way well-being should be a constant
@@ -599,7 +613,7 @@ installShortcuts({
   isReady: () => store.state != null,
 });
 
-const savedTheme = localStorage.getItem("ledger.theme");
+const savedTheme = localStorage.getItem(storageKey("ledger.theme"));
 if (savedTheme && savedTheme !== "system") document.documentElement.dataset.theme = savedTheme;
 
 installErrorHandling();
@@ -622,7 +636,11 @@ for (const event of ["visibilitychange", "pagehide"]) {
   });
 }
 
-if ("serviceWorker" in navigator) {
+// Stable only. A development copy that installs a caching service worker is a
+// development copy that serves you yesterday's code while you are trying to
+// find out whether today's works — and the dev build is deliberately published
+// without one, so registering would 404 anyway.
+if (!IS_DEV && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     // The version in the URL is what makes a release reach people: it changes
     // the worker's script URL, so the browser treats it as a new worker and

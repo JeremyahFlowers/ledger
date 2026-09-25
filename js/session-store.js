@@ -16,7 +16,9 @@
 // only what exists between starting a problem and saving it, which is exactly
 // the window where a crash costs something unrecoverable.
 
-const KEY = "ledger.session";
+import { storageKey } from "./channel.js";
+
+const KEY = storageKey("ledger.session");
 
 // Past this, a restored session is almost certainly abandoned rather than
 // interrupted, and silently resuming it would put a stale problem in front of

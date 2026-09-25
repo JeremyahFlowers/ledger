@@ -1634,3 +1634,17 @@ input[type="checkbox"]:focus-visible {
    which line is the big one, and that is a comparison you make down a column. */
 .footprint-list { list-style: none; margin: 0.6rem 0; padding: 0; display: grid; gap: 0.35rem; }
 .footprint-list li { line-height: 1.45; }
+
+/* Which copy of the app this is. Loud on purpose — the whole job of this
+   element is to be impossible to miss and impossible to mistake for part of
+   the design. */
+.channel-badge {
+  align-self: center;
+  padding: 0.15rem 0.5rem; border-radius: 4px;
+  background: var(--warn); color: #1b1300;
+  font-family: var(--font-mono); font-size: 0.68rem; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+/* And a hairline down the whole window, so it reads as dev even when the
+   header has scrolled away. */
+:root[data-channel="dev"] body { box-shadow: inset 0 0 0 2px var(--warn); }

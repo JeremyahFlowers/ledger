@@ -17,6 +17,11 @@
   <a class="skip-link" href="#view-root">Skip to content</a>
   <header class="topbar">
     <h1 class="brand"><span class="brand-mark" aria-hidden="true">{ }</span> Ledger</h1>
+    <!-- Filled in by app.js on any channel that isn't the published one. Not
+         hidden behind a setting: the failure this prevents is not knowing which
+         copy of the app you are looking at, and a badge you have to go and find
+         does not prevent it. -->
+    <span id="channel-badge" class="channel-badge" hidden></span>
     <!-- Search is the fastest way to anything in the app, so it gets the
          centre of the header and a real input rather than an icon that opens
          a dialog. Typing into it is the whole interaction. -->

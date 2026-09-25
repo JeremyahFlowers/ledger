@@ -16,6 +16,7 @@ import { migrateState } from "./seed.js";
 import { resetWelcome } from "./welcome.js";
 import { recentFaults, clearFaults, report, AppError } from "./errors.js";
 import { esc, toast, downloadState, confirmLoss } from "./ui.js";
+import { storageKey } from "./channel.js";
 
 
 // ---------- Settings ----------
@@ -168,7 +169,7 @@ function clockCardHtml(state) {
 
 export function renderSettings(root, store, actions) {
   const state = store.state;
-  const cfg = JSON.parse(localStorage.getItem("ledger.config") || "{}");
+  const cfg = JSON.parse(localStorage.getItem(storageKey("ledger.config")) || "{}");
 
   root.innerHTML = `
     <!-- Anything wrong sits above the sections, unheaded, because it is a
@@ -396,10 +397,10 @@ ${clockCardHtml(store.state)}
   });
 
   const themeSelect = root.querySelector("#theme-select");
-  themeSelect.value = localStorage.getItem("ledger.theme") || "system";
+  themeSelect.value = localStorage.getItem(storageKey("ledger.theme")) || "system";
   themeSelect.addEventListener("change", () => {
     const v = themeSelect.value;
-    localStorage.setItem("ledger.theme", v);
+    localStorage.setItem(storageKey("ledger.theme"), v);
     document.documentElement.dataset.theme = v === "system" ? "" : v;
   });
 }

@@ -15,12 +15,14 @@
 // therefore pulled out as pure functions that can be pinned directly, and the
 // DOM layer below them stays thin enough to read in one go.
 
+import { storageKey } from "./channel.js";
+
 /** Smallest a pane may be dragged to, as a fraction of the row. Below roughly
  * this, a code pane is too narrow to read a line of code in and the drag stops
  * feeling like resizing and starts feeling like closing. */
 export const MIN_PANE = 0.12;
 
-const STORE_KEY = "ledger.workspace.panes";
+const STORE_KEY = storageKey("ledger.workspace.panes");
 
 /**
  * Move one splitter, taking the space from the pane on one side and giving it

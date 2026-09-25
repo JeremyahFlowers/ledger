@@ -15,8 +15,9 @@
 // of this.
 
 import { esc } from "./ui.js";
+import { storageKey } from "./channel.js";
 
-const SEEN_KEY = "ledger.welcomed";
+const SEEN_KEY = storageKey("ledger.welcomed");
 
 /** Whether the introduction has been shown. Stored per device rather than in
  * synced state: it is about this browser, not about the prep log. */

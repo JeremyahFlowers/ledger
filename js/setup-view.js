@@ -10,6 +10,7 @@
 
 import { compareStates } from "./logic.js";
 import { esc, fmtDate, toast, downloadState, confirmLoss } from "./ui.js";
+import { defaultDataPath, IS_DEV } from "./channel.js";
 
 // ---------- Setup / connect ----------
 
@@ -41,9 +42,12 @@ export function renderSetup(root, store) {
         <label class="field"><span class="label">Branch</span>
           <input class="input" name="branch" required value="main" /></label>
         <label class="field"><span class="label">Data file path</span>
-          <input class="input" name="path" required value="prep-data/state.json" /></label>
+          <input class="input" name="path" required value="${esc(defaultDataPath())}" /></label>
         <label class="field"><span class="label">Personal access token</span>
           <input class="input" name="token" type="password" required placeholder="github_pat_…" /></label>
+        ${IS_DEV ? `<p class="banner banner-warn small">This is a development copy. The path above
+          defaults to a separate file on purpose — pointing it at your real log means testing
+          changes against your own practice history.</p>` : ""}
         <button class="btn btn-primary" type="submit">Connect</button>
         <p class="muted small">Stored only in this browser's localStorage. Never sent anywhere but
         api.github.com, directly from your device.</p>
@@ -56,7 +60,7 @@ export function renderSetup(root, store) {
       owner: f.get("owner").trim(),
       repo: f.get("repo").trim(),
       branch: f.get("branch").trim() || "main",
-      path: f.get("path").trim() || "prep-data/state.json",
+      path: f.get("path").trim() || defaultDataPath(),
       token: f.get("token").trim(),
     });
     store.init();

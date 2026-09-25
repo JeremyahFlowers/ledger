@@ -1,0 +1,122 @@
+name: Deploy
+
+# Two copies of the app, from two branches, to one GitHub Pages site.
+#
+#   main  ->  /            the stable copy, which is what its owner practises on
+#   dev   ->  /dev/        a copy for trying changes, with its own data file
+#
+# Why this exists: there was one copy, deployed straight to the URL its owner
+# actually uses, sharing one data file. Every change was tested in production
+# against real practice history, and there was no way to look at a change
+# without also being the person affected by it.
+#
+# Stable only moves on a tag. A push to main updates nothing on its own —
+# that is the point. `git tag v1.8.0 && git push origin v1.8.0` is what ships,
+# and it means a half-finished commit on main cannot reach the live app by
+# accident.
+#
+# Both copies are built by copying the repository, because there is no build
+# step; the difference between them is which path they are served from.
+# js/channel.js reads that path and decides which data file and which browser
+# storage keys it is allowed to touch, so a dev build physically cannot read
+# the stable log's cache or token.
+
+on:
+  push:
+    tags: ["v*"]          # ships stable
+    branches: [dev]       # ships /dev/
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time, and never cancel one in flight: a cancelled Pages
+# deploy can leave the site serving a half-published tree.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Checks must pass before anything is published
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm run verify
+
+  build:
+    name: Assemble the site
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out what is being deployed
+        uses: actions/checkout@v4
+
+      - name: Check out the other channel so it survives this deploy
+        # Pages publishes a whole tree, so publishing only the changed channel
+        # would delete the other one. Whichever channel this run is not, comes
+        # from its own branch or its latest tag.
+        run: |
+          set -euo pipefail
+          mkdir -p site
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "Shipping stable from ${{ github.ref_name }}"
+            git worktree add stable-src "${{ github.ref_name }}"
+            STABLE_SRC=stable-src
+            DEV_REF=$(git ls-remote --heads origin dev | cut -f1)
+            if [ -n "$DEV_REF" ]; then
+              git fetch --depth=1 origin dev
+              git worktree add dev-src FETCH_HEAD
+              DEV_SRC=dev-src
+            fi
+          else
+            echo "Shipping dev from ${{ github.ref_name }}"
+            git worktree add dev-src "${{ github.sha }}"
+            DEV_SRC=dev-src
+            LATEST_TAG=$(git tag -l 'v*' --sort=-v:refname | head -1 || true)
+            if [ -z "$LATEST_TAG" ]; then
+              git fetch --depth=100 --tags origin
+              LATEST_TAG=$(git tag -l 'v*' --sort=-v:refname | head -1 || true)
+            fi
+            if [ -n "$LATEST_TAG" ]; then
+              git worktree add stable-src "$LATEST_TAG"
+              STABLE_SRC=stable-src
+            fi
+          fi
+          copy() {
+            # Everything the browser needs, and nothing it doesn't. Tests,
+            # scripts and the model's training data are not served.
+            rsync -a --exclude '.git' --exclude '.github' --exclude 'test' \
+                     --exclude 'scripts' --exclude 'node_modules' --exclude 'data' \
+                     "$1"/ "$2"/
+          }
+          if [ -n "${STABLE_SRC:-}" ]; then copy "$STABLE_SRC" site; fi
+          mkdir -p site/dev
+          if [ -n "${DEV_SRC:-}" ]; then copy "$DEV_SRC" site/dev; fi
+          # A dev build inside the stable tree must not be served a service
+          # worker scoped to the whole site.
+          rm -f site/dev/sw.js || true
+          ls -la site site/dev
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    name: Publish
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

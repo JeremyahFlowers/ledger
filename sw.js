@@ -41,6 +41,7 @@ const SHELL = [
   "./js/store.js",
   "./js/views.js",
   "./js/chrome.js",
+  "./js/channel.js",
   "./js/detail-view.js",
   "./js/settings-view.js",
   "./js/drill-view.js",
