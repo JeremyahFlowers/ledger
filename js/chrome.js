@@ -423,6 +423,25 @@ export function updatePlantWidget(host, state, now = Date.now()) {
   }
 }
 
+/**
+ * Write the day budget into a session bar's readout.
+ *
+ * Both session views need it and neither can show the floating panel: they own
+ * the viewport, so the panel lands on the board rather than beside it. The
+ * wording lives here, next to the panel's own, so the two cannot drift into
+ * saying the same number two different ways.
+ */
+export function updateDayBudget(el, state, now = Date.now()) {
+  if (!el || !state) return;
+  const b = budgetProgress(state, now);
+  const text = b.over
+    ? `${Math.round(b.overMin)} min past today's ${b.budgetMin}`
+    : `${Math.round(b.remainingMin)} min left of today's ${b.budgetMin}`;
+  if (el.textContent !== text) el.textContent = text;
+  el.classList.toggle("budget-over", b.overrun);
+  el.classList.toggle("budget-warn", b.over && !b.overrun);
+}
+
 function fmtMins(minutes) {
   const m = Math.max(0, Math.round(minutes));
   return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}` : `${m}m`;

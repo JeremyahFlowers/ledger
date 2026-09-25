@@ -621,9 +621,17 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
   #ws-pane-statement .ws-pane-body { max-height: 40vh; }
   #ws-board-host { min-height: 50vh; }
 }
+.session-clock-group { display: flex; flex-direction: column; gap: 0.1rem; }
 .session-clock {
   font-family: var(--font-mono); font-size: 2rem; font-weight: 700;
   font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+/* Quiet on purpose: the question's clock is the one being worked to, and this
+   is the ceiling behind it. It should be readable in a glance down, not
+   competing with the number above it. */
+.session-day {
+  font-size: 0.72rem; font-weight: 600; color: var(--text-muted);
+  white-space: nowrap;
 }
 .session-exit {
   background: transparent; color: var(--bad); border-color: transparent;

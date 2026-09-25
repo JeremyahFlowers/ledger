@@ -16,6 +16,7 @@ import {
   designPlan, designPhase, designProblemById, componentsFor,
 } from "./design-logic.js";
 import { componentById } from "./design-logic.js";
+import { updateDayBudget } from "./chrome.js";
 import { createWhiteboard } from "./whiteboard.js";
 import { createRepoChannel, createEmitter } from "./session-sync.js";
 import { createLiveChannel } from "./live-channel.js";
@@ -116,7 +117,10 @@ export function renderDesignSession(root, store, actions) {
       <div class="ws-bar">
         <div class="ws-bar-id"><strong>${esc(p.name)}</strong>
           <span class="muted small">${esc(p.difficulty)}</span></div>
-        <div class="session-clock" id="ds-clock">00:00</div>
+        <div class="session-clock-group">
+          <div class="session-clock" id="ds-clock">00:00</div>
+          <div class="session-day" id="ds-day"></div>
+        </div>
         <div class="mock-phase" id="ds-phase"></div>
         <div class="ws-bar-actions">
           <button class="btn btn-ghost btn-sm" id="ds-requirements">Requirements</button>
@@ -174,6 +178,7 @@ export function renderDesignSession(root, store, actions) {
     clock.textContent = `${phase.overrun ? "+" : ""}${String(Math.floor(abs)).padStart(2, "0")}:`
       + String(Math.floor((abs % 1) * 60)).padStart(2, "0");
     clock.classList.toggle("clock-overrun", phase.overrun);
+    updateDayBudget(root.querySelector("#ds-day"), store.state);
     const host = root.querySelector("#ds-phase");
     const stamp = `${phase.index}:${phase.endingSoon ? 1 : 0}`;
     if (host && host.dataset.phase !== stamp) {

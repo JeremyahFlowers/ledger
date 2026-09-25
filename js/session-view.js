@@ -26,6 +26,7 @@ import {
 } from "./ui.js";
 import { TOPICS } from "./topics-content.js";
 import { loadCodeMirror, CODE_MODES } from "./codemirror-loader.js";
+import { updateDayBudget } from "./chrome.js";
 import { createWhiteboard } from "./whiteboard.js";
 import { createRepoChannel, createEmitter } from "./session-sync.js";
 import { createLiveChannel } from "./live-channel.js";
@@ -256,7 +257,15 @@ export function renderWorkspace(root, store, actions) {
     <div class="ws">
       <div class="ws-bar">
         <div class="ws-bar-id">${header}</div>
-        <div class="session-clock" id="ws-clock">00:00</div>
+        <div class="session-clock-group">
+          <div class="session-clock" id="ws-clock">00:00</div>
+          <!-- The day budget, which the floating plant panel carries everywhere
+               else and cannot carry here: in a session it lands on the
+               whiteboard canvas. The number matters most while you are head
+               down in a problem, so it moves into the bar rather than going
+               away. -->
+          <div class="session-day" id="ws-day"></div>
+        </div>
         <div class="mock-phase" id="ws-mock-phase"></div>
         <div class="ws-bar-actions">
           <button type="button" class="btn btn-ghost btn-sm" id="ws-mark-insight" ${session.insightAt ? "disabled" : ""}>
@@ -367,6 +376,8 @@ export function renderWorkspace(root, store, actions) {
       host.innerHTML = `<span class="mock-phase-label">${esc(phase.label)}</span>
         <span class="mock-phase-prompt">${esc(phase.prompt)}</span>${nudge}`;
     }
+    updateDayBudget(document.getElementById("ws-day"), store.state);
+
     // Follows the phase, not the clock: only a change of phase moves anything,
     // so this costs nothing on the other three ticks a second.
     if (!session.isMock) layoutForPhase(phase.key);

@@ -430,8 +430,12 @@ function applyPageWidth() {
 }
 
 // Home gives the plant a whole card of its own, so the floating one would just
-// be a second copy of the same thing on the same screen.
-const PLANT_WIDGET_HIDDEN_ON = new Set(["dashboard"]);
+// be a second copy of the same thing on the same screen. The two session views
+// are excluded for the opposite reason: they own the viewport, so the panel
+// lands on the whiteboard canvas rather than beside it, and a readout that
+// covers the surface you are drawing on is worse than no readout. Both carry
+// the day budget in their own bar instead.
+const PLANT_WIDGET_HIDDEN_ON = new Set(["dashboard", "workspace", "designSession"]);
 
 // The widget is inert apart from this one control, so the click is bound here
 // on the container rather than on a button that gets replaced.
