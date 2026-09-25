@@ -5,7 +5,7 @@
 // undo stack.
 const COLORS = ["#e7efeb", "#4fc3b8", "#e0a257", "#e2827c", "#7ed9cf"];
 
-export function createWhiteboard(root) {
+export function createWhiteboard(root, hooks = {}) {
   root.innerHTML = `
     <div class="whiteboard-toolbar">
       <div class="wb-colors">
@@ -20,10 +20,16 @@ export function createWhiteboard(root) {
     <canvas class="whiteboard-canvas" id="wb-canvas"></canvas>
   `;
 
+  // Told about completed strokes, undos and clears. The board still knows
+  // nothing about sessions, sync or events — it reports what was drawn and the
+  // caller decides whether that is worth sending anywhere.
+  const { onStroke = null, onUndo = null, onClear = null } = hooks;
+
   const canvas = root.querySelector("#wb-canvas");
   const ctx = canvas.getContext("2d");
   const strokes = [];
   let current = null;
+  let localSeq = 0;
   let color = COLORS[0];
   let width = 3;
 
@@ -62,7 +68,10 @@ export function createWhiteboard(root) {
   canvas.style.touchAction = "none";
   canvas.addEventListener("pointerdown", (e) => {
     canvas.setPointerCapture(e.pointerId);
-    current = { color, width, points: [pointFromEvent(e)] };
+    // Identified at birth. A stroke needs a name before anything can undo it or
+    // recognise it arriving back from another device, and the board is the only
+    // thing that knows when one began.
+    current = { id: `s${localSeq++}-${Math.random().toString(36).slice(2, 8)}`, color, width, points: [pointFromEvent(e)] };
     strokes.push(current);
   });
   canvas.addEventListener("pointermove", (e) => {
@@ -71,6 +80,9 @@ export function createWhiteboard(root) {
     redraw();
   });
   const endStroke = () => {
+    // Reported on completion rather than per point: a stroke is the unit a
+    // person draws and the unit worth sending.
+    if (current && current.points.length && onStroke) onStroke({ ...current, points: current.points.slice() });
     current = null;
   };
   canvas.addEventListener("pointerup", endStroke);
@@ -86,12 +98,14 @@ export function createWhiteboard(root) {
     width = Number(e.target.value);
   });
   root.querySelector("#wb-undo").addEventListener("click", () => {
-    strokes.pop();
+    const removed = strokes.pop();
     redraw();
+    if (removed && onUndo) onUndo(removed.id);
   });
   root.querySelector("#wb-clear").addEventListener("click", () => {
     strokes.length = 0;
     redraw();
+    if (onClear) onClear();
   });
 
   window.addEventListener("resize", resize);
@@ -114,7 +128,12 @@ export function createWhiteboard(root) {
      * different size later. Copied on the way out so a caller holding the
      * result can't mutate the live board.
      */
-    toJSON: () => strokes.map((s) => ({ color: s.color, width: s.width, points: s.points.slice() })),
+    toJSON: () => strokes.map((s) => ({ id: s.id, color: s.color, width: s.width, points: s.points.slice() })),
+
+    /** True while a stroke is being drawn. A caller replacing the board with a
+     *  remote version has to wait: dropping the line under a moving pen is the
+     *  most annoying possible way for sync to announce itself. */
+    isDrawing: () => current != null,
 
     /** Replace the drawing with previously serialized strokes. */
     restore(saved) {
@@ -124,7 +143,7 @@ export function createWhiteboard(root) {
         // Defensive: this comes back from storage, which anything could have
         // written. A malformed stroke should be skipped, not thrown on.
         if (s && Array.isArray(s.points)) {
-          strokes.push({ color: s.color, width: s.width, points: s.points });
+          strokes.push({ id: s.id, color: s.color, width: s.width, points: s.points });
         }
       }
       redraw();

@@ -27,6 +27,9 @@ import {
 import { TOPICS } from "./topics-content.js";
 import { loadCodeMirror, CODE_MODES } from "./codemirror-loader.js";
 import { createWhiteboard } from "./whiteboard.js";
+import { createRepoChannel, createEmitter } from "./session-sync.js";
+import { deviceId } from "./session-log.js";
+import { storageKey } from "./channel.js";
 import { plantSvg } from "./plant.js";
 import { patternIcon } from "./icons.js";
 import { problemUrl, slugify } from "./catalog.js";
@@ -146,11 +149,18 @@ export function discardSession(actions) {
 }
 
 /** Called when the user exits Workspace or Reflect without saving. */
-export function abandonSession() {
+export function abandonSession({ saved = false } = {}) {
   clearCheckpoint();
   if (session?.intervalId) clearInterval(session.intervalId);
   if (session?.whiteboardCtl) session.whiteboardCtl.destroy();
   if (session?.teardownSplitters) session.teardownSplitters();
+  if (session?.stopWatching) session.stopWatching();
+  // Fire and forget. A session that is over must not make anyone wait for a
+  // network call, and the two outcomes differ: a saved session's scratch log
+  // has been superseded by the attempt and the board PNG, while an abandoned
+  // one's is kept, because the next device to open this problem may still want
+  // the drawing.
+  session?.sync?.stop({ discard: saved }).catch(() => {});
   session = null;
   reflectState = null;
 }
@@ -175,6 +185,11 @@ function fmtClock(ms) {
 }
 
 export function renderWorkspace(root, store, actions) {
+  // Sync, started once per mounted session. Everything below can emit events
+  // whether or not a channel ever connects — the emitter is local, and a
+  // channel that cannot reach the repo keeps the log in memory and retries.
+  if (!session.sync) startSessionSync(store);
+
   // The box for this question, from this user's settings, decided once.
   if (!session.plan) {
     session.plan = session.isMock
@@ -426,7 +441,13 @@ export function renderWorkspace(root, store, actions) {
     // Created on first show rather than up front: someone who never opens the
     // board shouldn't pay for a canvas and its listeners.
     if (shown && !session.whiteboardCtl) {
-      session.whiteboardCtl = createWhiteboard(boardHost);
+      session.whiteboardCtl = createWhiteboard(boardHost, {
+        // Each completed stroke becomes an event. The board does not know that;
+        // it reports what was drawn and this decides where it goes.
+        onStroke: (stroke) => session.emitter?.emit("stroke", stroke),
+        onUndo: (strokeId) => session.emitter?.emit("stroke-undo", { strokeId }),
+        onClear: () => session.emitter?.emit("board-clear"),
+      });
       // A drawing recovered from a checkpoint is replayed onto the fresh
       // canvas; strokes are resolution-independent so the pane's current size
       // doesn't matter.
@@ -638,6 +659,63 @@ function boxPreviewHtml(plan, difficulty) {
       <p class="muted small"><button type="button" class="link-button" data-goto="settings">Change
         these times</button> per difficulty in Settings.</p>
     </div>`;
+}
+
+/**
+ * Attach this session to its durable log.
+ *
+ * What makes handoff work: the log is read once at mount, so a device that was
+ * asleep replays whatever the other one drew, and from then on each stroke is
+ * appended and pushed on a coarse debounce.
+ *
+ * Deliberately not fatal. If there is no connection, or no repo configured at
+ * all, the emitter still exists and the session still works exactly as it did
+ * before any of this — the strokes live in the canvas and in the local
+ * checkpoint, which is where they lived already.
+ */
+function startSessionSync(store) {
+  const sessionId = session.syncId || (session.syncId = uid());
+  const device = deviceId(localStorage, storageKey("ledger.device"));
+
+  const channel = store.gh
+    ? createRepoChannel({ gh: store.gh, sessionId })
+    : null;
+  session.sync = channel;
+  session.emitter = createEmitter({
+    sessionId, deviceId: device, channels: channel ? [channel] : [],
+  });
+
+  // Said once, so a log that already exists is described rather than replayed
+  // silently — coming back to a drawing you made on another device should be
+  // visible, not mysterious.
+  session.emitter.emit("session", {
+    problemId: session.problem.id,
+    difficulty: session.problem.difficulty,
+    plan: session.plan,
+  });
+
+  if (!channel) return;
+
+  channel.subscribe(() => {
+    // Any arrival: re-render the board from the reduced log. Cheap, and it
+    // cannot drift from what the events say, which a per-event patch could.
+    const ctl = session.whiteboardCtl;
+    if (!ctl || ctl.isDrawing?.()) return;   // never yank the line under a moving pen
+    ctl.restore(channel.state.strokes);
+  });
+
+  channel.start().then((state) => {
+    if (!session || session.syncId !== sessionId) return;   // session ended while loading
+    if (!state.strokes.length) return;
+    session.restoredBoard = state.strokes;
+    if (session.whiteboardCtl && !session.whiteboardCtl.isDrawing()) {
+      session.whiteboardCtl.restore(state.strokes);
+    }
+    toast("Picked up the drawing from your other device.");
+  }).catch(() => {
+    /* offline is a normal state; the session works without a channel */
+  });
+  session.stopWatching = channel.watch();
 }
 
 function wireStatementPane(root, store, problem) {
@@ -952,7 +1030,10 @@ export function renderReflect(root, store, actions) {
           });
         }
       }, `Ledger: session — ${p.name}`);
-      abandonSession();
+      // Saved: the attempt and the board PNG are now the durable record, so the
+      // session's scratch log is cleaned up rather than left to accumulate one
+      // file per session forever.
+      abandonSession({ saved: true });
       toast("Saved.");
       actions.switchTab("sessionSummary");
     };

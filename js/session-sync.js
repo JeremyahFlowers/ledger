@@ -24,7 +24,7 @@
 // a log of practice ("Ledger: session pattern-recall answer"), so a branch buys
 // nothing and costs the Git refs API.
 
-import { mergeLogs, compact, reduce } from "./session-log.js";
+import { mergeLogs, compact, reduce, makeEvent } from "./session-log.js";
 
 /** How often the log is pushed while a session is open. Coarse on purpose. */
 export const PUSH_EVERY_MS = 10_000;
@@ -180,6 +180,48 @@ export function createRepoChannel({ gh, sessionId, now = () => Date.now() }) {
           /* a leftover scratch file is untidy, not harmful */
         }
       }
+    },
+  };
+}
+
+/**
+ * One session's outgoing events, and the channels they go to.
+ *
+ * Owns the per-device sequence counter, which is the one piece of state that
+ * must not be duplicated: two events sharing a sequence number share an id, and
+ * then one of them silently disappears into the deduplication. Everything that
+ * emits an event goes through here.
+ *
+ * `channels` is a list rather than one, because the whole point of the event
+ * model is that the durable one and a live one can both be attached and neither
+ * needs to know. Today there is one.
+ */
+export function createEmitter({ sessionId, deviceId, channels, seq = 0 }) {
+  let next = seq;
+  const list = [].concat(channels).filter(Boolean);
+
+  return {
+    get seq() { return next; },
+
+    /** Build, send and return an event. Returns it so a caller can apply it
+     *  locally without waiting for a channel to echo it back. */
+    emit(kind, payload = {}, at = Date.now()) {
+      const event = makeEvent({ sessionId, deviceId, seq: next++, kind, payload, at });
+      for (const channel of list) channel.publish(event);
+      return event;
+    },
+
+    /** Send everything pending on every channel now. */
+    flush() {
+      return Promise.all(list.map((c) => c.flush?.()).filter(Boolean));
+    },
+
+    /** Subscribe to arrivals from every channel at once. Events this device
+     *  emitted never come back through here — a channel does not announce what
+     *  it was given. */
+    subscribe(handler) {
+      const offs = list.map((c) => c.subscribe(handler));
+      return () => offs.forEach((off) => off());
     },
   };
 }
