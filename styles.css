@@ -297,6 +297,11 @@ a.btn-primary { color: var(--accent-contrast); }
 .btn-sm { padding: 0.4rem 0.7rem; font-size: 0.78rem; min-height: 34px; }
 .file-btn { position: relative; }
 
+/* The setup and conflict screens render with no nav, so `main` keeps whatever
+   width the last view asked for — a connect form stretched to 1120px reads
+   like a table. This is the one card on screen; it sets its own measure. */
+.setup-card { max-width: 640px; margin-inline: auto; }
+
 ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1rem; }
 
 .banner { border-left: 4px solid var(--border); }
@@ -347,6 +352,9 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 }
 .plant-vitality-stressed .plant-illustration { filter: saturate(0.8); }
 .plant-vitality-wilting .plant-illustration { filter: saturate(0.55) brightness(0.94); }
+/* A leaf on the soil is a past event, not a live part of the plant — it reads
+   as one by sitting back from the drawing rather than swaying with it. */
+.plant-fallen { opacity: 0.85; }
 .plant-info { flex: 1; min-width: 220px; }
 .plant-stage-row { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.3rem; }
 .plant-stage-name { font-size: 1.3rem; font-weight: 700; letter-spacing: -0.01em; }

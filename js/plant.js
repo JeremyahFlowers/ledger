@@ -85,7 +85,7 @@ function fallenLeaves(count, palette) {
     const [x, y, a] = spots[i];
     // Named, because a dropped leaf is the drawing's one statement about
     // health that isn't a colour, and nothing outside this file could see it.
-    out += `<g class="plant-fallen" opacity="0.85">${leaf(x, y, a, 0.7, palette)}</g>`;
+    out += `<g class="plant-fallen">${leaf(x, y, a, 0.7, palette)}</g>`;
   }
   return out;
 }

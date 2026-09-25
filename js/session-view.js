@@ -21,7 +21,7 @@ import {
   priorAttemptSummary,
 } from "./logic.js";
 import {
-  esc, richText, fmtDate, patternName, toast, OUTCOME_GLYPH, showTopic, outcomeOptions,
+  esc, richText, fmtDate, patternName, toast, showTopic, outcomeOptions,
   confirmLoss, outcomeLabel, outcomePill,
 } from "./ui.js";
 import { TOPICS } from "./topics-content.js";

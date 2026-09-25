@@ -107,8 +107,12 @@ export function renderDesignSession(root, store, actions) {
   // Re-rendering a live session would tear the canvas out from under the pen.
   if (session.mounted && root.querySelector("#ds-board")) return;
 
+  // `ws` is the same wrapper the coding workspace uses, and it is what pins a
+  // session to the viewport — a board that scrolls out of view while you are
+  // working on it is worse than a short one. Inventing a second class for the
+  // same job is how this screen shipped unstyled.
   root.innerHTML = `
-    <div class="ws-shell">
+    <div class="ws">
       <div class="ws-bar">
         <div class="ws-bar-id"><strong>${esc(p.name)}</strong>
           <span class="muted small">${esc(p.difficulty)}</span></div>

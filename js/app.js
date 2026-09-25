@@ -404,6 +404,8 @@ function celebrateGrowth() {
 // styles.css for why this is per-page rather than one width for everything.
 const PAGE_WIDTH = {
   workspace: "page-full",     // an IDE: statement, editor and board side by side
+  designSession: "page-full", // the same: a board that owns the viewport
+  designCompare: "page-read", // your answer beside the reference, read carefully
   problemDetail: "page-read", // a history to read, not a dashboard
   dayDetail: "page-read",
   componentDetail: "page-read",

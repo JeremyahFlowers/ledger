@@ -14,9 +14,9 @@ import { problemUrl } from "./catalog.js";
 import { patternIcon } from "./icons.js";
 import {
   esc, fmtDate, patternName, toast, offerUndo, outcomeOptions, outcomeLabel, downloadFile,
-  showTopic, OUTCOME_GLYPH,
+  showTopic,
 } from "./ui.js";
-import { wireBoardViewers } from "./chrome.js";
+import { wireBoardViewers, outcomeIcon } from "./chrome.js";
 import { wireStartButtons } from "./session-view.js";
 
 /**
@@ -253,13 +253,12 @@ function numberOrNull(value) {
 
 function attemptRowHtml(state, problem, a) {
   if (a.id === editingAttemptId) return attemptEditHtml(a);
-  const glyph = OUTCOME_GLYPH[a.outcome];
   return `
     <li class="attempt-row">
       <div class="row space-between" style="align-items:flex-start;gap:0.75rem;flex-wrap:wrap">
         <div>
           <div class="row gap-sm" style="flex-wrap:wrap">
-            <span class="outcome-glyph ${glyph ? glyph.cls : ""}">${glyph ? glyph.symbol : "?"}</span>
+            ${outcomeIcon(a.outcome)}
             <strong>${esc(outcomeLabel(a.outcome))}</strong>
             <span class="muted small">${fmtDate(a.date)}</span>
             ${a.isMock ? `<span class="pill pill-warn">mock</span>` : ""}
@@ -359,11 +358,10 @@ export function renderDayDetail(root, store, actions) {
       <h2>What you worked</h2>
       <ul class="attempt-list">
         ${attempts.map((a) => {
-          const glyph = OUTCOME_GLYPH[a.outcome];
           return `
           <li class="attempt-row">
             <div class="row gap-sm" style="flex-wrap:wrap;align-items:center">
-              <span class="outcome-glyph ${glyph ? glyph.cls : ""}">${glyph ? glyph.symbol : "?"}</span>
+              ${outcomeIcon(a.outcome)}
               <button type="button" class="link-button" data-open-problem="${esc(a.problemId)}">${esc(a.problemName)}</button>
               <span class="pill pill-icon"><span class="pattern-icon">${patternIcon(a.patternId, { size: 13 })}</span>${esc(patternName(state, a.patternId))}</span>
               ${a.isMock ? `<span class="pill pill-warn">mock</span>` : ""}
