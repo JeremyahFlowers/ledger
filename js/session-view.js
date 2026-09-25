@@ -188,6 +188,17 @@ function fmtClock(ms) {
 }
 
 export function renderWorkspace(root, store, actions) {
+  // First, because the active tab is remembered across reloads and the session
+  // is not always restored with it: exit a session in a way that leaves the tab
+  // set to `workspace` and the next load renders a workspace with nothing in
+  // it. This guard was written for that and sat three lines below the first two
+  // statements that dereference `session`, so it never ran — the reload threw
+  // "cannot read properties of null" and the error boundary took the page.
+  if (!session) {
+    actions.switchTab("dashboard");
+    return;
+  }
+
   // Sync, started once per mounted session. Everything below can emit events
   // whether or not a channel ever connects — the emitter is local, and a
   // channel that cannot reach the repo keeps the log in memory and retries.
@@ -200,10 +211,6 @@ export function renderWorkspace(root, store, actions) {
       : questionPlan(store.state, session.problem.difficulty);
   }
 
-  if (!session) {
-    actions.switchTab("dashboard");
-    return;
-  }
   const state = store.state;
   const p = session.problem;
   const header = `
