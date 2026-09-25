@@ -12,10 +12,13 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import {
   questionPlan, questionPhase, questionMinutes, planMinutes,
   DEFAULT_QUESTION_MINUTES, DEFAULT_PLAN_MINUTES, READ_MINUTES, REFLECT_MINUTES,
+  phaseLayout, PHASE_LAYOUTS,
 } from "../js/logic.js";
 
 const boxed = (min, plan) => ({
@@ -247,5 +250,99 @@ describe("settings the app writes and reads back", () => {
       });
       assert.equal(s.settings.questionMinutes.Medium, 40, "a user's own setting was overwritten");
     });
+  });
+});
+
+describe("the layout follows the interview, not the editor", () => {
+  // How a real interview goes: you read the problem, you diagram the approach
+  // while the interviewer watches you think, and *then* you write code — with
+  // the diagram still on screen, because the reason you drew it was to code
+  // against it. A code editor that dominates from the first second teaches the
+  // opposite: start typing, work it out as you go.
+
+  const [STATEMENT, CODE, BOARD] = [0, 1, 2];
+
+  test("test_layout_everyPhaseSumsToOne", () => {
+    for (const [key, l] of Object.entries(PHASE_LAYOUTS)) {
+      assert.equal(l.length, 3, key);
+      assert.ok(Math.abs(l.reduce((a, b) => a + b, 0) - 1) < 1e-9, `${key} sums to ${l.reduce((a, b) => a + b, 0)}`);
+    }
+  });
+
+  test("test_layout_readingLeadsWithTheProblem", () => {
+    const l = phaseLayout("read");
+    assert.ok(l[STATEMENT] > l[CODE] && l[STATEMENT] > l[BOARD]);
+  });
+
+  test("test_layout_planningLeadsWithTheWhiteboard", () => {
+    const l = phaseLayout("plan");
+    assert.ok(l[BOARD] > l[CODE] && l[BOARD] > l[STATEMENT]);
+  });
+
+  test("test_layout_codingLeadsWithTheEditor", () => {
+    const l = phaseLayout("code");
+    assert.ok(l[CODE] > l[BOARD] && l[CODE] > l[STATEMENT]);
+  });
+
+  test("test_layout_theBoardStaysVisibleWhileCoding", () => {
+    // The stated reason for drawing it: reference the diagram while writing the
+    // solution. Shrinking it to a sliver, or closing it, defeats that.
+    const l = phaseLayout("code");
+    assert.ok(l[BOARD] >= 0.2, `board is ${l[BOARD]} of the window while coding`);
+  });
+
+  test("test_layout_theBoardGetsMoreRoomWhilePlanningThanWhileCoding", () => {
+    assert.ok(phaseLayout("plan")[BOARD] > phaseLayout("code")[BOARD]);
+  });
+
+  test("test_layout_theEditorIsNotDominantBeforeItIsTimeToCode", () => {
+    // Teaching "start typing before you know the shape of the answer" is the
+    // single most common way a solvable interview problem goes wrong.
+    for (const phase of ["read", "plan"]) {
+      const l = phaseLayout(phase);
+      assert.ok(l[CODE] < l[STATEMENT] + l[BOARD], `${phase} gives the editor the room`);
+    }
+  });
+
+  test("test_layout_noPaneIsEverCollapsedEntirely", () => {
+    for (const [key, l] of Object.entries(PHASE_LAYOUTS)) {
+      assert.ok(l.every((f) => f >= 0.1), `${key} collapses a pane to ${Math.min(...l)}`);
+    }
+  });
+
+  test("test_layout_anUnknownPhaseFallsBackRatherThanReturningUndefined", () => {
+    assert.deepEqual(phaseLayout("nonsense"), PHASE_LAYOUTS.solve);
+    assert.deepEqual(phaseLayout(undefined), PHASE_LAYOUTS.solve);
+  });
+});
+
+describe("the layout defers to you", () => {
+  const src = readFileSync(fileURLToPath(new URL("../js/session-view.js", import.meta.url)), "utf8");
+
+  test("test_layout_aDragStopsTheAppMovingPanes", () => {
+    // For the rest of the session, not the rest of the phase. A layout that
+    // reasserts itself over a deliberate adjustment is worse than one that
+    // never helps, because you cannot tell whether your drag took.
+    assert.match(src, /phaseLayoutIsAdvisory = false;/);
+    assert.match(src, /if \(!phaseLayoutIsAdvisory \|\| phaseKey === lastLaidOutPhase\) return;/);
+  });
+
+  test("test_layout_onlyMovesOnAPhaseChange", () => {
+    // The tick runs four times a second. Re-applying a layout on each one would
+    // fight every drag and make the splitters feel broken.
+    assert.match(src, /lastLaidOutPhase = phaseKey;/);
+  });
+
+  test("test_layout_opensTheBoardForPlanningAndNeverClosesIt", () => {
+    // "Plan" with the board hidden is the phase without its instrument. But
+    // shutting a panel someone is looking at is help nobody asks for twice.
+    assert.match(src, /if \(phaseKey === "plan" && !session\.whiteboardShown\) setBoard\(true\)/);
+    assert.doesNotMatch(src, /setBoard\(false\)\s*;?\s*\/\/ *phase|phaseKey.*setBoard\(false\)/);
+  });
+
+  test("test_layout_doesNotApplyToAMock", () => {
+    // A mock has its own five phases on a different clock, and moving the panes
+    // under someone being watched is not a kindness.
+    assert.match(src, /if \(!session\.isMock\) layoutForPhase\(phase\.key\)/);
   });
 });

@@ -17,7 +17,7 @@ import {
   todayISO, applyOutcome, activateProblem, uid, MISTAKE_TAGS, MOCK_CHECKLIST,
   quizOptions, updateStreak, computePlantState, recommendSession, allAttempts,
   normalizeStatement, MAX_STATEMENT_CHARS, lastAttemptWithCode, mockPhase, MOCK_MINUTES,
-  questionPlan, questionPhase,
+  questionPlan, questionPhase, phaseLayout,
   priorAttemptSummary,
 } from "./logic.js";
 import {
@@ -350,6 +350,9 @@ export function renderWorkspace(root, store, actions) {
       host.innerHTML = `<span class="mock-phase-label">${esc(phase.label)}</span>
         <span class="mock-phase-prompt">${esc(phase.prompt)}</span>${nudge}`;
     }
+    // Follows the phase, not the clock: only a change of phase moves anything,
+    // so this costs nothing on the other three ticks a second.
+    if (!session.isMock) layoutForPhase(phase.key);
   }, 250);
 
   // ---- panes ----
@@ -364,6 +367,13 @@ export function renderWorkspace(root, store, actions) {
   const visible = () => [true, true, session.whiteboardShown];
   let sizes = loadSizes(DEFAULT_PANES);
 
+  // Once you drag a splitter, the app stops moving the panes for you — for the
+  // rest of the session, not just the rest of the phase. A layout that keeps
+  // reasserting itself over a deliberate adjustment is worse than one that
+  // never helps, because you cannot tell whether your drag took.
+  let phaseLayoutIsAdvisory = true;
+  let lastLaidOutPhase = null;
+
   const applyPanes = (next) => {
     sizes = next;
     panes.style.gridTemplateColumns = gridTemplate(next, visible(), SPLITTER_PX);
@@ -376,10 +386,34 @@ export function renderWorkspace(root, store, actions) {
   };
   applyPanes(redistribute(sizes, visible(), DEFAULT_PANES));
 
+  /**
+   * Move the emphasis to whichever surface the phase is about.
+   *
+   * The whiteboard is opened for the planning phase if it is closed, because
+   * "plan" with the board hidden is the phase without its instrument. It is not
+   * closed again afterwards: shutting a panel someone is looking at is the kind
+   * of help nobody asks for twice.
+   */
+  const layoutForPhase = (phaseKey) => {
+    if (!phaseLayoutIsAdvisory || phaseKey === lastLaidOutPhase) return;
+    lastLaidOutPhase = phaseKey;
+    // setBoard handles creating the canvas on first show and replaying a
+    // recovered drawing onto it; it also applies panes, which the line below
+    // then overrides with the phase's own emphasis.
+    if (phaseKey === "plan" && !session.whiteboardShown) setBoard(true);
+    applyPanes(redistribute(phaseLayout(phaseKey), visible(), DEFAULT_PANES));
+  };
+
   session.teardownSplitters = installSplitters({
     container: panes,
     getSizes: () => sizes,
-    setSizes: (next) => { sizes = next; },
+    setSizes: (next) => {
+      sizes = next;
+      // A deliberate drag ends the app's involvement for the rest of the
+      // session. A layout that reasserts itself over an adjustment is worse
+      // than one that never helps, because you cannot tell if your drag took.
+      phaseLayoutIsAdvisory = false;
+    },
     apply: applyPanes,
   });
 

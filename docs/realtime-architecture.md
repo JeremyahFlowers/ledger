@@ -157,18 +157,43 @@ the peer connection is up, strokes flow directly between the two machines,
 encrypted, at full speed. Setup costs a few seconds of polling; the rest of the
 session costs nothing. Nobody else is involved at any point.
 
-**For an interviewer, who must not have repo access, the options are real and
-the choice is yours** — and it is the only decision this design defers:
+**For an interviewer, who must not have repo access: a small relay you own,
+carrying the handshake, with the strokes still going peer-to-peer.** Decided,
+and the reasoning is about interviews rather than about privacy purism.
 
-| | latency | third party sees your work | you operate |
-|---|---|---|---|
-| Paste the connection blob into the chat you are already on | sub-second | nobody | nothing |
-| A small WebSocket relay | sub-second | nobody (it forwards, stores nothing) | one service |
-| Hosted realtime (Firebase, Supabase) | sub-second | yes, stored on their servers | nothing |
+An interview is forty-five minutes with a stranger who is being generous with
+their time. Three things follow, and they outrank elegance:
 
-The first is not a joke: you are on a call with this person already, and "paste
-this, send me back what it gives you" is one step, zero infrastructure, and
-nothing of yours anywhere.
+- **Setup has to be one step.** Not "copy this blob, send it to me, paste what
+  it gives you back". Every minute of fiddling is a minute of the interview, and
+  the first impression you make is of someone whose tooling does not work.
+- **It has to work the first time, on their network.** This is what rules out
+  the zero-infrastructure option. WebRTC without a relay fails on restrictive
+  NATs, and an interviewer may well be behind a corporate one. A peer-to-peer
+  purist design that connects eighty percent of the time is worse in practice
+  than a relayed one that connects always — the twenty percent lands in front of
+  the person you were trying to impress.
+- **They will not debug it.** They click a link, they see the board. Anything
+  else and they will ask you to share your screen instead, at which point none
+  of this was worth building.
+
+So: a WebSocket relay, on a free tier, under the user's own control. It
+forwards and stores nothing. WebRTC is still attempted first, so in the normal
+case the strokes travel directly between the two machines and only the
+handshake crosses the relay; when the peer connection cannot be established,
+the relay carries the events too, and the session works anyway.
+
+What crosses it is worth being precise about, because it is not the thing the
+privacy concern was about. It is one session that somebody is already watching:
+a public problem statement, the strokes you are drawing for them, the code you
+are writing in front of them. Not your practice history, not your notes, not
+your log — the interviewer's side never receives the state document at all.
+
+**One mechanism, not two.** The same relay signals the solo tablet-to-laptop
+case, rather than that case using the repo and the interview case using the
+relay. Two signalling paths for one job is the duplication this codebase has
+spent six cycles deleting, and the repo-as-signalling trick — while pleasing —
+buys nothing once a relay exists for the case that actually needs one.
 
 ### Degradation is the point
 
@@ -179,7 +204,45 @@ work is lost, only one where it is slower.
 
 ---
 
-## 4. The interviewer
+## 4. The session follows the interview, not the editor
+
+Built, ahead of any transport work, because it needed none.
+
+A real interview has an order: you read the problem, you diagram the approach
+while the interviewer watches you think, and *then* you write code — with the
+diagram still on screen, because the reason you drew it was to code against it.
+An editor that dominates the window from the first second teaches the opposite:
+start typing, work it out as you go, which is the commonest way a solvable
+problem goes wrong.
+
+So the emphasis moves with the timebox phase, which the session already knows:
+
+| phase   | statement | code | board | |
+|---------|-----------|------|-------|---|
+| Read    | 55% | 30% | 15% | the problem leads |
+| Plan    | 25% | 20% | 55% | the board leads, and opens if it was closed |
+| Code    | 20% | 52% | 28% | the editor leads, the board stays legible |
+| Reflect | 34% | 33% | 33% | all three, to write about |
+
+Two things this deliberately does not do. It never shrinks the board below a
+readable share while coding, because referencing the diagram is the stated
+reason for having one. And it never closes a panel — opening the board for the
+planning phase is supplying the phase's instrument, but shutting one someone is
+looking at is help nobody asks for twice.
+
+It defers to you completely: one drag of a splitter and the app stops moving
+panes for the rest of the session. A layout that reasserts itself over a
+deliberate adjustment is worse than one that never helps, because you cannot
+tell whether your drag took effect.
+
+This matters more than it looks for the interviewer view, which will mirror the
+same phases: what they see emphasised is what you are supposed to be doing, so
+"you spent nineteen minutes in Code with an empty board" is legible to both of
+you without anyone saying it.
+
+---
+
+## 5. The interviewer
 
 A separate view, joined by a room code, that has never held the state document.
 
@@ -209,7 +272,7 @@ you did alone, with better provenance.
 
 ---
 
-## 5. Drop, reconnect, and what has to be true
+## 6. Drop, reconnect, and what has to be true
 
 - Every device keeps an outbox of events it has not seen acknowledged, in
   `localStorage`. On reconnect: replay the durable log, merge the outbox, dedupe
@@ -230,7 +293,7 @@ you did alone, with better provenance.
 
 ---
 
-## 6. Staging
+## 7. Staging
 
 The order things get built. Each stage is usable on its own; none of them
 require revisiting the ones before.
@@ -240,15 +303,15 @@ require revisiting the ones before.
    third party, no server.
 2. **The fast channel between your own devices**, WebRTC signalled through your
    repo. Sub-second between tablet and laptop. Still nobody else involved.
-3. **The interviewer view and the rubric**, on whichever signalling route is
-   chosen above. This is the mock interview feature.
+3. **The interviewer view and the rubric**, and the relay that introduces them.
+   This is the mock interview feature.
 
 Stage 1 is the foundation and not a stopgap: stages 2 and 3 add a transport to
 it and change nothing about how state is represented.
 
 ---
 
-## 7. Explicitly not in scope
+## 8. Explicitly not in scope
 
 - A CRDT for code. The lease is the answer.
 - Audio or video. You are on a call.

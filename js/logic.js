@@ -1309,6 +1309,38 @@ export function questionPlan(state, difficulty) {
 }
 
 /**
+ * Which surface the current phase is about, as pane fractions.
+ *
+ * Statement, code, whiteboard — the three panes of the workspace, in that
+ * order, summing to 1.
+ *
+ * This follows how a real interview actually goes rather than how a code editor
+ * usually looks. You read the problem, you diagram the approach while the
+ * interviewer watches you think, and *then* you write code — with the diagram
+ * still on screen, because the whole reason you drew it is to code against it.
+ *
+ * So the emphasis moves with the phase: the statement leads while you are
+ * reading it, the board takes the room while you are planning, and the editor
+ * takes it when it is time to type — at which point the board shrinks but does
+ * not disappear, because "reference the drawing while coding" is the point of
+ * having drawn it.
+ *
+ * Suggestions, not impositions. A drag wins and keeps winning: see
+ * `phaseLayoutIsAdvisory` in session-view.js.
+ */
+export const PHASE_LAYOUTS = {
+  read:    [0.55, 0.30, 0.15],
+  plan:    [0.25, 0.20, 0.55],
+  code:    [0.20, 0.52, 0.28],
+  reflect: [0.34, 0.33, 0.33],
+  solve:   [0.30, 0.45, 0.25],
+};
+
+export function phaseLayout(phaseKey) {
+  return PHASE_LAYOUTS[phaseKey] || PHASE_LAYOUTS.solve;
+}
+
+/**
  * Where you are in the plan, given minutes elapsed.
  *
  * `overrun` counts past the end of the box rather than clamping, for the same
