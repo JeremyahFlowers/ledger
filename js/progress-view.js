@@ -19,6 +19,7 @@
 // chart, because it gets believed.
 
 import { esc, pct, mins, fmtDate, toast, outcomeLabel, downloadFile } from "./ui.js";
+import { emptyState } from "./chrome.js";
 import {
   weeklyProgress, patternMovement, progressSummary, PROGRESS_WEEKS, allAttempts, weekInReview,
 } from "./logic.js";
@@ -451,8 +452,10 @@ export function patternProgressHtml(state, patternId) {
     return `
       <div class="card">
         <h2>Your history here</h2>
-        <p class="muted small">Nothing logged against this pattern yet. Practising one of the
-        problems above is what starts the record.</p>
+        ${emptyState("progress", "Nothing logged against this pattern yet",
+          "One attempt is enough to start a record here — the clean-solve rate and the trend both "
+          + "build from the first one.",
+          { tab: "bank", label: "Find a problem for this pattern" })}
       </div>`;
   }
 

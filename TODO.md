@@ -70,11 +70,14 @@ data-loss path that was reproduced in a browser before a line was changed.
   *Done:* starting a session on a problem you've attempted shows what you did
   last time.
 
-- [ ] **46. The topic pages don't know what you've done.**
-  A topic explains the pattern, lists pitfalls, draws a diagram and shows a
-  practice ladder — and says nothing about how you actually do on it, which is
-  recorded three clicks away on the mastery table.
-  *Done:* a topic page leads with your own record on that pattern.
+- [x] **46. Your record on a pattern is at the bottom of its topic page.** _(1.6.0)_
+  As first written this item claimed the topic page said nothing about how you
+  do on the pattern. That was wrong — it ends with attempts, clean rate, recall
+  rate, a trend chart and your last six attempts. What is true is where that
+  sits: below the hook, the concept, the recognisers, the invariant, the
+  pitfalls, two diagrams, the practice ladder and your resource links.
+  *Done:* the header answers "how am I doing on this" without a scroll, and the
+  full history stays where a chart belongs.
 
 - [ ] **47. Keyboard support stops at the door of every list.**
   `g`-shortcuts reach any page and `?` explains them. Once you are on the

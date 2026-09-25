@@ -1615,3 +1615,12 @@ input[type="checkbox"]:focus-visible {
   margin: 0.5rem 0; padding-left: 0.7rem;
   border-left: 2px solid var(--border); color: var(--text);
 }
+
+/* Where you stand on a pattern, in the topic header. The full history is still
+   at the bottom of the page, which is right for a chart — but "how am I doing
+   on this" should not need a scroll past two diagrams to answer. */
+.topic-record {
+  display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;
+  margin: 0.7rem 0 0; padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+}

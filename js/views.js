@@ -833,6 +833,37 @@ export function renderTopics(root, store, actions) {
 /** The dedicated per-pattern page — reached only by clicking a Topics card
  * (topicNav.patternId set just before the tab switch), same handoff idiom
  * used for prefilling Log Session and starting a Workspace session. */
+/**
+ * Where you stand on this pattern, in one line, in the header.
+ *
+ * The full history was already at the bottom of this page, which is the right
+ * place for a chart and six recent attempts — and it is below the hook, the
+ * concept, the recognisers, the invariant, the pitfalls, two diagrams, the
+ * practice ladder and your resource links. "How am I doing on this" should not
+ * need a scroll.
+ *
+ * Silent on a pattern you have never practised: the empty state at the bottom
+ * of the page already says so, and saying it twice on one screen reads as the
+ * page insisting.
+ */
+function topicRecordHtml(state, patternId) {
+  const record = patternStats(state).find((s) => s.pattern.id === patternId);
+  if (!record || !record.attempts) return "";
+
+  const parts = [
+    `${record.attempts} attempt${record.attempts === 1 ? "" : "s"}`,
+    record.solvedCleanRate != null ? `${pct(record.solvedCleanRate)} clean` : null,
+    record.patternGuessRate != null ? `${pct(record.patternGuessRate)} recalled` : null,
+    record.avgInsightMin != null ? `${Math.round(record.avgInsightMin)} min to the approach` : null,
+  ].filter(Boolean);
+
+  return `
+    <p class="topic-record muted small">
+      ${esc(parts.join(" · "))}${record.topMistake
+        ? ` · most often <span class="pill pill-warn">${esc(record.topMistake.replace(/-/g, " "))}</span>` : ""}
+    </p>`;
+}
+
 export function renderTopicDetail(root, store, actions) {
   topicDiagramPlayers.forEach((p) => p.destroy());
   topicDiagramPlayers = [];
@@ -857,6 +888,7 @@ export function renderTopicDetail(root, store, actions) {
           <p class="muted small" style="margin:0.15rem 0 0">${esc(pat.description)}</p>
         </div>
       </div>
+      ${topicRecordHtml(state, pat.id)}
     </div>
     ${t ? `
     <div class="card">
