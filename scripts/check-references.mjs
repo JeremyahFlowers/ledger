@@ -43,6 +43,13 @@ function strip(src) {
     .replace(/^\s*\/\/.*$/gm, " ");
 }
 
+/** Quoted strings out. Not template literals — see the note in `strip`. */
+function withoutQuotedStrings(src) {
+  return src
+    .replace(/'(?:\\.|[^'\\\n])*'/g, "''")
+    .replace(/"(?:\\.|[^"\\\n])*"/g, '""');
+}
+
 function matchAll(src, re) {
   return new Set([...src.matchAll(re)].map((m) => m[1]));
 }
@@ -134,17 +141,22 @@ const exportsByFile = new Map([...sources].map(([f, src]) => [f, exportedIn(src)
 
 const problems = [];
 for (const [file, src] of sources) {
-  const code = strip(src);
+  // Quoted strings out, template literals left in. That split is the whole
+  // rule: a template literal holds code — `${esc(name)}` is a real reference —
+  // and a quoted string holds data. A file of prose about stores and explaining
+  // things reported three references that were sentences, which is how a check
+  // that is always noisy becomes a check nobody reads.
+  //
+  // Template literals stay because stripping those is what desynchronised the
+  // matcher once and swallowed four hundred lines of real code.
+  const code = withoutQuotedStrings(strip(src));
   const known = new Set([...declaredIn(code), ...importedIn(src), ...reExportedIn(src), ...AMBIENT]);
   const used = new Set([
     ...matchAll(code, /(?<![.\w$])([A-Za-z_$][\w$]*)\s*(?=\()/g),   // calls
     ...matchAll(code, /\$\{\s*([A-Za-z_$][\w$]*)/g),                // template holes
     ...matchAll(code, /(?<![.\w$])([A-Za-z_$][\w$]*)\s*\[/g),       // table lookups
     ...matchAll(code, /(?<![.\w$])([A-Za-z_$][\w$]*)\s*\./g),       // member reads
-    // A bare reference passed as an argument: `filter(isCleanSolve)`. Missed
-    // until it shipped twice — `isCleanSolve` went unimported in two files and
-    // this said all clear, because nothing here was followed by a `(`.
-    ...matchAll(code, /[(,]\s*([A-Za-z_$][\w$]*)\s*[),]/g),
+    ...matchAll(code, /[(,]\s*([A-Za-z_$][\w$]*)\s*[),]/g),        // bare arguments
   ]);
   for (const name of [...used].sort()) {
     if (known.has(name)) continue;

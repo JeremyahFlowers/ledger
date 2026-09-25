@@ -2,8 +2,10 @@
 // the leetcode repo today. Every problem starts due immediately (box 0) so
 // day one already has a real review queue instead of an empty app.
 import {
-  todayISO, newDayTimer, DEFAULT_QUESTION_MINUTES, DEFAULT_PLAN_MINUTES,
+  todayISO, newDayTimer, DEFAULT_QUESTION_MINUTES, DEFAULT_PLAN_MINUTES, STATUS_ACTIVE,
 } from "./logic.js";
+import { DEFAULT_DESIGN_MINUTES } from "./design-logic.js";
+import { DESIGN_PROBLEMS } from "./design-problems.js";
 import { APP_VERSION } from "./version.js";
 
 const PATTERNS = [
@@ -76,12 +78,22 @@ export function buildSeedState() {
       // before writing code. See questionPlan() in logic.js.
       questionMinutes: { ...DEFAULT_QUESTION_MINUTES },
       planMinutes: { ...DEFAULT_PLAN_MINUTES },
+      // How long one design problem gets, and what share of the day goes to
+      // design at all. The share starts at zero: system design is part of the
+      // same practice day, but turning it on has to be a decision, or it
+      // silently takes minutes from somebody who never asked for it.
+      designMinutes: { ...DEFAULT_DESIGN_MINUTES },
+      designShare: 0,
       systemDesignUnlockThreshold: { minMocks: 10, minSolvedCleanRate: 0.7 },
     },
     patterns: PATTERNS,
     problems: PROBLEMS,
     mocks: [],
     journal: [],
+    // Design problems are problems: same boxes, same intervals, same schedule
+    // as the coding side, with a different practice format. Seeded from the
+    // bank so the first visit is not an empty page.
+    designProblems: seedDesignProblems(),
     systemDesign: { manualUnlock: false, sessions: [] },
     streak: { current: 0, longest: 0, lastActiveDate: null },
     resources: {}, // { [patternId]: [{ id, title, url, addedAt }] } — user-curated video/article links
@@ -93,6 +105,16 @@ export function buildSeedState() {
 
 /** Backfills fields added after a state.json was first created, without
  * touching anything that already exists. Safe to call on every load. */
+/** The bank as trackable problems, in the shape the scheduler already
+ *  understands. Content lives in design-problems.js; this is only the record
+ *  of what you have done with each one. */
+function seedDesignProblems() {
+  return DESIGN_PROBLEMS.map((p) => ({
+    id: p.id, name: p.name, difficulty: p.difficulty,
+    status: STATUS_ACTIVE, box: 0, nextReviewDate: todayISO(), attempts: [],
+  }));
+}
+
 export function migrateState(state) {
   if (!state.resources) state.resources = {};
   if (!state.whiteboards) state.whiteboards = [];
@@ -107,6 +129,22 @@ export function migrateState(state) {
   if (!state.settings) state.settings = {};
   if (!state.settings.questionMinutes) state.settings.questionMinutes = { ...DEFAULT_QUESTION_MINUTES };
   if (!state.settings.planMinutes) state.settings.planMinutes = { ...DEFAULT_PLAN_MINUTES };
+  if (!state.settings.designMinutes) state.settings.designMinutes = { ...DEFAULT_DESIGN_MINUTES };
+  // Off for anyone who had a log before design existed. Opting in is a
+  // setting, not a surprise.
+  if (typeof state.settings.designShare !== "number") state.settings.designShare = 0;
+
+  // The bank grows: a release that adds a problem should add it to every
+  // existing log, merged by id so nothing already attempted is touched.
+  if (!Array.isArray(state.designProblems)) state.designProblems = [];
+  const haveDesign = new Set(state.designProblems.map((p) => p.id));
+  for (const p of DESIGN_PROBLEMS) {
+    if (haveDesign.has(p.id)) continue;
+    state.designProblems.push({
+      id: p.id, name: p.name, difficulty: p.difficulty,
+      status: STATUS_ACTIVE, box: 0, nextReviewDate: todayISO(), attempts: [],
+    });
+  }
   // Deliberately not backfilled with today's date: newDayTimer() stamps the
   // day it was made, and logic.js treats a timer from another date as an empty
   // day, so an absent one and a stale one behave identically.
