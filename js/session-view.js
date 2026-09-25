@@ -28,6 +28,7 @@ import { TOPICS } from "./topics-content.js";
 import { loadCodeMirror, CODE_MODES } from "./codemirror-loader.js";
 import { createWhiteboard } from "./whiteboard.js";
 import { createRepoChannel, createEmitter } from "./session-sync.js";
+import { createLiveChannel } from "./live-channel.js";
 import { deviceId } from "./session-log.js";
 import { storageKey } from "./channel.js";
 import { plantSvg } from "./plant.js";
@@ -161,6 +162,7 @@ export function abandonSession({ saved = false } = {}) {
   // one's is kept, because the next device to open this problem may still want
   // the drawing.
   session?.sync?.stop({ discard: saved }).catch(() => {});
+  session?.live?.stop().catch(() => {});
   session = null;
   reflectState = null;
 }
@@ -678,13 +680,37 @@ function startSessionSync(store) {
   const sessionId = session.syncId || (session.syncId = uid());
   const device = deviceId(localStorage, storageKey("ledger.device"));
 
-  const channel = store.gh
-    ? createRepoChannel({ gh: store.gh, sessionId })
+  // Two channels, same events, neither aware of the other. The repo is durable
+  // and slow — it is what survives a closed tab. The relay is fast and forgets,
+  // and is what makes a stroke appear on the other screen while you are still
+  // drawing it. Events carry ids, so arriving by both routes is a no-op.
+  const durable = store.gh ? createRepoChannel({ gh: store.gh, sessionId }) : null;
+  const relayUrl = store.state?.settings?.relayUrl || "";
+  const live = relayUrl
+    ? createLiveChannel({ relayUrl, sessionId, deviceId: device })
     : null;
-  session.sync = channel;
+
+  session.sync = durable;
+  session.live = live;
   session.emitter = createEmitter({
-    sessionId, deviceId: device, channels: channel ? [channel] : [],
+    sessionId, deviceId: device, channels: [durable, live].filter(Boolean),
   });
+
+  if (live) {
+    // Applied element by element rather than by replacing the board: a full
+    // restore mid-session would drop a selection and fight a drag, and the
+    // whole point of this channel is that it lands while you are working.
+    live.subscribe((event) => {
+      const ctl = session.whiteboardCtl;
+      if (!ctl) return;
+      const p = event.payload || {};
+      if (event.kind === "element" || event.kind === "stroke") ctl.applyRemote({ id: event.id, ...p });
+      else if (event.kind === "element-move") ctl.applyRemote({ ...ctl.toJSON().find((e) => e.id === p.id), ...p });
+      else if (event.kind === "element-del" || event.kind === "stroke-undo") ctl.removeRemote(p.id ?? p.strokeId);
+      else if (event.kind === "board-clear") ctl.restore([]);
+    });
+    live.start();
+  }
 
   // Said once, so a log that already exists is described rather than replayed
   // silently — coming back to a drawing you made on another device should be
@@ -695,17 +721,18 @@ function startSessionSync(store) {
     plan: session.plan,
   });
 
-  if (!channel) return;
+  if (!durable) return;
 
-  channel.subscribe(() => {
-    // Any arrival: re-render the board from the reduced log. Cheap, and it
-    // cannot drift from what the events say, which a per-event patch could.
+  durable.subscribe(() => {
+    // The durable channel delivers in bulk on a poll, so the board is redrawn
+    // from the reduced log rather than patched event by event — cheap, and it
+    // cannot drift from what the events say.
     const ctl = session.whiteboardCtl;
     if (!ctl || ctl.isDrawing?.()) return;   // never yank the line under a moving pen
-    ctl.restore(channel.state.strokes);
+    ctl.restore(durable.state.strokes);
   });
 
-  channel.start().then((state) => {
+  durable.start().then((state) => {
     if (!session || session.syncId !== sessionId) return;   // session ended while loading
     if (!state.strokes.length) return;
     session.restoredBoard = state.strokes;
@@ -716,7 +743,7 @@ function startSessionSync(store) {
   }).catch(() => {
     /* offline is a normal state; the session works without a channel */
   });
-  session.stopWatching = channel.watch();
+  session.stopWatching = durable.watch();
 }
 
 function wireStatementPane(root, store, problem) {

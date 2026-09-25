@@ -134,6 +134,42 @@ function faultLogHtml() {
 }
 
 /**
+ * Where the live relay is, if there is one.
+ *
+ * Optional, and the app is complete without it: with no relay, a drawing still
+ * follows you between devices within a few seconds, because the durable copy in
+ * your own repo is what makes that work. The relay only makes it immediate,
+ * which matters when two screens are open at once — a tablet beside a laptop,
+ * or an interviewer watching.
+ *
+ * Empty by default, deliberately. Pointing this at somebody else's server means
+ * a session's strokes and code pass through it, and that should be a thing you
+ * typed in rather than a default you inherited.
+ */
+function liveSyncCardHtml(state) {
+  const url = state.settings?.relayUrl || "";
+  return `
+    <div class="card">
+      <h3>Live sync</h3>
+      <p class="muted small">Without this, a drawing follows you between devices in a few seconds,
+      through your own repo. With it, a stroke appears on the other screen as you draw — which is
+      what two screens at once needs, and what a mock interview with somebody watching needs.</p>
+      <p class="muted small">It relays and stores nothing, and only ever carries the session in
+      front of you: the problem, the drawing, the code. Never your log. Run your own with
+      <code>node relay/server.mjs</code> — see <code>relay/README.md</code>.</p>
+      <form id="relay-form" class="settings-form">
+        <label class="field"><span class="label">Relay address</span>
+          <input class="input" name="relayUrl" type="url" placeholder="https://your-relay.example.com"
+                 value="${esc(url)}" style="max-width:22rem" /></label>
+        <button class="btn btn-primary btn-sm" type="submit">Save</button>
+      </form>
+      <p class="muted small">${url
+        ? "Sessions started from now on will use it. Leave it empty to turn live sync off."
+        : "Off. Everything works; cross-device updates just take a few seconds instead of a moment."}</p>
+    </div>`;
+}
+
+/**
  * How long one question gets, and how much of it is for planning.
  *
  * Two tables rather than one, because they answer different questions. The
@@ -256,6 +292,7 @@ export function renderSettings(root, store, actions) {
       </form>
     </div>
 ${timeboxCardHtml(store.state)}
+${liveSyncCardHtml(store.state)}
 ${clockCardHtml(store.state)}
 <div class="card">
       <h3>Review intervals</h3>
@@ -319,6 +356,29 @@ ${clockCardHtml(store.state)}
       </select>
     </div>
     </section>`;
+
+  root.querySelector("#relay-form")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const raw = String(new FormData(e.target).get("relayUrl") || "").trim();
+    if (raw) {
+      // Checked here rather than left to fail silently at session start, where
+      // the only symptom would be sync not happening for no stated reason.
+      let parsed;
+      try {
+        parsed = new URL(raw);
+      } catch (_) {
+        toast("That isn't a web address. It should look like https://your-relay.example.com");
+        return;
+      }
+      if (parsed.protocol !== "https:" && parsed.hostname !== "localhost" && parsed.hostname !== "127.0.0.1") {
+        toast("Use https — an http relay would send your session in the clear.");
+        return;
+      }
+    }
+    store.mutate((st) => { st.settings.relayUrl = raw; }, "Ledger: set live sync relay");
+    toast(raw ? "Live sync on for new sessions." : "Live sync off.");
+    actions.rerender();
+  });
 
   root.querySelector("#timebox-form")?.addEventListener("submit", (e) => {
     e.preventDefault();
