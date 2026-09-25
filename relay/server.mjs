@@ -48,9 +48,15 @@ const cors = {
   "Access-Control-Allow-Headers": "content-type",
 };
 
+/** Rooms are session UUIDs. The length floor is what makes one unguessable, so
+ *  a short id is refused rather than quietly creating a room anyone could hit
+ *  by typing. */
+const MIN_ROOM_ID = 8;
+
 const roomIdFrom = (url) => {
-  const m = /^\/r\/([A-Za-z0-9_-]{8,128})$/.exec(url.split("?")[0]);
-  return m ? m[1] : null;
+  const m = /^\/r\/([A-Za-z0-9_-]{1,128})$/.exec(url.split("?")[0]);
+  if (!m) return null;
+  return m[1].length >= MIN_ROOM_ID ? m[1] : { tooShort: true };
 };
 
 function subscribe(roomId, req, res) {
@@ -128,6 +134,13 @@ createServer((req, res) => {
 
   const roomId = roomIdFrom(req.url);
   if (!roomId) { res.writeHead(404, cors).end(); return; }
+  if (roomId.tooShort) {
+    // Said rather than left as a bare 404, because the symptom of getting this
+    // wrong is a client that connects to nothing and reports no reason.
+    res.writeHead(400, { ...cors, "Content-Type": "application/json" })
+      .end(JSON.stringify({ error: `room id must be at least ${MIN_ROOM_ID} characters` }));
+    return;
+  }
 
   if (req.method === "GET") {
     res.ledgerFrom = new URL(req.url, "http://x").searchParams.get("from") || "";

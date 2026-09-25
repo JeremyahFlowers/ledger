@@ -47,6 +47,13 @@ function installDomStub() {
     createElement: () => ({ ...element }),
     addEventListener() {},
   };
+  // A page has these directly, not only on `window`. interview.js reads
+  // location.hash at import time, which is exactly the kind of top-level work
+  // this check exists to exercise.
+  globalThis.location = { href: "http://localhost/", origin: "http://localhost",
+    pathname: "/index.html", hash: "", hostname: "localhost" };
+  globalThis.EventSource = class { close() {} };
+  globalThis.prompt = () => null;
   globalThis.window = {
     addEventListener() {}, removeEventListener() {},
     matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),

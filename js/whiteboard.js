@@ -40,9 +40,18 @@ const TOOLS = [
  *  boxes reads as a mistake rather than as a pointer. */
 const SNAP_BY_DEFAULT = new Set(["arrow", "line"]);
 
+/**
+ * @param {object} hooks  onAdd / onUpdate / onRemove / onClear, and `readOnly`.
+ *
+ * Read-only exists so the interviewer's page draws the board with this code
+ * rather than a second copy of it. Two renderers for one drawing would drift,
+ * and the first time anyone noticed would be an interview where the two screens
+ * disagreed about what had been drawn.
+ */
 export function createWhiteboard(root, hooks = {}) {
+  const readOnly = !!hooks.readOnly;
   root.innerHTML = `
-    <div class="whiteboard-toolbar">
+    ${readOnly ? "" : `<div class="whiteboard-toolbar">
       <div class="wb-tools" role="toolbar" aria-label="Drawing tools">
         ${TOOLS.map((t) => `<button type="button" class="wb-tool" data-tool="${t.id}"
           title="${t.label} (${t.key.toUpperCase()})" aria-label="${t.label}"
@@ -57,8 +66,8 @@ export function createWhiteboard(root, hooks = {}) {
       <button type="button" class="btn btn-ghost btn-sm" id="wb-undo" title="Undo (Cmd/Ctrl-Z)">Undo</button>
       <button type="button" class="btn btn-ghost btn-sm" id="wb-redo" title="Redo (Cmd/Ctrl-Shift-Z)">Redo</button>
       <button type="button" class="btn btn-ghost btn-sm" id="wb-clear">Clear</button>
-    </div>
-    <canvas class="whiteboard-canvas" id="wb-canvas" tabindex="0"></canvas>
+    </div>`}
+    <canvas class="whiteboard-canvas" id="wb-canvas" ${readOnly ? "" : 'tabindex="0"'}></canvas>
   `;
 
   // Told what changed. The board knows nothing about sessions, sync or events:
@@ -247,7 +256,7 @@ export function createWhiteboard(root, hooks = {}) {
 
   canvas.style.touchAction = "none";
 
-  canvas.addEventListener("pointerdown", (e) => {
+  if (!readOnly) canvas.addEventListener("pointerdown", (e) => {
     canvas.setPointerCapture?.(e.pointerId);
     canvas.focus?.();
     const at = pointFromEvent(e);
@@ -277,7 +286,7 @@ export function createWhiteboard(root, hooks = {}) {
     redraw();
   });
 
-  canvas.addEventListener("pointermove", (e) => {
+  if (!readOnly) canvas.addEventListener("pointermove", (e) => {
     const at = pointFromEvent(e);
 
     if (dragging) {
@@ -321,8 +330,10 @@ export function createWhiteboard(root, hooks = {}) {
     if (el.kind === "pen" && el.points.length < 2) { redraw(); return; }
     add(el);
   };
-  canvas.addEventListener("pointerup", finish);
-  canvas.addEventListener("pointercancel", finish);
+  if (!readOnly) {
+    canvas.addEventListener("pointerup", finish);
+    canvas.addEventListener("pointercancel", finish);
+  }
 
   // ---- keyboard ----
 
@@ -343,7 +354,7 @@ export function createWhiteboard(root, hooks = {}) {
     const match = TOOLS.find((t) => t.key === e.key.toLowerCase());
     if (match && !meta) { e.preventDefault(); setTool(match.id); }
   };
-  canvas.addEventListener("keydown", onKey);
+  if (!readOnly) canvas.addEventListener("keydown", onKey);
 
   // ---- toolbar ----
 
@@ -359,6 +370,9 @@ export function createWhiteboard(root, hooks = {}) {
   root.querySelectorAll(".wb-tool").forEach((btn) => {
     btn.addEventListener("click", () => setTool(btn.dataset.tool));
   });
+  // Everything below binds to toolbar controls, which a read-only board has
+  // none of. querySelector returns null there, so each has to be guarded — or
+  // this can simply stop.
   root.querySelectorAll(".wb-color").forEach((btn) => {
     btn.addEventListener("click", () => {
       color = btn.dataset.color;
@@ -369,10 +383,10 @@ export function createWhiteboard(root, hooks = {}) {
       if (sel) replace({ ...sel, color });
     });
   });
-  root.querySelector("#wb-width").addEventListener("input", (e) => { width = Number(e.target.value); });
-  root.querySelector("#wb-undo").addEventListener("click", undo);
-  root.querySelector("#wb-redo").addEventListener("click", redo);
-  root.querySelector("#wb-clear").addEventListener("click", () => {
+  root.querySelector("#wb-width")?.addEventListener("input", (e) => { width = Number(e.target.value); });
+  root.querySelector("#wb-undo")?.addEventListener("click", undo);
+  root.querySelector("#wb-redo")?.addEventListener("click", redo);
+  root.querySelector("#wb-clear")?.addEventListener("click", () => {
     if (!elements.length) return;
     const previous = elements;
     elements = [];

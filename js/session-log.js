@@ -35,6 +35,7 @@ export const KINDS = [
   "lease",        // who may type
   "rubric",       // the interviewer's observations
   "note",         // a line of the interviewer's feedback
+  "hello",        // someone joined and has no history; send them the board
 ];
 
 /**
@@ -129,6 +130,10 @@ export function emptyState() {
     code: "", codeLang: null, codeAt: 0, codeBy: null,
     lease: null, leaseAt: 0,
     rubric: {}, rating: null, notes: [],
+    joined: [],
+    // What is being worked, for a view that has never seen the practice log and
+    // never will. Nothing else about the problem reaches the other side.
+    problemName: null, statement: null, url: null,
   };
 }
 
@@ -148,6 +153,9 @@ export function reduce(events) {
         state.problemId = p.problemId ?? state.problemId;
         state.difficulty = p.difficulty ?? state.difficulty;
         state.plan = p.plan ?? state.plan;
+        state.problemName = p.problemName ?? state.problemName;
+        state.statement = p.statement ?? state.statement;
+        state.url = p.url ?? state.url;
         break;
 
       case "timer":
@@ -225,6 +233,14 @@ export function reduce(events) {
 
       case "note":
         state.notes.push({ id: event.id, at: event.at, text: p.text || "" });
+        break;
+
+      case "hello":
+        // Carries nothing and changes nothing. It exists so that whoever is
+        // already in the room hears a newcomer and answers with a snapshot —
+        // the relay stores nothing, so joining ten minutes in would otherwise
+        // show an empty board with no way to know it was wrong.
+        state.joined.push({ id: event.id, deviceId: event.deviceId, at: event.at, role: p.role || "viewer" });
         break;
     }
   }

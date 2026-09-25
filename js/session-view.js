@@ -484,12 +484,42 @@ export function renderWorkspace(root, store, actions) {
     let codeTimer = null;
     session.cm.on("change", () => {
       clearTimeout(codeTimer);
-      codeTimer = setTimeout(() => checkpoint(session), 1000);
+      codeTimer = setTimeout(() => {
+        checkpoint(session);
+        // Sent as a whole snapshot rather than a diff, which is only correct
+        // because exactly one device is ever typing — see the code lease in
+        // docs/realtime-architecture.md. Watching somebody code is watching
+        // them think, and a second of lag is the difference between that and
+        // reading a transcript.
+        session.emitter?.emit("code", { text: session.cm.getValue(), lang: session.codeLang });
+      }, 1000);
     });
   });
   langSelect.addEventListener("change", () => {
     session.codeLang = langSelect.value;
     if (session.cm) session.cm.setOption("mode", CODE_MODES[session.codeLang].mode);
+    if (session.cm) session.emitter?.emit("code", { text: session.cm.getValue(), lang: session.codeLang });
+  });
+
+  // A link somebody can open to watch this session. Both halves live in the
+  // fragment, which is never sent to a server — so the room id stays out of
+  // access logs and out of whatever scans a link pasted into a chat.
+  root.querySelector("#ws-share")?.addEventListener("click", async () => {
+    const relayUrl = store.state?.settings?.relayUrl;
+    if (!relayUrl) {
+      toast("Set a live sync relay in Settings first — without one there is nothing to watch.");
+      return;
+    }
+    const link = `${location.origin}${location.pathname.replace(/[^/]*$/, "")}interview.html`
+      + `#${encodeURIComponent(`${relayUrl}|${session.syncId}`)}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      toast("Link copied. They will see the problem, your board and your code — nothing else.");
+    } catch (_) {
+      // Clipboard access can be refused, and a share button that fails silently
+      // is worse than one that makes you select the text yourself.
+      prompt("Copy this and send it to them:", link);
+    }
   });
 
   // Getting the code into LeetCode's own editor is as close as a web page can
@@ -701,9 +731,30 @@ function startSessionSync(store) {
     // restore mid-session would drop a selection and fight a drag, and the
     // whole point of this channel is that it lands while you are working.
     live.subscribe((event) => {
+      const p = event.payload || {};
+
+      // Somebody joined with no history. The relay stores nothing, so they are
+      // looking at an empty board and have no way to know it is wrong; this is
+      // the only moment anyone can tell them.
+      if (event.kind === "hello") {
+        answerHello();
+        return;
+      }
+      // What the interviewer sends back. Held on the session so the reflection
+      // form can offer it when the session is saved.
+      if (event.kind === "rubric") {
+        session.observed = { ...(session.observed || {}), ...(p.observed || {}) };
+        if (p.rating != null) session.observedRating = p.rating;
+        return;
+      }
+      if (event.kind === "note") {
+        session.interviewerNotes = [...(session.interviewerNotes || []), { at: event.at, text: p.text || "" }];
+        toast("Note from your interviewer.");
+        return;
+      }
+
       const ctl = session.whiteboardCtl;
       if (!ctl) return;
-      const p = event.payload || {};
       if (event.kind === "element" || event.kind === "stroke") ctl.applyRemote({ id: event.id, ...p });
       else if (event.kind === "element-move") ctl.applyRemote({ ...ctl.toJSON().find((e) => e.id === p.id), ...p });
       else if (event.kind === "element-del" || event.kind === "stroke-undo") ctl.removeRemote(p.id ?? p.strokeId);
@@ -712,12 +763,45 @@ function startSessionSync(store) {
     live.start();
   }
 
+  /** Re-send everything a newcomer needs: what the problem is, when the clock
+   *  started, and the board as it stands. Cheap, and only ever in response to
+   *  somebody actually arriving. */
+  function answerHello() {
+    if (!session?.emitter) return;
+    session.emitter.emit("session", {
+      problemId: session.problem.id,
+      problemName: session.problem.name,
+      difficulty: session.problem.difficulty,
+      statement: session.problem.statement || "",
+      url: problemUrl(session.problem) || "",
+      plan: session.plan,
+    });
+    if (session.startedAt) {
+      session.emitter.emit("timer", { action: "start" }, session.startedAt);
+    }
+    const elements = session.whiteboardCtl?.toJSON() || [];
+    // A wholesale replacement rather than one event per element: the newcomer's
+    // board is empty, and `board` is the kind that already means "this is
+    // everything".
+    session.emitter.emit("board", { strokes: elements, absorbed: {} });
+    if (session.cm) {
+      session.emitter.emit("code", { text: session.cm.getValue(), lang: session.codeLang });
+    }
+  }
+
   // Said once, so a log that already exists is described rather than replayed
   // silently — coming back to a drawing you made on another device should be
   // visible, not mysterious.
+  // Enough for a view that has never seen the practice log to know what is
+  // being worked, and nothing more. No attempts, no notes, no history — the
+  // other side receives events from this session and there is nothing else on
+  // it to ask for.
   session.emitter.emit("session", {
     problemId: session.problem.id,
+    problemName: session.problem.name,
     difficulty: session.problem.difficulty,
+    statement: session.problem.statement || "",
+    url: problemUrl(session.problem) || "",
     plan: session.plan,
   });
 
@@ -1008,7 +1092,13 @@ export function renderReflect(root, store, actions) {
     const capturedCode = session.capturedCode;
     const capturedCodeLang = session.codeLang;
     const whiteboardDataUrl = session.capturedWhiteboardDataUrl;
-    const checklist = { ...session.checklist };
+    // What somebody watching ticked wins over what you ticked about yourself.
+    // That is the entire reason the interviewer view exists: these five were
+    // self-reported, after the fact, by the person being assessed, and an
+    // observation is better evidence than a memory of one.
+    const observed = session.observed || null;
+    const checklist = observed ? { ...session.checklist, ...observed } : { ...session.checklist };
+    const observedBy = observed ? "interviewer" : "self";
     const date = todayISO();
 
     const finish = () => {
@@ -1059,8 +1149,17 @@ export function renderReflect(root, store, actions) {
         if (isMock) {
           s.mocks.push({
             id: uid(), date, problemId: problem.id, outcome,
-            communicationRating: f.get("communicationRating") ? Number(f.get("communicationRating")) : null,
-            durationActualMin: solveMin, notes: "", checklist,
+            // Same precedence: a rating from the person watching, if there was
+            // one, rather than the one you gave yourself.
+            communicationRating: session.observedRating
+              ?? (f.get("communicationRating") ? Number(f.get("communicationRating")) : null),
+            durationActualMin: solveMin,
+            notes: (session.interviewerNotes || []).map((n) => n.text).join("\n"),
+            checklist,
+            // Which kind of evidence this is. A rate computed over a mix of
+            // self-reports and observations, with no way to tell them apart, is
+            // a number that quietly means two things.
+            observedBy,
           });
         }
       }, `Ledger: session — ${p.name}`);

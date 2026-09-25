@@ -1698,3 +1698,15 @@ input[type="checkbox"]:focus-visible {
    round the whole drawing. */
 .whiteboard-canvas:focus { outline: none; }
 .whiteboard-canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* The watcher's page. Two panes side by side on a laptop, stacked on a phone —
+   an interviewer may well be on one. */
+.interview-body { padding: 0 1rem 2rem; }
+.iv-panes { display: grid; gap: 1rem; grid-template-columns: 1fr; margin-top: 1rem; }
+@media (min-width: 900px) { .iv-panes { grid-template-columns: 1fr 1fr; } }
+.iv-pane { display: flex; flex-direction: column; min-width: 0; }
+.iv-pane h3 { margin: 0 0 0.6rem; font-size: 0.95rem; }
+.iv-board { height: 22rem; }
+.iv-board .whiteboard-canvas { width: 100%; height: 100%; }
+#iv-code { max-height: 22rem; overflow: auto; margin: 0; }
+.iv-problem .ws-statement { margin-top: 0.7rem; max-height: 12rem; overflow: auto; }

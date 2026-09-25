@@ -150,13 +150,10 @@ export function mockPhase(elapsedMin, totalMin = MOCK_MINUTES) {
   };
 }
 
-export const MOCK_CHECKLIST = [
-  "Clarified constraints & edge cases before coding",
-  "Stated approach out loud before typing",
-  "Narrated trade-offs while coding",
-  "Stated time/space complexity unprompted",
-  "Tested with an example before declaring done",
-];
+// Re-exported from rubric.js, which is its own module so the interviewer's
+// page can have it without importing the domain layer. Everything already
+// imports it from here.
+export { MOCK_CHECKLIST } from "./rubric.js";
 
 // How a session ended, in one table.
 //
