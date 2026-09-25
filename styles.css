@@ -529,6 +529,11 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
   padding: 0.3rem 0.7rem; border-left: 3px solid var(--warn);
   max-width: 24rem;
 }
+/* It is filled by the tick, which has not run yet on a first render and never
+   runs at all on the watcher's page until somebody connects. Without this the
+   rule that marks the phase is drawn with no phase beside it — an orange tick
+   floating in the header. */
+.mock-phase:empty { display: none; }
 .mock-phase-label {
   font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.05em; color: var(--warn);
