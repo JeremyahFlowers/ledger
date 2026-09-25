@@ -1624,3 +1624,8 @@ input[type="checkbox"]:focus-visible {
   margin: 0.7rem 0 0; padding-top: 0.6rem;
   border-top: 1px solid var(--border);
 }
+
+/* The footprint breakdown. A list rather than a run-on sentence: the point is
+   which line is the big one, and that is a comparison you make down a column. */
+.footprint-list { list-style: none; margin: 0.6rem 0; padding: 0; display: grid; gap: 0.35rem; }
+.footprint-list li { line-height: 1.45; }

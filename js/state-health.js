@@ -47,9 +47,17 @@ export function syncFootprint(state) {
 
   const total = bytes(state);
   const problems = state?.problems || [];
+  const allAttempts = problems.flatMap((p) => p.attempts || []);
+
   const statements = problems.reduce((n, p) => n + (p.statement ? bytes(p.statement) : 0), 0);
-  const code = problems.reduce(
-    (n, p) => n + (p.attempts || []).reduce((m, a) => m + (a.code ? bytes(a.code) : 0), 0), 0);
+  const code = allAttempts.reduce((n, a) => n + (a.code ? bytes(a.code) : 0), 0);
+  // The whole attempt records, code included. This is the one that actually
+  // dominates: measured on a realistic log at the limit, attempts are 76% of
+  // the file. The card used to name statements and code as "the two that grow
+  // without limit", which sent people to trim 11% and 21% while the thing
+  // underneath them went unmentioned.
+  const attempts = bytes(allAttempts);
+  const notes = allAttempts.reduce((n, a) => n + (a.soulStatement ? bytes(a.soulStatement) : 0), 0);
 
   return {
     total,
@@ -58,15 +66,20 @@ export function syncFootprint(state) {
     warn: total >= SYNC_LIMIT_BYTES * SYNC_WARN_FRACTION,
     over: total >= SYNC_LIMIT_BYTES,
     breakdown: {
+      attempts,
       statements,
+      // Kept alongside because they are the parts of an attempt a person can
+      // recognise and decide about; they are inside `attempts`, not beside it,
+      // which is why the card labels them as such rather than adding up.
       code,
-      // Everything that isn't one of the two unbounded contributors.
-      rest: Math.max(0, total - statements - code),
+      notes,
+      rest: Math.max(0, total - attempts - statements),
     },
     counts: {
       problems: problems.length,
       withStatement: problems.filter((p) => p.statement).length,
-      attempts: problems.reduce((n, p) => n + (p.attempts || []).length, 0),
+      attempts: allAttempts.length,
+      withCode: allAttempts.filter((a) => a.code).length,
     },
   };
 }

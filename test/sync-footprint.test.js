@@ -4,9 +4,14 @@
 // is a cliff, not a slope: the save that crosses it fails, and so does every
 // save after it, with a raw API error that gives no way to work out what to do.
 //
-// It was comfortable at ~640 bytes per problem. Analyze now writes pasted
-// statements into state at 1-3 KB each — the first thing here that grows
-// without bound — so the distance to the wall is worth measuring.
+// Written when pasted statements looked like the thing that would grow without
+// bound. Measured later on a realistic log at the limit, that was wrong: the
+// attempts are 76% of the file and statements are 11%. An attempt costs about
+// 430 bytes and you add them forever, which is the shape that matters — a
+// statement is written once per problem and then never again.
+//
+// scripts/measure.mjs is where those numbers come from, and re-running it is
+// how to check whether this comment is still true.
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
@@ -18,6 +23,11 @@ import {
 const problem = (over = {}) => ({
   id: "p1", name: "3Sum", number: 15, difficulty: "Medium", patternId: "two-pointers",
   status: STATUS_ACTIVE, box: 0, nextReviewDate: "2026-09-20", attempts: [], ...over,
+});
+
+const attempt = (over = {}) => ({
+  id: "a1", date: "2026-09-20", outcome: "solved-clean", patternGuess: "correct",
+  timeToInsightMin: 5, timeToSolveMin: 20, mistakeTags: [], soulStatement: "", ...over,
 });
 
 const state = (problems = []) => ({
@@ -50,11 +60,46 @@ describe("syncFootprint", () => {
     assert.equal(f.counts.attempts, 1);
   });
 
-  test("test_footprint_breakdownDoesNotExceedTheTotal", () => {
+  test("test_footprint_theThreeTopLevelLinesAccountForTheWholeFile", () => {
+    // attempts + statements + rest is the whole file. `code` and `notes` are
+    // parts of `attempts`, not a fourth and fifth share of it, which is why
+    // the card labels them as "of that" rather than adding them in.
     const f = syncFootprint(state([problem({ statement: "s".repeat(500) })]));
-    const sum = f.breakdown.statements + f.breakdown.code + f.breakdown.rest;
+    const sum = f.breakdown.attempts + f.breakdown.statements + f.breakdown.rest;
     assert.ok(sum <= f.total + 2, `${sum} vs ${f.total}`);
     assert.ok(f.breakdown.rest >= 0, "the remainder must never go negative");
+  });
+
+  test("test_footprint_codeAndNotesAreInsideAttemptsNotBesideThem", () => {
+    const f = syncFootprint(state([problem({
+      attempts: [attempt({ code: "c".repeat(400), soulStatement: "n".repeat(200) })],
+    })]));
+    assert.ok(f.breakdown.code < f.breakdown.attempts, "code is part of the attempt record");
+    assert.ok(f.breakdown.notes < f.breakdown.attempts);
+    assert.ok(f.breakdown.code + f.breakdown.notes <= f.breakdown.attempts);
+  });
+
+  test("test_footprint_attemptsAreReportedAsTheirOwnLine", () => {
+    // The card used to name statements and code as "the two that grow without
+    // limit". Measured on a realistic log at the limit, attempts are 76% of
+    // the file — so people were sent to trim 11% and 21% while the thing
+    // underneath them went unmentioned.
+    const heavy = state([problem({
+      statement: "s".repeat(200),
+      attempts: Array.from({ length: 30 }, (_, i) => attempt({ id: `a${i}` })),
+    })]);
+    const f = syncFootprint(heavy);
+    assert.ok(f.breakdown.attempts > f.breakdown.statements,
+      "attempts should dominate a log with thirty of them and one statement");
+  });
+
+  test("test_footprint_countsHowManyAttemptsCarryCode", () => {
+    // "500 KB of code across 30 attempts" reads as if all thirty have code.
+    const f = syncFootprint(state([problem({
+      attempts: [attempt({ id: "a1", code: "x" }), attempt({ id: "a2" })],
+    })]));
+    assert.equal(f.counts.withCode, 1);
+    assert.equal(f.counts.attempts, 2);
   });
 
   test("test_footprint_warnsBeforeTheWallNotAtIt", () => {

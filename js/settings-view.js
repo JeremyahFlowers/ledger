@@ -46,13 +46,20 @@ function footprintCardHtml(state) {
       ${f.over
         ? "Saves are failing until this comes down. Nothing is lost — it's all still on this device."
         : "Everything still saves normally; this is a heads-up while there's room to act."}</p>
-      <p class="muted small">
-        Problem statements: ${esc(formatBytes(f.breakdown.statements))} across ${f.counts.withStatement} problems ·
-        Saved code: ${esc(formatBytes(f.breakdown.code))} across ${f.counts.attempts} attempts ·
-        Everything else: ${esc(formatBytes(f.breakdown.rest))}
-      </p>
-      <p class="muted small">Statements and old code are the two that grow without limit. Removing a
-      problem you've finished with, or an attempt you don't need, takes its statement and code with it.</p>
+      <ul class="footprint-list muted small">
+        <li><strong>${esc(formatBytes(f.breakdown.attempts))}</strong> — your ${f.counts.attempts}
+          logged attempts, everything they hold. Of that,
+          ${esc(formatBytes(f.breakdown.code))} is saved code from ${f.counts.withCode} of them
+          and ${esc(formatBytes(f.breakdown.notes))} is what you wrote.</li>
+        <li><strong>${esc(formatBytes(f.breakdown.statements))}</strong> — problem statements,
+          across ${f.counts.withStatement} problems.</li>
+        <li><strong>${esc(formatBytes(f.breakdown.rest))}</strong> — everything else: the problems
+          themselves, settings, your streak, mocks and the journal.</li>
+      </ul>
+      <p class="muted small">Attempts are what grows, and they grow forever — each one costs about
+      the same whether or not you keep its code. Deleting a problem you have finished with takes its
+      attempts and its statement with it, which is the largest single thing you can do. An attempt
+      you don't need can go from that problem's history.</p>
     </div>`;
 }
 

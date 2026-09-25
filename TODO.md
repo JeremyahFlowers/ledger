@@ -43,7 +43,7 @@ measuring the two things everyone guesses about instead of checking.
   moves the cursor there.
   *Done:* navigating puts you at the top of what you navigated to.
 
-- [ ] **51. The sync footprint card names the wrong culprits.**
+- [x] **51. The sync footprint card names the wrong culprits.** _(1.7.0)_
   It calls statements and code "the two unbounded contributors". Measured on a
   realistic log at the limit: attempts are 76% of the file, of which code is
   21%, soul statements 15%, and the repeated JSON key names 21% — more than the
@@ -51,8 +51,8 @@ measuring the two things everyone guesses about instead of checking.
   sends you to trim the wrong thing.
   *Done:* it names what is actually large, from the same measurement.
 
-- [ ] **52. "Is it slow?" and "how big will this get?" need a throwaway script
-  to answer.**
+- [x] **52. "Is it slow?" and "how big will this get?" need a throwaway script
+  to answer.** _(1.7.0)_
   Both were answered this cycle by writing one and deleting it, which means the
   next person guesses. The answers are worth keeping: at 6,400 attempts a
   dashboard render costs about 30 ms of logic, which is fine, and a realistic
