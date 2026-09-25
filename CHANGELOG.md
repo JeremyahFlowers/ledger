@@ -28,6 +28,80 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 1.8.0 — 2026-09-24
+
+### Fixed, and it was live
+
+- **Saving a session charged the day budget for it twice.** Reported from use:
+  "when I submitted my soul statement, my time dropped from 30 minutes to +15
+  minutes." Nothing happened in between except pressing save, and 45 minutes is
+  exactly the session that had just been logged.
+
+  `budgetProgress` added the day clock's minutes to the minutes logged against
+  today's attempts. Its own comment gave the reasoning — a day where you logged
+  two problems and then ran the clock for twenty minutes has used both — which
+  is true, and which assumed the two can never be *the same* minutes. They are,
+  whenever the clock runs during a session you then save. So the budget was
+  wrong on the main path and right only on the incidental one.
+
+  A session saved while the clock was running now says so, and its minutes are
+  left to the clock that already counted them. A rep logged by hand for work
+  done on paper says so too, and still counts in full.
+
+### Two copies of the app, with separate data
+
+- **`main` on a tag ships the live site; a `dev` branch ships `/dev/`.** There
+  was one copy, deployed straight to the URL its owner practises on, sharing one
+  data file and one set of browser keys — so every change was tested in
+  production against real practice history, and a local build read the same
+  cached state as the real thing.
+
+  The channel comes from where the page is served, never a build step or a flag.
+  Localhost is always dev. Every stored key is namespaced, including the token,
+  so a dev build cannot reach a real log even in the same browser. A dev build
+  says so in the header and around the window, and registers no service worker.
+
+  A push to `main` now publishes nothing on its own. That is the point.
+
+### A timebox per question
+
+- **30 / 45 / 60 minutes by difficulty**, editable per difficulty, divided into
+  the phases the process actually has — medium is 5 read, 15 plan, 20 code, 5
+  reflect. The division is not proportional, because the process isn't:
+  understanding a problem takes about five minutes whether it is easy or hard,
+  and what scales with difficulty is how long you should be willing to plan
+  before committing to code.
+
+  Guardrails, not gates. Nothing stops when a phase ends; the workspace says
+  where you are, nudges a minute before each boundary while there is still time
+  to act on it, and counts overrun rather than hiding it.
+
+- **The layout follows the interview, not the editor.** Reading leads with the
+  problem; planning gives the whiteboard the room and opens it if it was closed;
+  coding gives the editor the room and keeps the board legible beside it,
+  because referencing the diagram is the reason for having drawn one. One drag
+  of a splitter and the app stops moving panes for the rest of the session.
+
+### Cross-device handoff
+
+- **Draw on the tablet, open the laptop, the drawing is there** — and back
+  again. A session is now an append-only log of identified events, persisted to
+  your own repo. Stage 1 of `docs/realtime-architecture.md`; the live
+  sub-second channel is stage 2.
+
+### Cycle 7
+
+- **A problem you keep failing is noticed.** Three failed attempts in a row used
+  to reset it to box 0 so it came back tomorrow, forever, with nothing saying
+  anything. The dashboard now says so and offers the pattern to read and the
+  code you wrote last time, with "Try it anyway" plain and last.
+- **One outcome table, one difficulty order, one clean-solve question.** Three
+  hand-written copies that had stopped agreeing with the originals — which
+  surfaced that `.pill-bad` never existed, because the copy had quietly
+  downgraded a failure to a warning.
+
+---
+
 ## 1.7.0 — 2026-09-24
 
 Cycle 6 of TODO.md, found by rendering a brand-new account and reading what it
