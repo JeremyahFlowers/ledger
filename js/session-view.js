@@ -343,7 +343,7 @@ export function renderWorkspace(root, store, actions) {
             <button type="button" class="btn btn-ghost btn-xs" id="ws-close-board"
                     title="Minimize whiteboard" aria-label="Minimize whiteboard">&minus;</button>
           </header>
-          <div class="ws-pane-body ws-pane-body-flush"><div id="ws-board-host"></div></div>
+          <div class="ws-pane-body ws-pane-body-flush"><div id="ws-board-host" class="board-host"></div></div>
         </section>
       </div>
     </div>`;

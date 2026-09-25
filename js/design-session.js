@@ -82,8 +82,13 @@ export function renderDesignSession(root, store, actions) {
   if (!session.plan) session.plan = designPlan(store.state, p.difficulty);
 
   if (!session.startedAt) {
+    // session-card is the same reading column the coding pre-start uses. A
+    // bare card on a page-full view has no max width and no padding, so this
+    // ran the full width of the window with its text against the left edge —
+    // a page for reading before the clock, laid out like the workspace that
+    // comes after it.
     root.innerHTML = `
-      <div class="card">
+      <div class="card session-card">
         <h2>${esc(p.name)}</h2>
         <p class="muted">${esc(p.prompt)}</p>
         <p class="muted small">Clarify the requirements out loud, estimate the scale, then draw.
@@ -141,7 +146,7 @@ export function renderDesignSession(root, store, actions) {
           </div>
         </section>
         <section class="ws-pane ds-board-pane">
-          <div class="ws-pane-body ws-pane-body-flush"><div id="ds-board"></div></div>
+          <div class="ws-pane-body ws-pane-body-flush"><div id="ds-board" class="board-host"></div></div>
         </section>
       </div>
     </div>`;

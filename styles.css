@@ -593,10 +593,16 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 .btn-xs { padding: 0.15rem 0.5rem; font-size: 0.75rem; min-height: 0; }
 
 /* The standalone Whiteboard page sizes its canvas to a fixed 360px, which is
-   right for a scratchpad sitting in a column of cards. In the workspace the
-   board is a full pane, so it fills the height it's been given instead. */
-#ws-board-host { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0.5rem; }
-#ws-board-host .whiteboard-canvas { flex: 1; height: auto; min-height: 0; }
+   right for a scratchpad sitting in a column of cards. Where the board is a
+   whole pane — the coding workspace and the design session — it fills the
+   height it has been given instead.
+   One rule for both, because there were two and they drifted: the design
+   session's copy gave the canvas `height: 100%` of the host without making the
+   host a column, so the toolbar and a full-height canvas together overflowed
+   the pane. The pane scrolls, so the first stroke near the top scrolled the
+   toolbar out of sight and there was no way to change tool or colour again. */
+.board-host { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0.5rem; }
+.board-host .whiteboard-canvas { flex: 1; width: 100%; height: auto; min-height: 0; }
 
 /* Side-by-side panes need width. Below this the workspace stacks: the statement
    and code become full-width rows you scroll between, and dragging a splitter
@@ -619,7 +625,7 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
      takes the column and leaves the editor a sliver. */
   #ws-pane-code .ws-pane-body { min-height: 55vh; }
   #ws-pane-statement .ws-pane-body { max-height: 40vh; }
-  #ws-board-host { min-height: 50vh; }
+  .board-host { min-height: 50vh; }
 }
 .session-clock-group { display: flex; flex-direction: column; gap: 0.1rem; }
 .session-clock {
@@ -1813,8 +1819,6 @@ input[type="checkbox"]:focus-visible {
 .ds-panes { display: flex; flex: 1; min-height: 0; gap: 0; }
 .ds-brief { flex: 0 0 22rem; max-width: 40%; border-right: 1px solid var(--border); overflow: auto; }
 .ds-board-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.ds-board-pane #ds-board { flex: 1; min-height: 0; }
-.ds-board-pane #ds-board .whiteboard-canvas { width: 100%; height: 100%; }
 @media (max-width: 720px) {
   .ds-panes { flex-direction: column; }
   .ds-brief { flex: 0 0 auto; max-width: none; max-height: 40%; border-right: 0; border-bottom: 1px solid var(--border); }
