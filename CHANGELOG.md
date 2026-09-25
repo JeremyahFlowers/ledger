@@ -28,6 +28,59 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 1.7.0 — 2026-09-24
+
+Cycle 6 of TODO.md, found by rendering a brand-new account and reading what it
+says, and by measuring the two things everyone guesses about instead.
+
+### What a new account is told
+
+- **A problem you have never practised is new, not neglected.** The refresher
+  queue banded by days-since-practice, which is null when there is no history,
+  and null fell into the oldest bucket. So the first screen a new user opened
+  said they were "a month or more" behind on twenty-three problems they had
+  never seen, in red — the deadline framing this app went out of its way to
+  remove, surviving in the one view named after removing it. There is now a
+  fourth band and it leads, because on a new account it is the whole list and
+  it is where you start.
+
+- **Pattern mastery says what it will measure, before it can measure it.** Nine
+  columns, of which six are an em dash until something is logged: twenty-three
+  rows of nothing formatted as data, on the page whose job is to say what to
+  focus on next. Once some patterns have been worked it also names how many are
+  unranked, because an untouched pattern is not a weak one and without the
+  sentence a bottom-of-table position reads as a verdict.
+
+### Measured, not assumed
+
+- **The size warning was blaming the wrong things.** It called statements and
+  code "the two that grow without limit". Measured on a realistic log at the
+  limit: attempts are 80% of the file, the repeated JSON key names inside them
+  are 22%, saved code 21%, and statements 7%. It now leads with attempts and
+  says the one thing that actually helps.
+
+- **`npm run measure`** answers "is it slow?" and "how big does this get?".
+  Both had been answered by writing a throwaway script and deleting it. The
+  answers: 6,400 attempts cost about 18 ms of logic per dashboard render, so
+  there is no performance problem to solve; and a realistic log fits at 300
+  problems / 1,800 attempts and is over at 400 / 3,200 — two or three years
+  away, and a hard wall rather than a slope.
+
+### Keyboard and screen reader
+
+- **Navigating puts the cursor at the top of what you navigated to.** The app
+  announced each new view into a live region and never moved focus there, so
+  after `g q` the cursor sat on a nav button the re-render had replaced, focus
+  fell to `<body>`, and the next Tab started from the top of the document.
+  `#view-root` had carried `tabindex="-1"` for exactly this since it was
+  written. It never steals focus from a field being typed in.
+
+- **The plant is tested as drawn.** Which found that an unrecognised vitality
+  fell back for the palette but not for the class name — a correct-looking
+  plant in a frame that had silently lost its colour.
+
+---
+
 ## 1.6.0 — 2026-09-24
 
 Cycle 5 of TODO.md, found by probing the app rather than reading it. The first
