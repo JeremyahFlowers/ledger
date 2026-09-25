@@ -35,7 +35,7 @@ measuring the two things everyone guesses about instead of checking.
 
 ## P1 — things measured rather than assumed
 
-- [ ] **50. Keyboard focus doesn't move when you navigate.**
+- [x] **50. Keyboard focus doesn't move when you navigate.** _(1.7.0)_
   `g q` re-renders the page and leaves focus on a nav button that no longer
   exists, so it falls to `<body>` and the next Tab starts from the top of the
   page. `#view-root` carries `tabindex="-1"` for precisely this and is never

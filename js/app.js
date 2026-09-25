@@ -119,12 +119,45 @@ function currentViewName() {
 }
 
 let lastAnnounced = null;
+let viewChanged = false;
 function announceView() {
-  if (!announcer) return;
   const name = currentViewName();
   if (name === lastAnnounced) return; // re-renders are not navigations
   lastAnnounced = name;
-  announcer.textContent = name;
+  if (announcer) announcer.textContent = name;
+  // Recorded here and acted on after the render: focusing an element whose
+  // contents are about to be replaced hands a screen reader the old page.
+  viewChanged = true;
+}
+
+/**
+ * Put the cursor at the top of the view you just navigated to.
+ *
+ * The live region announced the new page and nothing moved focus there, so
+ * after `g q` the cursor was still on a nav button that the re-render had
+ * replaced — which drops focus to <body>, and the next Tab starts from the top
+ * of the document. Every navigation cost a keyboard user a walk back through
+ * the header, the search box and both tiers of nav. `#view-root` has carried
+ * `tabindex="-1"` for exactly this since it was written and was never focused.
+ *
+ * Guarded three ways, because focus is the one thing more annoying to get
+ * wrong than to leave alone:
+ *
+ *  * Only on a real navigation. `announceView` already returns early when the
+ *    view name is unchanged, so a sync landing or the day clock ticking cannot
+ *    yank the cursor out of a half-typed field.
+ *  * Never over a typing cursor. A view can re-render while a form is open,
+ *    and stealing focus mid-sentence is worse than not moving it at all.
+ *  * `preventScroll`, because the render has already put the page where it
+ *    belongs and focusing must not fight it.
+ */
+function moveFocusToView() {
+  if (!viewChanged || !root) return;
+  viewChanged = false;
+  const active = document.activeElement;
+  if (active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) return;
+  if (active && active.isContentEditable) return;
+  root.focus({ preventScroll: true });
 }
 
 const actions = {
@@ -459,6 +492,7 @@ function renderAll() {
   // here for the same reason the navigation buttons are — a list is markup any
   // view can emit, and it should not need each one to remember.
   root.querySelectorAll(".queue-list").forEach((list) => wireListRows(list));
+  moveFocusToView();
   renderPlantWidget();
   applyGrowthAnimation();
 }
