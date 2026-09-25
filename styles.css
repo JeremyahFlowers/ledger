@@ -1677,3 +1677,24 @@ input[type="checkbox"]:focus-visible {
    is two digits and a full-width field invites a paragraph. */
 .timebox-table td { vertical-align: middle; }
 .input-xs { max-width: 5rem; }
+
+/* The tool strip. Icon buttons rather than labels: seven tools with words
+   would wrap on a phone and push the canvas off the screen, and every one of
+   them has a keyboard letter in its tooltip for the people who will use it
+   every day. */
+.wb-tools { display: flex; gap: 2px; flex-wrap: wrap; }
+.wb-tool {
+  width: 1.9rem; height: 1.9rem; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid transparent; border-radius: 4px;
+  background: transparent; color: var(--text-muted);
+  font-size: 0.95rem; line-height: 1; cursor: pointer;
+}
+.wb-tool:hover { color: var(--text); border-color: var(--border); }
+.wb-tool[aria-pressed="true"] {
+  background: var(--accent); border-color: var(--accent); color: #0c1512;
+}
+/* The canvas takes focus so its shortcuts work, and says so without a ring
+   round the whole drawing. */
+.whiteboard-canvas:focus { outline: none; }
+.whiteboard-canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }

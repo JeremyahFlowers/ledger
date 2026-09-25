@@ -204,3 +204,54 @@ export function cellLabels(el) {
   }
   return out;
 }
+
+/**
+ * An undo stack of reversible steps.
+ *
+ * Here rather than inside the canvas because the bug it had was pure logic and
+ * a canvas made it invisible: undo pushed the inverse of the inverse, so redo
+ * re-applied the *undo* — putting a deleted box back and then adding a second
+ * copy of it. Nothing about that needed a drawing surface to go wrong, and
+ * nothing about it needs one to be checked.
+ *
+ * `recording` is the whole mechanism. A reversal calls the same add/remove
+ * functions an ordinary action does, so without suppressing it each undo would
+ * record itself as a new step and the stack would never empty.
+ */
+export function createHistory() {
+  const past = [];
+  const future = [];
+  let recording = true;
+
+  const run = (fn) => {
+    recording = false;
+    try { fn(); } finally { recording = true; }
+  };
+
+  return {
+    /** Remember a step. Ignored while undoing or redoing. */
+    record(entry) {
+      if (!recording) return;
+      past.push(entry);
+      // A new action makes the redo stack meaningless: you cannot replay a
+      // future that no longer follows from here.
+      future.length = 0;
+    },
+    undo() {
+      const entry = past.pop();
+      if (!entry) return false;
+      run(entry.undo);
+      future.push(entry);
+      return true;
+    },
+    redo() {
+      const entry = future.pop();
+      if (!entry) return false;
+      run(entry.redo);
+      past.push(entry);
+      return true;
+    },
+    get canUndo() { return past.length > 0; },
+    get canRedo() { return future.length > 0; },
+  };
+}

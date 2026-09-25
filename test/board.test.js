@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import {
   BOARD_WIDTH, ELEMENT_KINDS, HIT_SLOP, makeElement, toBoard, toScreen,
   elementBounds, hitsElement, elementAt, movedBy, snapToAngle, cellLines, cellLabels,
+  createHistory,
 } from "../js/board.js";
 
 const el = (kind, points, over = {}) =>
@@ -232,5 +233,115 @@ describe("the kinds", () => {
     for (const kind of ["pen", "line", "arrow", "rect", "ellipse", "text", "cells"]) {
       assert.ok(ELEMENT_KINDS[kind], `no ${kind} tool`);
     }
+  });
+});
+
+describe("the undo stack", () => {
+  // Extracted from the canvas because its one real bug was pure logic that a
+  // drawing surface made invisible: undo pushed the inverse of the inverse, so
+  // redo re-applied the *undo* — putting a deleted box back and then adding a
+  // second copy of it. Caught by drawing two shapes in a browser and counting.
+
+  /** A tiny world the history can act on, standing in for the element list. */
+  const world = () => {
+    const items = [];
+    const h = createHistory();
+    return {
+      items, history: h,
+      add(x) {
+        items.push(x);
+        h.record({ undo: () => this.remove(x), redo: () => this.add(x) });
+      },
+      remove(x) {
+        const i = items.indexOf(x);
+        if (i < 0) return;
+        items.splice(i, 1);
+        h.record({ undo: () => this.add(x), redo: () => this.remove(x) });
+      },
+    };
+  };
+
+  test("test_history_undoReversesTheLastAction", () => {
+    const w = world();
+    w.add("a"); w.add("b");
+    w.history.undo();
+    assert.deepEqual(w.items, ["a"]);
+  });
+
+  test("test_history_redoReplaysItWithoutDuplicating", () => {
+    // The bug, exactly: this used to leave ["a", "b", "b"].
+    const w = world();
+    w.add("a"); w.add("b");
+    w.history.undo();
+    w.history.redo();
+    assert.deepEqual(w.items, ["a", "b"]);
+  });
+
+  test("test_history_undoingADeletionDoesNotThenDeleteItAgain", () => {
+    const w = world();
+    w.add("a");
+    w.remove("a");
+    w.history.undo();
+    assert.deepEqual(w.items, ["a"]);
+    w.history.redo();
+    assert.deepEqual(w.items, []);
+  });
+
+  test("test_history_aReversalDoesNotBecomeAStepOfItsOwn", () => {
+    // Without suppressing recording, each undo records itself and the stack
+    // never empties — you can press undo forever and nothing more happens.
+    const w = world();
+    w.add("a");
+    w.history.undo();
+    assert.equal(w.history.canUndo, false);
+  });
+
+  test("test_history_undoAllTheWayEmptiesTheBoard", () => {
+    const w = world();
+    for (const x of ["a", "b", "c"]) w.add(x);
+    while (w.history.undo());
+    assert.deepEqual(w.items, []);
+  });
+
+  test("test_history_redoAllTheWayPutsItBack", () => {
+    const w = world();
+    for (const x of ["a", "b", "c"]) w.add(x);
+    while (w.history.undo());
+    while (w.history.redo());
+    assert.deepEqual(w.items, ["a", "b", "c"]);
+  });
+
+  test("test_history_aNewActionDiscardsTheRedoStack", () => {
+    // You cannot replay a future that no longer follows from here.
+    const w = world();
+    w.add("a"); w.add("b");
+    w.history.undo();
+    w.add("c");
+    assert.equal(w.history.canRedo, false);
+    w.history.redo();
+    assert.deepEqual(w.items, ["a", "c"]);
+  });
+
+  test("test_history_undoOnAnEmptyStackIsHarmless", () => {
+    const h = createHistory();
+    assert.equal(h.undo(), false);
+    assert.equal(h.redo(), false);
+  });
+
+  test("test_history_reportsWhetherThereIsAnythingToUndo", () => {
+    const h = createHistory();
+    assert.equal(h.canUndo, false);
+    h.record({ undo() {}, redo() {} });
+    assert.equal(h.canUndo, true);
+  });
+
+  test("test_history_recordingResumesEvenIfAStepThrows", () => {
+    // A broken step must not silently disable the whole undo stack for the
+    // rest of the session.
+    const h = createHistory();
+    h.record({ undo: () => { throw new Error("boom"); }, redo() {} });
+    assert.throws(() => h.undo());
+    h.record({ undo() {}, redo() {} });
+    assert.equal(h.canUndo, true, "recording never came back on");
   });
 });

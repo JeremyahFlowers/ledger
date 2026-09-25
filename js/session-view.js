@@ -442,10 +442,11 @@ export function renderWorkspace(root, store, actions) {
     // board shouldn't pay for a canvas and its listeners.
     if (shown && !session.whiteboardCtl) {
       session.whiteboardCtl = createWhiteboard(boardHost, {
-        // Each completed stroke becomes an event. The board does not know that;
-        // it reports what was drawn and this decides where it goes.
-        onStroke: (stroke) => session.emitter?.emit("stroke", stroke),
-        onUndo: (strokeId) => session.emitter?.emit("stroke-undo", { strokeId }),
+        // Each change becomes an event. The board does not know that; it
+        // reports what happened and this decides where it goes.
+        onAdd: (el) => session.emitter?.emit("element", el),
+        onUpdate: (el) => session.emitter?.emit("element-move", el),
+        onRemove: (id) => session.emitter?.emit("element-del", { id }),
         onClear: () => session.emitter?.emit("board-clear"),
       });
       // A drawing recovered from a checkpoint is replayed onto the fresh

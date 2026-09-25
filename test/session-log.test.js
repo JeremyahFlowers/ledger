@@ -131,6 +131,72 @@ describe("invariant 3: a stroke that reached the durable channel is never lost",
   });
 });
 
+describe("elements, and the strokes that came before them", () => {
+  // The board grew from freehand-only to seven kinds of element. `stroke` is
+  // kept because logs written by 1.8.0 contain them, and a reducer that forgets
+  // them is a reducer that loses somebody's drawing.
+
+  const element = (seq, id, over = {}, at = 1000 + seq, device = "d1") =>
+    ev(seq, "element", { id, kind: "rect", color: "#fff", width: 3,
+      points: [{ x: 0, y: 0 }, { x: 10, y: 10 }], ...over }, at, device);
+
+  test("test_log_aStrokeFromAnOlderLogStillReplays", () => {
+    const s = reduce([ev(0, "stroke", { color: "#fff", width: 3, points: [{ x: 1, y: 1 }] }, 100)]);
+    assert.equal(s.strokes.length, 1);
+  });
+
+  test("test_log_anElementIsAddedLikeAStroke", () => {
+    assert.equal(reduce([element(0, "a")]).strokes.length, 1);
+  });
+
+  test("test_log_reAddingTheSameElementReplacesItRatherThanDuplicating", () => {
+    // Undo then redo emits the element again. Appending would leave two of it.
+    const s = reduce([element(0, "a"), element(1, "a", { color: "#f00" }, 2000)]);
+    assert.equal(s.strokes.length, 1);
+    assert.equal(s.strokes[0].color, "#f00");
+  });
+
+  test("test_log_movingKeepsTheElementsPlaceInTheStack", () => {
+    // Re-appending a moved element would silently bring it to the front, which
+    // is a different drawing when things overlap.
+    const s = reduce([
+      element(0, "a"), element(1, "b"),
+      ev(2, "element-move", { id: "a", points: [{ x: 90, y: 90 }, { x: 99, y: 99 }] }, 3000),
+    ]);
+    assert.deepEqual(s.strokes.map((e) => e.id), ["a", "b"]);
+    assert.equal(s.strokes[0].points[0].x, 90);
+  });
+
+  test("test_log_movingAnElementThatIsGoneDoesNothing", () => {
+    // It can arrive after the deletion that removed it.
+    const s = reduce([
+      element(0, "a"),
+      ev(1, "element-del", { id: "a" }, 2000),
+      ev(2, "element-move", { id: "a", points: [{ x: 5, y: 5 }] }, 3000),
+    ]);
+    assert.deepEqual(s.strokes, []);
+  });
+
+  test("test_log_deletionTakesEitherSpelling", () => {
+    // `stroke-undo` carried a strokeId; `element-del` carries an id. Old logs
+    // and new ones both have to work.
+    assert.deepEqual(reduce([element(0, "a"), ev(1, "stroke-undo", { strokeId: "a" }, 2000)]).strokes, []);
+    assert.deepEqual(reduce([element(0, "a"), ev(1, "element-del", { id: "a" }, 2000)]).strokes, []);
+  });
+
+  test("test_log_everyElementKindSurvivesTheRoundTrip", () => {
+    const kinds = ["pen", "line", "arrow", "rect", "ellipse", "text", "cells"];
+    const log = kinds.map((kind, i) =>
+      element(i, `e${i}`, { kind, text: "i", cols: 8, rows: 1 }, 1000 + i));
+    assert.deepEqual(reduce(log).strokes.map((e) => e.kind), kinds);
+  });
+
+  test("test_log_aTextElementKeepsItsText", () => {
+    const s = reduce([element(0, "t", { kind: "text", text: "left", points: [{ x: 5, y: 5 }] })]);
+    assert.equal(s.strokes[0].text, "left");
+  });
+});
+
 describe("invariant 4: the interviewer's view comes from events alone", () => {
   test("test_log_everythingAViewNeedsIsInTheReducedState", () => {
     const log = [

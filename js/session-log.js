@@ -24,8 +24,11 @@ export const BOARD_KINDS = new Set(["stroke", "stroke-undo", "board", "board-cle
 export const KINDS = [
   "session",      // what is being worked: problem, difficulty, the timebox plan
   "timer",        // started / paused / resumed
-  "stroke",       // one whiteboard stroke; the event's own id is the stroke's id
+  "stroke",       // a freehand stroke — what 1.8.0 wrote, kept so old logs replay
   "stroke-undo",  // remove one stroke by id
+  "element",      // any board element: pen, arrow, box, circle, text, array
+  "element-move", // the same element, somewhere else or a different colour
+  "element-del",  // remove one element by id
   "board",        // a compaction: these strokes, and what they absorbed
   "board-clear",
   "code",         // a snapshot of the editor, from whoever holds the lease
@@ -160,11 +163,27 @@ export function reduce(events) {
         break;
 
       case "stroke":
-        state.strokes.push({ id: event.id, ...p });
+      case "element": {
+        // Add, or replace in place if it is already there. Replacing rather
+        // than appending matters for a redo: undoing and redoing the same
+        // element must not leave two of it.
+        const el = { id: event.id, ...p };
+        const at = state.strokes.findIndex((s) => s.id === el.id);
+        if (at >= 0) state.strokes[at] = el; else state.strokes.push(el);
         break;
+      }
+
+      case "element-move": {
+        // Moving keeps an element's place in the stack. Re-appending it would
+        // silently bring it to the front, which is a different drawing.
+        const at = state.strokes.findIndex((s) => s.id === p.id);
+        if (at >= 0) state.strokes[at] = { ...state.strokes[at], ...p };
+        break;
+      }
 
       case "stroke-undo":
-        state.strokes = state.strokes.filter((s) => s.id !== p.strokeId);
+      case "element-del":
+        state.strokes = state.strokes.filter((s) => s.id !== (p.strokeId ?? p.id));
         break;
 
       case "board":
