@@ -302,13 +302,23 @@ you did alone, with better provenance.
 The order things get built. Each stage is usable on its own; none of them
 require revisiting the ones before.
 
-1. **Event log and reducer**, with the durable channel only. Delivers handoff:
-   tablet → laptop → tablet, a few seconds on switch. No new dependency, no
-   third party, no server.
-2. **The fast channel between your own devices**, WebRTC signalled through your
-   repo. Sub-second between tablet and laptop. Still nobody else involved.
-3. **The interviewer view and the rubric**, and the relay that introduces them.
-   This is the mock interview feature.
+1. ~~**Event log and reducer**, with the durable channel only.~~ **Done.**
+   Handoff works: tablet → laptop → tablet, a few seconds on switch, through
+   your own repo. No new dependency, no third party, no server.
+2. ~~**The fast channel.**~~ **Done**, and not as originally written. The plan
+   said WebRTC signalled through the repo, keeping the solo case free of any
+   third party. That was dropped once the relay had to exist anyway for the
+   interviewer — two signalling paths for one job is the duplication this
+   codebase keeps deleting, and the repo-as-signalling trick was pleasing
+   rather than useful. Measured at 132ms end to end through the relay.
+3. **The interviewer view and the rubric.** The mock interview feature: a
+   read-mostly view joined by a room code, showing the statement, the board and
+   the code live, with the five verbalization behaviours as checkboxes the
+   interviewer ticks. Next.
+4. **A WebRTC upgrade**, so that once two peers are connected the strokes go
+   directly between them and only the handshake crosses the relay. An
+   optimisation and a privacy improvement, not a prerequisite for anything —
+   which is why it is now last rather than second.
 
 Stage 1 is the foundation and not a stopgap: stages 2 and 3 add a transport to
 it and change nothing about how state is represented.
