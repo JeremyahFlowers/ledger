@@ -26,7 +26,7 @@ measuring the two things everyone guesses about instead of checking.
   *Done:* never practised reads as new, and leads, because those are the ones
   to start with.
 
-- [ ] **49. Pattern mastery on day one is twenty-three rows of dashes.**
+- [x] **49. Pattern mastery on day one is twenty-three rows of dashes.** _(1.7.0)_
   Every column — attempts, clean-solve rate, trend, recall, time to insight,
   top mistake — renders an em dash until you have practised. A screenful of
   nothing, formatted as data, on a page whose stated job is to tell you what to

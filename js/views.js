@@ -478,11 +478,38 @@ export function renderLog(root, store, actions) {
 export function renderPatterns(root, store, actions) {
   const state = store.state;
   const stats = patternStats(state).sort((a, b) => (a.solvedCleanRate ?? 1) - (b.solvedCleanRate ?? 1));
+  const worked = stats.filter((s) => s.attempts > 0);
+
+  // Before any practice this table is twenty-three rows of em dashes: a
+  // screenful of nothing formatted as data, on the page whose stated job is to
+  // say what to focus on next. It cannot do that job yet, so it says so and
+  // says what starts it, rather than implying the answer is "everything,
+  // equally, at zero".
+  if (!worked.length) {
+    root.innerHTML = `
+      <div class="card">
+        <h2>Pattern mastery</h2>
+        ${emptyState("patterns", "Nothing measured yet",
+          "This ranks the " + stats.length + " patterns weakest-first once there is something to rank "
+          + "them by — clean-solve rate, how often you name the pattern cold, and how long it takes you "
+          + "to see the approach. One logged session starts it.",
+          { tab: "queue", label: "Pick something to practise" })}
+        <p class="muted small">Until then the patterns themselves are worth reading, and the topic
+        pages explain each one from scratch.</p>
+        <button class="btn btn-ghost btn-sm" data-goto="topics">Read the patterns</button>
+      </div>`;
+    wireTopicRows(root, actions);
+    return;
+  }
+
   root.innerHTML = `
     <div class="card">
       <h2>Pattern mastery</h2>
       <p class="muted">Weakest first — this is what "next 2 weeks of focus" should be picked from. Click a
       pattern to open its Topics page.</p>
+      ${worked.length < stats.length ? `<p class="muted small">${stats.length - worked.length} of
+        ${stats.length} patterns have nothing logged against them yet and sit at the bottom
+        unranked — an untouched pattern is not a weak one.</p>` : ""}
       <div class="table-wrap">
       <table class="table">
         <thead><tr><th>Mastery</th><th>Pattern</th><th># problems</th><th>Attempts</th><th>Clean-solve rate</th><th>Trend</th><th>ID'd correctly</th><th>Avg time to insight</th><th>Top mistake</th></tr></thead>
@@ -505,6 +532,10 @@ export function renderPatterns(root, store, actions) {
       </div>
     </div>`;
 
+  wireTopicRows(root, actions);
+}
+
+function wireTopicRows(root, actions) {
   root.querySelectorAll("[data-open-topic]").forEach((row) => {
     row.addEventListener("click", () => {
       showTopic(row.dataset.openTopic);
