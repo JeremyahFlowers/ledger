@@ -9,6 +9,67 @@ one-line title is not enough to pick the work up again a week later.
 
 ---
 
+# Cycle 6
+
+Found by rendering a brand-new account and reading what it says, and by
+measuring the two things everyone guesses about instead of checking.
+
+## P0 — what a new account is told
+
+- [x] **48. A new account is told 23 problems are "a month or more" overdue.** _(1.7.0)_
+  The refresher queue bands problems by how long since you practised them, and
+  puts never-practised ones in the oldest band. `refresherStatus` already
+  returns a `new` tone for exactly this case and the queue ignores it, reading
+  only `daysSince`. So the first screen a new user opens says they are a month
+  behind on twenty-three problems they have never seen — the deadline framing
+  this app specifically removed, surviving in the one view named after it.
+  *Done:* never practised reads as new, and leads, because those are the ones
+  to start with.
+
+- [ ] **49. Pattern mastery on day one is twenty-three rows of dashes.**
+  Every column — attempts, clean-solve rate, trend, recall, time to insight,
+  top mistake — renders an em dash until you have practised. A screenful of
+  nothing, formatted as data, on a page whose stated job is to tell you what to
+  focus on next.
+  *Done:* it says what it will be able to tell you, and what starts it.
+
+## P1 — things measured rather than assumed
+
+- [ ] **50. Keyboard focus doesn't move when you navigate.**
+  `g q` re-renders the page and leaves focus on a nav button that no longer
+  exists, so it falls to `<body>` and the next Tab starts from the top of the
+  page. `#view-root` carries `tabindex="-1"` for precisely this and is never
+  focused. The live region announces the new view to a screen reader; nothing
+  moves the cursor there.
+  *Done:* navigating puts you at the top of what you navigated to.
+
+- [ ] **51. The sync footprint card names the wrong culprits.**
+  It calls statements and code "the two unbounded contributors". Measured on a
+  realistic log at the limit: attempts are 76% of the file, of which code is
+  21%, soul statements 15%, and the repeated JSON key names 21% — more than the
+  code. Statements are 11% of the whole file. When the warning does fire it
+  sends you to trim the wrong thing.
+  *Done:* it names what is actually large, from the same measurement.
+
+- [ ] **52. "Is it slow?" and "how big will this get?" need a throwaway script
+  to answer.**
+  Both were answered this cycle by writing one and deleting it, which means the
+  next person guesses. The answers are worth keeping: at 6,400 attempts a
+  dashboard render costs about 30 ms of logic, which is fine, and a realistic
+  log crosses GitHub's 1 MB single-file limit at around 300 problems and 1,800
+  attempts, which is two or three years away and a hard wall when it arrives.
+  *Done:* both are one command, and the numbers are written down where the
+  decision would be made.
+
+## P2
+
+- [ ] **53. The plant has no tests.**
+  It is the app's headline judgment and the thing most likely to be seen every
+  day. `computePlantState` is tested thoroughly; `plantSvg`, which turns that
+  into what you actually look at, is not tested at all — including the
+  decorative-vs-labelled distinction that was already got wrong once.
+  *Done:* the drawing is covered, especially where it has been wrong before.
+
 # Cycle 5
 
 Found by probing the app rather than reading it — the first item is a real

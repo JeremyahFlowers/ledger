@@ -19,6 +19,7 @@
 import {
   todayISO, applyOutcome, activateProblem, dueProblems, planToday, allAttempts, patternStats,
   updateStreak, systemDesignUnlock, uid, MISTAKE_TAGS, activityByDate, patternTrend,
+  refresherBands,
   MOCK_CHECKLIST, mockReview,
   recommendSession, computePlantState, streakGraceInfo, refresherStatus, STATUS_ACTIVE,
 } from "./logic.js";
@@ -237,31 +238,28 @@ export function renderQueue(root, store, actions) {
   const state = store.state;
   const due = dueProblems(state);
   const today = todayISO();
-  // Grouped by how long it's been, not by how late anything is. The bands are
-  // the same underlying schedule; only what they're called changed.
-  const buckets = { recent: 0, aWhile: 0, longest: 0 };
-  due.forEach((p) => {
-    const { daysSince } = refresherStatus(p, today);
-    if (daysSince == null || daysSince >= 30) buckets.longest++;
-    else if (daysSince >= 14) buckets.aWhile++;
-    else buckets.recent++;
-  });
+  // Banded by how long it has been, not by how late anything is — and a
+  // problem you have never practised is in its own band rather than in the
+  // oldest one, which is what a null gap used to fall into.
+  const bands = refresherBands(due, today).filter((b) => b.count > 0);
   const total = due.length || 1;
+  const unpractised = bands.find((b) => b.key === "fresh")?.count || 0;
+
   root.innerHTML = `
     <div class="card">
       <h2>Ready for a refresher</h2>
-      <p class="muted">Whatever you haven't looked at in a while, the ones you find hardest first.
-      There's no deadline on any of this — it's here when you want it.</p>
+      <p class="muted">${unpractised === due.length && due.length
+        ? `Everything here is new — you haven't worked any of these yet. Start anywhere;
+           the schedule builds itself from what you do.`
+        : `Whatever you haven't looked at in a while, the ones you find hardest first.
+           There's no deadline on any of this — it's here when you want it.`}</p>
       ${due.length > 0 ? `
       <div class="backlog-bar">
-        <div class="backlog-seg" style="width:${(buckets.recent / total) * 100}%; background:var(--accent)"></div>
-        <div class="backlog-seg" style="width:${(buckets.aWhile / total) * 100}%; background:var(--warn)"></div>
-        <div class="backlog-seg" style="width:${(buckets.longest / total) * 100}%; background:var(--bad)"></div>
+        ${bands.map((b) => `<div class="backlog-seg"
+          style="width:${(b.count / total) * 100}%; background:${b.color}"></div>`).join("")}
       </div>
       <div class="backlog-legend">
-        <span style="--_c:var(--accent)">${buckets.recent} from the last fortnight</span>
-        <span style="--_c:var(--warn)">${buckets.aWhile} it's been a few weeks</span>
-        <span style="--_c:var(--bad)">${buckets.longest} a month or more</span>
+        ${bands.map((b) => `<span style="--_c:${b.color}">${b.count} ${esc(b.label)}</span>`).join("")}
       </div>` : ""}
       ${due.length === 0 ? `<p class="empty">Nothing's gone stale — everything you're tracking is recent.</p>` : `
       <ul class="queue-list">${due.map((p) => queueItemHtml(state, p)).join("")}</ul>`}

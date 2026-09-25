@@ -272,6 +272,45 @@ export function isBacklog(problem) {
   return problem.status === STATUS_BACKLOG;
 }
 
+/**
+ * The refresher queue, banded by how long it has been.
+ *
+ * A fourth band, and the whole reason this function exists: a problem you have
+ * never practised is not one you have neglected for a month. The queue banded
+ * on `daysSince` alone, which is null when there is no history, and null fell
+ * into the oldest bucket — so a brand-new account opened on "23, a month or
+ * more". That is the deadline framing this app specifically removed, surviving
+ * in the one view named after removing it.
+ *
+ * `fresh` leads rather than trailing, because on a new account it is the whole
+ * list and it is where you start.
+ */
+export const REFRESHER_BANDS = [
+  { key: "fresh", label: "not practiced yet", color: "var(--accent)" },
+  { key: "recent", label: "from the last fortnight", color: "var(--good)" },
+  { key: "aWhile", label: "it's been a few weeks", color: "var(--warn)" },
+  { key: "longest", label: "a month or more", color: "var(--bad)" },
+];
+const A_FEW_WEEKS = 14;
+const A_MONTH = 30;
+
+export function refresherBands(problems, today = todayISO()) {
+  const counts = Object.fromEntries(REFRESHER_BANDS.map((b) => [b.key, 0]));
+  for (const p of problems) {
+    counts[bandOf(p, today)] += 1;
+  }
+  return REFRESHER_BANDS.map((b) => ({ ...b, count: counts[b.key] }));
+}
+
+/** Which band one problem sits in. Exported so the queue can order by it. */
+export function bandOf(problem, today = todayISO()) {
+  const { daysSince } = refresherStatus(problem, today);
+  if (daysSince == null) return "fresh";
+  if (daysSince >= A_MONTH) return "longest";
+  if (daysSince >= A_FEW_WEEKS) return "aWhile";
+  return "recent";
+}
+
 export function dueProblems(state) {
   const today = todayISO();
   return state.problems
