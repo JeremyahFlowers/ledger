@@ -1004,6 +1004,12 @@ export function renderReflect(root, store, actions) {
           mistakeTags: f.getAll("mistakeTags"),
           soulStatement: f.get("soulStatement") || "",
           isMock,
+          // Whether the day clock was running through this session, and so has
+          // already counted these minutes. Without it the budget added the
+          // clock's time to the attempt's time and charged the same session
+          // twice — a 45-minute problem turned "30 minutes left" into "15 over"
+          // the moment it was saved.
+          onClock: !!(s.dayTimer?.running && s.dayTimer.date === date),
           code: capturedCode,
           codeLang: capturedCode ? capturedCodeLang : "",
         };

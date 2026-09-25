@@ -775,15 +775,30 @@ export const OVERRUN_MULTIPLE = 1.5;
 /**
  * Where today stands against the budget.
  *
- * `usedMin` counts the live clock *and* time already logged against attempts
- * today, because both are practice — a day where you logged two problems and
- * then ran the clock for twenty minutes has used both.
+ * `usedMin` is the day clock plus any attempt the clock did *not* already
+ * count. The original version added the two outright, on the reasoning that a
+ * day where you logged two problems and then ran the clock for twenty minutes
+ * has used both — which is true, and which quietly assumed the two are never
+ * the same minutes.
+ *
+ * They are the same minutes whenever the clock is running during a session you
+ * then save, which is the ordinary way to use this app. Saving a 45-minute
+ * problem turned "30 minutes left" into "15 minutes over" without a second of
+ * work happening in between.
+ *
+ * So a session saved while the clock was running is marked, and its minutes are
+ * left to the clock. A rep logged manually for something you did on paper is
+ * not marked, and still counts — it was never on the clock.
+ *
+ * Where the clock covered only part of a session this slightly under-counts.
+ * That is the right direction to be wrong in: the budget is a ceiling, and
+ * over-reporting tells you to stop when you have not yet started.
  */
 export function budgetProgress(state, now = Date.now()) {
   const budgetMin = state.settings.dailyBudgetMin || 75;
   const today = todayISO();
   const loggedMin = allAttempts(state)
-    .filter((a) => a.date === today)
+    .filter((a) => a.date === today && !a.onClock)
     .reduce((sum, a) => sum + (a.timeToSolveMin || 0), 0);
   const clockMin = dayTimerElapsedMs(state, now) / 60000;
   const usedMin = loggedMin + clockMin;
