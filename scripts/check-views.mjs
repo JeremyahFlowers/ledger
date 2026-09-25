@@ -114,38 +114,13 @@ const make = installDomStub();
 process.on("unhandledRejection", () => {});
 
 const { buildSeedState } = await import(pathToFileURL(join(JS_DIR, "seed.js")));
+const { demoState } = await import(pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), "demo-state.mjs")));
 const logic = await import(pathToFileURL(join(JS_DIR, "logic.js")));
 
-/** A log with something in it: two attempts, a mock, a retro, a quiz answer. */
+/** The shared populated log, plus the one thing it cannot carry: a day clock,
+ *  which is started relative to now rather than stored. */
 function populated() {
-  const state = buildSeedState();
-  const today = logic.todayISO();
-  const problem = state.problems[0];
-  problem.statement = "Given an array, return indices.";
-  problem.statementMeta = { source: "pasted", at: today };
-  problem.box = 2;
-  problem.attempts = [
-    { id: "a1", date: logic.addDaysISO(today, -9), outcome: "failed", patternGuess: "incorrect",
-      timeToInsightMin: 18, timeToSolveMin: 45, mistakeTags: ["off-by-one"],
-      soulStatement: "never shrank the window", code: "def f(): pass", codeLang: "python" },
-    { id: "a2", date: today, outcome: "solved-clean", patternGuess: "correct",
-      timeToInsightMin: 4, timeToSolveMin: 22, mistakeTags: [], soulStatement: "shrink from the left" },
-  ];
-  problem.analysis = { at: today, predictions: [{ pattern: problem.patternId, probability: 0.88 }] };
-  state.mocks = [{ id: "m1", date: today, problemId: problem.id, outcome: "solved-struggled",
-    communicationRating: 3, durationActualMin: 44, notes: "", checklist: { 0: true, 1: true } }];
-  state.journal = [{ id: "j1", date: today, type: "weekly-retro", text: "kept rushing into code" }];
-  state.quiz = { totalAsked: 4, totalCorrect: 2, recent: [
-    { correct: false, actual: problem.patternId, said: "greedy", problemId: problem.id },
-    { correct: false, actual: problem.patternId, said: "greedy", problemId: problem.id },
-    { correct: true, actual: problem.patternId, said: problem.patternId, problemId: problem.id },
-    { correct: false },
-  ] };
-  state.systemDesign = { manualUnlock: true, sessions: [
-    { id: "s1", date: today, topic: "rate limiter", notes: "token bucket", confidence: 3 }] };
-  state.whiteboards = [{ id: "w1", date: today, problemId: problem.id, path: "p.png", caption: "trace" }];
-  state.resources = { [problem.patternId]: [{ id: "r1", title: "A talk", url: "https://example.com", addedAt: today }] };
-  state.streak = { current: 3, longest: 9, lastActiveDate: today };
+  const state = demoState();
   logic.startDayTimer(state, Date.now() - 20 * 60000);
   return state;
 }

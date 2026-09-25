@@ -51,7 +51,7 @@ export function renderComponents(root, store, actions) {
     const stat = byId.get(component.id);
     const recency = componentRecency(store.state, component.id);
     return `
-      <button type="button" class="index-card" data-open-component="${esc(component.id)}">
+      <button type="button" class="card index-card" data-open-component="${esc(component.id)}">
         <h3>${esc(component.name)}</h3>
         <p class="muted small">${esc(component.hook)}</p>
         <p class="index-card-stat">${stat.seen
@@ -380,7 +380,7 @@ export function renderDesignProblem(root, store, actions) {
       <h2>Components this leans on</h2>
       <div class="index-grid">
         ${componentsFor(problem).map((c) => `
-          <button type="button" class="index-card" data-open-component="${esc(c.id)}">
+          <button type="button" class="card index-card" data-open-component="${esc(c.id)}">
             <h3>${esc(c.name)}</h3>
             <p class="muted small">${esc(c.hook)}</p>
           </button>`).join("")}

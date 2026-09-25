@@ -164,6 +164,13 @@ main.page-read { --page-max: 880px; }
 /* The session workspace is an IDE, not a document — it owns its own edges. */
 main.page-full { --page-max: none; padding: 0; }
 
+/* A button that is given no surface of its own should look like the page it
+   is on, not like the operating system. Without this the component library
+   shipped as light-grey UA buttons in a dark theme, with near-white headings
+   on them that could not be read at all — the class list said `index-card`
+   where every other index says `card index-card`, and nothing failed. */
+button { background: transparent; color: inherit; }
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -330,7 +337,13 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 .index-intro p { margin: 0; }
 .index-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; margin-top: 1rem; }
 .index-card {
-  display: block; width: 100%; text-align: left; cursor: pointer;
+  /* Flex, not block, because these are <button>s: a button centres its content
+     inside its box, and a grid stretches every card to the tallest one. So a
+     card whose description runs to three lines sat 10px lower than its
+     four-line neighbour, and a row of headings that should read as one line
+     didn't. Flex column lays them out from the top instead. */
+  display: flex; flex-direction: column; align-items: stretch;
+  width: 100%; text-align: left; cursor: pointer;
   font: inherit; color: inherit;
 }
 .index-card:hover { border-color: var(--accent); }
@@ -622,7 +635,10 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 .outcome-warn { background: var(--warn-bg); color: var(--warn); }
 .outcome-bad { background: var(--bad-bg); color: var(--bad); }
 .week-strip { display: block; }
-.index-card-stat { font-size: 0.76rem; font-weight: 700; color: var(--accent); margin-top: 0.3rem; }
+/* `auto` rather than a fixed gap: the stat is the last line of a card whose
+   height the tallest sibling decides, so it belongs against the bottom edge
+   where every card's stat lines up, not trailing whatever text precedes it. */
+.index-card-stat { font-size: 0.76rem; font-weight: 700; color: var(--accent); margin-top: auto; padding-top: 0.3rem; }
 .backlog-bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; margin: 0.5rem 0; background: var(--surface-alt); }
 .backlog-seg { height: 100%; }
 .backlog-legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.75rem; }
@@ -1243,6 +1259,25 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
    excluded: it doesn't scroll, and padding its panes would shorten the editor
    for no reason. */
 main:not(.page-full) { padding-bottom: calc(var(--plant-size) + 2rem); }
+
+/* The other half of the same reservation, and the half that was missing: the
+   panel occupies a column at the right edge as well as a strip at the bottom.
+   On a `page-wide` view the content is wider than the margin the viewport
+   leaves, so the panel sat on top of it — covering the Start button on every
+   refresher row it passed, and clipping the right-hand words of a paragraph on
+   Analyze. Clicks go through, so nothing was unreachable, but it was
+   unreadable, which for a readout of text is the same failure.
+   Only the intrusion is reserved: `100vw - page-max` is the room the centred
+   column already leaves, and where that is more than the panel needs — a
+   narrow page, or a wide screen — this subtracts to zero and changes nothing.
+   Below 1100px there is no spare width to give, and taking 150px from a phone
+   to protect a corner is the worse trade. */
+@media (min-width: 1100px) {
+  main:not(.page-full) {
+    padding-right: max(0px, calc(var(--plant-size) + 2rem
+                                 - (100vw - min(var(--page-max, 1120px), 100vw)) / 2));
+  }
+}
 
 /* In a session on a phone there is no spare corner — the editor runs to both
    edges, and the panel ends up sitting on the code. It shrinks rather than
