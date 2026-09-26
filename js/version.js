@@ -18,7 +18,7 @@
 // to CHANGELOG.md. A test fails if the changelog has no entry for the current
 // version, so a release cannot ship undocumented.
 
-export const APP_VERSION = "2.0.1";
+export const APP_VERSION = "2.1.0";
 
 /** ISO date of this version, shown next to it in Settings. */
-export const RELEASED = "2026-09-25";
+export const RELEASED = "2026-09-26";

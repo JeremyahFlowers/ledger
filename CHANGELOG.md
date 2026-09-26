@@ -28,6 +28,85 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 2.1.0 — 2026-09-26
+
+The whiteboard, rebuilt. Reported as "the whiteboard wasn't made for humans to
+use", which was fair: a shape was final the moment you let go of it, text was a
+browser `prompt()`, there was no eraser and no zoom. Rebuilt against what
+Figma, draw.io and Excalidraw do, because those conventions are already in
+people's hands.
+
+### Anything placed can be picked up again
+
+Every element reports a box, so one resize implementation serves all of them —
+eight grips, shift to hold the ratio, arrow keys to nudge, Cmd-D to duplicate,
+a colour or a stroke width applied to whatever is selected.
+
+Text gets six grips rather than eight, on purpose. Its height is whatever its
+words need once they have wrapped, so a grip that set the height would be a
+control whose effect is immediately overwritten. Its corners scale the type and
+its sides set the wrap width, which between them are the two things anyone
+wants to do to a paragraph.
+
+### Text is a text box, edited where it sits
+
+A textarea is laid over the canvas at the size the glyphs will be drawn. That
+is what makes selection, word jumps, select-all, copy and paste, undo inside
+the field, an IME, and a tablet's own keyboard and autocorrect all work without
+any of it being reimplemented badly. Return makes a new line and Escape
+commits. Double-click opens one again to fix a typo — which a `prompt()` could
+not do at all.
+
+Type has a size of its own instead of inheriting the pen's stroke width, set
+from the toolbar with `A−` / `A+` and a number, or by dragging a corner.
+
+### An eraser
+
+Because undo only removes what you did last, and the thing you want gone is
+usually not that. A sweep across six marks is one Undo, and it erases between
+pointer samples rather than only where they happened to land.
+
+### Pan and zoom
+
+Scroll to pan, pinch or Cmd-scroll to zoom, space-drag or the hand tool to
+shove the canvas around, Cmd-0 to frame everything. Zoom is about the pointer,
+so what you were looking at stays where it was. Without any of this, the detail
+you could draw on a tablet was whatever a finger managed at one fixed scale.
+
+Two live pointers are now a gesture rather than a second stroke, which is most
+of what made a tablet feel broken: a pinch used to leave a line across the
+drawing.
+
+### Smaller things the rebuild fixed
+
+- Placing a shape hands back the select tool with the shape selected, so
+  moving, sizing or labelling it is the next gesture rather than the next trip
+  to the toolbar. The pen and eraser keep themselves, since those are used in
+  runs.
+- Freehand is smoothed through the midpoints instead of being drawn as a
+  polyline of raw pointer samples with a corner at every one.
+- The canvas resizes with its pane, not only with the window, so dragging a
+  workspace splitter no longer distorts the drawing.
+- A saved board image frames the whole drawing rather than whatever the view
+  happened to be pointed at.
+- Boards drawn by older versions are converted on the way in, so text saved as
+  a bare anchor point still opens.
+- Tool buttons, steppers and swatches get real touch targets on a touch screen.
+
+### Two bugs the browser found that reading could not
+
+A lost `pointerup` — a release over browser chrome, a refused pointer capture,
+a system dialog — left a pointer in the map for ever, and because two live
+pointers mean a pinch, the *next* touch quietly stopped drawing. A window-level
+release now backstops it.
+
+A pinch begun while the text tool was in hand left an empty editor open over
+the board, drawing its own outline across the drawing; it also reported the
+board as busy, which would have stopped the session syncing until something
+else happened to close it.
+
+---
+
 ## 2.0.1 — 2026-09-25
 
 A pass through every screen, opening each one and walking each flow end to
