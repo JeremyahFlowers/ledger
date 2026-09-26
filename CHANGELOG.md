@@ -28,6 +28,65 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 2.2.0 — 2026-09-26
+
+A design session now runs the way a design interview runs: requirements, core
+entities, API, high-level design, then deep dives — in that order, each with
+its own slice of the box, and each checked against an answer key before the
+next one starts.
+
+### Why the order
+
+It is load-bearing rather than decorative. An API designed before the entities
+exist has nothing to carry, and a diagram drawn before the requirements are
+agreed is a careful drawing of the wrong system. This used to be one open
+timebox with the whole reference revealed at the end — a format that collapses
+into "draw boxes for forty minutes" and then tells you on minute forty that the
+requirements were wrong on minute four.
+
+### Each stage worked in the right thing
+
+The first three are written, the fourth is the whiteboard, and the fifth is
+five stress-test questions put one at a time with a model answer after each —
+which is how a follow-up actually works. Holding all five back until the end
+would let one wrong assumption run through all of them.
+
+Every stage after the first carries the earlier answers beside it, because it
+is supposed to be built on them and cannot be if they are off screen. The
+deep-dive stage also shows the design you drew, so you are defending something
+you can see.
+
+### Timeboxed per stage
+
+Entities is deliberately the shortest. Naming the nouns is a two minute job
+that routinely takes ten, and the box is the only thing that says so. Nothing
+stops when a stage's time is up — the clock is information, not a buzzer — but
+what each stage actually took is recorded, so the summary can show you a stage
+that ran to three times its box.
+
+### New answer keys
+
+Core entities with their fields, an API with what goes in and what comes back,
+and five deep dives per problem — each with a real answer and a "watch for" —
+across all five problems. `followUps` is gone, folded into the deep dives: two
+lists of "what they ask next" would drift, and only one of them had answers.
+
+### Honesty per stage rather than once at the end
+
+Each check asks "had it / partly / missed it" for that stage. One score for a
+whole design says nothing about which part was weak, and which part was weak is
+the only thing worth knowing afterwards. Both the per-stage marks and the time
+each took are stored on the attempt.
+
+### Fixed
+
+Typed answers were escaped twice — `richText` escapes on its way in — so an
+arrow typed into an API sketch came back as `-&gt;`. Now pinned in both
+directions, since what somebody types is the one untrusted string on that
+screen.
+
+---
+
 ## 2.1.0 — 2026-09-26
 
 The whiteboard, rebuilt. Reported as "the whiteboard wasn't made for humans to
