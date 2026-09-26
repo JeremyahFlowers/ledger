@@ -615,7 +615,7 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
    the pane. The pane scrolls, so the first stroke near the top scrolled the
    toolbar out of sight and there was no way to change tool or colour again. */
 .board-host { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0.5rem; }
-.board-host .whiteboard-canvas { flex: 1; width: 100%; height: auto; min-height: 0; }
+.board-host .wb-stage { flex: 1; min-height: 0; }
 
 /* Side-by-side panes need width. Below this the workspace stacks: the statement
    and code become full-width rows you scroll between, and dragging a splitter
@@ -794,10 +794,73 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
   outline: 2px solid var(--accent);
 }
 .wb-width-label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--text-muted); }
+.wb-sep { width: 1px; align-self: stretch; background: var(--border); margin-inline: 0.1rem; }
+.wb-spacer { flex: 1 1 0; min-width: 0; }
+
+/* Type size, as two buttons and a number rather than a slider. A slider is the
+   wrong control for a value you know — you want 24, not "somewhere around
+   here" — and on a tablet it is a 4px target being aimed at with a finger. */
+.wb-size { display: flex; align-items: center; gap: 2px; }
+.wb-size-input {
+  width: 3.1rem; text-align: center;
+  font: inherit; font-size: 0.8rem; color: var(--text);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+  padding: 0.2rem 0.25rem;
+}
+.wb-step {
+  min-width: 1.9rem; height: 1.9rem; padding: 0 0.35rem;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface); color: var(--text-muted);
+  font: inherit; font-size: 0.78rem; font-weight: 700; line-height: 1; cursor: pointer;
+}
+.wb-step:hover { color: var(--text); border-color: var(--accent); }
+
+/* The canvas and the two things laid over it — the text editor and the zoom
+   readout — share one positioned box, because both are placed in the canvas's
+   own coordinates. */
+/* Clipped, because the editor is a real DOM element laid on top: a paragraph
+   typed near the bottom edge would otherwise hang out of the board and over
+   whatever the page puts underneath it. The canvas clips itself; this is for
+   the things laid over it. */
+.wb-stage { position: relative; display: flex; min-height: 22rem; min-width: 0; overflow: hidden; border-radius: 8px; }
+.wb-stage > .whiteboard-canvas { flex: 1; width: auto; height: auto; min-width: 0; min-height: 0; }
 .whiteboard-canvas {
-  width: 100%; height: 360px; display: block; border: 1px solid var(--border); border-radius: 8px;
+  width: 100%; display: block; border: 1px solid var(--border); border-radius: 8px;
   touch-action: none; cursor: crosshair;
 }
+
+/* Laid exactly over the glyphs it stands in for, at the size they will be
+   drawn, so committing does not make the words jump. Everything that would
+   make it look like a form field is taken off: while you are typing it has to
+   look like the drawing, not like a dialog in front of it. The one ring is
+   there so an empty box is still visibly somewhere. */
+.wb-text-editor {
+  position: absolute; z-index: 2;
+  margin: 0; padding: 0; border: 0; outline: none;
+  background: transparent; resize: none; overflow: hidden;
+  white-space: pre-wrap; overflow-wrap: break-word;
+  box-shadow: 0 0 0 1px var(--accent);
+  border-radius: 2px;
+}
+
+.wb-zoom {
+  position: absolute; right: 0.6rem; bottom: 0.6rem; z-index: 3;
+  display: flex; align-items: center; gap: 2px;
+  padding: 3px; border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(3px);
+}
+.wb-zoom .wb-step { border-color: transparent; background: transparent; }
+.wb-zoom-level {
+  min-width: 3.6rem; height: 1.9rem; padding: 0 0.4rem;
+  border: 1px solid transparent; border-radius: 999px;
+  background: transparent; color: var(--text-muted);
+  font: inherit; font-size: 0.74rem; font-weight: 700;
+  font-variant-numeric: tabular-nums; cursor: pointer;
+}
+.wb-zoom-level:hover { color: var(--text); border-color: var(--border); }
 .whiteboard-thumb-host img { max-width: 100%; border-radius: 6px; margin-top: 0.5rem; border: 1px solid var(--border); }
 
 
@@ -1564,6 +1627,11 @@ input[type="checkbox"]:focus-visible {
     width: 20px;
     height: 20px;
   }
+  /* A drawing tool is pressed hundreds of times in a session and on a tablet
+     it is pressed with a fingertip, which has no 30px of precision in it. */
+  .wb-tool, .wb-step, .wb-zoom-level { min-width: 44px; min-height: 44px; }
+  .wb-color { width: 34px; height: 34px; }
+  .wb-size-input { min-height: 44px; }
   .queue-item .btn { min-height: 40px; }
 }
 
@@ -1809,7 +1877,7 @@ input[type="checkbox"]:focus-visible {
 .iv-pane { display: flex; flex-direction: column; min-width: 0; }
 .iv-pane h3 { margin: 0 0 0.6rem; font-size: 0.95rem; }
 .iv-board { height: 22rem; }
-.iv-board .whiteboard-canvas { width: 100%; height: 100%; }
+.iv-board .wb-stage { flex: 1; min-height: 0; height: 100%; }
 #iv-code { max-height: 22rem; overflow: auto; margin: 0; }
 .iv-problem .ws-statement { margin-top: 0.7rem; max-height: 12rem; overflow: auto; }
 

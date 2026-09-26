@@ -35,6 +35,7 @@ function installDomStub() {
       addEventListener() {}, removeEventListener() {}, dispatchEvent() {},
       appendChild() {}, replaceWith() {}, replaceChildren() {}, insertAdjacentHTML() {},
       setAttribute() {}, removeAttribute() {}, getAttribute: () => null,
+      toggleAttribute() {}, hasAttribute: () => false,
       focus() {}, blur() {}, click() {}, remove() {}, scrollIntoView() {},
       setSelectionRange() {}, closest: () => null,
       getBoundingClientRect: () => ({ width: 800, height: 600, top: 0, left: 0 }),

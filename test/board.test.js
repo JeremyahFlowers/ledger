@@ -68,12 +68,12 @@ describe("bounds", () => {
     assert.equal(elementBounds(el("pen", [])), null);
   });
 
-  test("test_board_textIsAnAnchorWithABoxAroundIt", () => {
-    // It has to be clickable before it is measured, so the box is estimated
-    // from the string rather than from a canvas metric.
-    const b = elementBounds(el("text", [{ x: 50, y: 50 }], { text: "left" }));
-    assert.ok(b.w > 0 && b.h > 0);
-    assert.ok(b.y < 50, "the anchor is the baseline, so the box sits above it");
+  test("test_board_textIsABoxLikeEverythingElse", () => {
+    // It used to be a bare anchor point with its box estimated from the string,
+    // which is what made it the one element that could not be resized, wrapped
+    // or clicked accurately. It is now two corners, same as a rectangle.
+    const b = elementBounds(el("text", [{ x: 50, y: 40 }, { x: 250, y: 80 }], { text: "left" }));
+    assert.deepEqual(b, { x: 50, y: 40, w: 200, h: 40 });
   });
 });
 

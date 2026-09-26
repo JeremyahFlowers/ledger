@@ -163,10 +163,12 @@ describe("the board on the watcher's side", () => {
     assert.match(interview, /createWhiteboard\(.*\{ readOnly: true \}\)/s);
   });
 
-  test("test_interview_readOnlyMeansNoToolbarAndNoInput", () => {
+  test("test_interview_theWatcherGetsTheReadOnlyBoard", () => {
+    // That a read-only board wires no input at all is pinned where it can be
+    // checked by running it rather than by reading it — see
+    // test/whiteboard.test.js. A source match here pinned the spelling of one
+    // `if`, and broke the first time the guards became a single block.
     const wb = read("../js/whiteboard.js");
     assert.match(wb, /const readOnly = !!hooks\.readOnly/);
-    assert.match(wb, /if \(!readOnly\) canvas\.addEventListener\("pointerdown"/);
-    assert.match(wb, /if \(!readOnly\) canvas\.addEventListener\("keydown", onKey\)/);
   });
 });
