@@ -10,6 +10,7 @@
 // shows the real approach rather than only marking you wrong.
 
 import { pickQuizProblem, quizOptions, recommendSession, quizConfusions } from "./logic.js";
+import { prepPhase } from "./prep.js";
 import { patternIcon } from "./icons.js";
 import { esc, pct, patternName } from "./ui.js";
 import { emptyState, ringSvg } from "./chrome.js";
@@ -291,7 +292,7 @@ export function renderWarmup(root, store, actions) {
   if (warmupState.count === 0 && !warmupState.current) nextWarmupQuestion(state);
 
   if (warmupState.count >= WARMUP_LENGTH || (!warmupState.current && warmupState.count > 0)) {
-    const rec = recommendSession(state);
+    const rec = recommendSession(state, prepPhase(state).key);
     root.innerHTML = `
       <div class="card">
         <h2>Warmed up</h2>

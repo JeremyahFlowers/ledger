@@ -20,6 +20,7 @@ import {
   questionPlan, questionPhase, phaseLayout,
   priorAttemptSummary,
 } from "./logic.js";
+import { prepPhase } from "./prep.js";
 import {
   esc, richText, fmtDate, patternName, toast, showTopic, outcomeOptions,
   confirmLoss, outcomeLabel, outcomePill,
@@ -1228,7 +1229,7 @@ export function renderSessionSummary(root, store, actions) {
   const today = todayISO();
   const todaysAttempts = allAttempts(state).filter((a) => a.date === today);
   const totalMin = todaysAttempts.reduce((sum, a) => sum + (a.timeToSolveMin || 0), 0);
-  const rec = recommendSession(state);
+  const rec = recommendSession(state, prepPhase(state).key);
   const plant = computePlantState(state);
   const budgetMin = state.settings.dailyBudgetMin;
   const overBudget = totalMin >= budgetMin;

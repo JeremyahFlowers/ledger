@@ -10,14 +10,21 @@ import {
   parseBoxIntervals, validateBoxIntervals, syncFootprint, formatBytes,
   dayTimerElapsedMs, dayTimerAdjustmentMin, adjustDayTimer,
   questionMinutes, planMinutes, questionPlan, READ_MINUTES, REFLECT_MINUTES, inspectImport,
-  describeState,
-} from "./logic.js";
+  describeState, todayISO} from "./logic.js";
 import { splitBudget, designShare, designAttempts } from "./design-logic.js";
 import { APP_VERSION, RELEASED } from "./version.js";
 import { migrateState } from "./seed.js";
 import { resetWelcome } from "./welcome.js";
 import { recentFaults, clearFaults, report, AppError } from "./errors.js";
 import { esc, toast, downloadState, confirmLoss } from "./ui.js";
+import {
+  STARTING_POINTS, TARGETS, LEVELS, INTENSITIES, DEFAULT_PREP,
+  prepOf, prepStatus, dayPlan, intensityByKey, planStart, dailyBand,
+} from "./prep.js";
+import {
+  DAYS, ITEM_KINDS, WEEK_TEMPLATES, weekSettings, weekPlan, itemKind,
+  dayMinutes, weeklyMinutes, weeklyProblems, isRestDay, dayKeyOf, problemsForBand, codingDays,
+} from "./week.js";
 import { storageKey } from "./channel.js";
 
 
@@ -316,10 +323,16 @@ export function renderSettings(root, store, actions) {
     ${faultLogHtml()}
 
     <nav class="settings-jump" aria-label="Settings sections">
+      <a href="#set-prep">What you're preparing for</a>
+      <a href="#set-week">Your week</a>
       <a href="#set-practice">How practice works</a>
       <a href="#set-data">Your data</a>
       <a href="#set-app">This app</a>
     </nav>
+
+${prepSectionHtml(state)}
+
+    ${weekSectionHtml(state)}
 
     <section class="settings-section">
       <h2 id="set-practice" tabindex="-1">How practice works</h2>
@@ -327,17 +340,12 @@ export function renderSettings(root, store, actions) {
       what comes up next; nothing already recorded is altered.</p>
 <div class="card">
       <h3>Daily budget</h3>
-      <p class="muted small">A ceiling, not a target. Today's plan is filled up to this many minutes
-      with whatever you find hardest and haven't seen in longest, and the rest is left for the refresher
-      queue rather than onto today. Finishing the plan is a complete day — the app will say so and
-      stop asking for more.</p>
-      <form id="budget-form" class="settings-form">
-        <label class="field inline"><span class="label">Minutes per day</span>
-          <input class="input" type="number" name="dailyBudgetMin" min="10" max="480"
-                 value="${state.settings.dailyBudgetMin}" style="max-width:6rem" /></label>
-        <button class="btn btn-primary" type="submit">Save</button>
-      </form>
-    </div>
+      <p class="muted small">Set as a band under
+        <a href="#set-prep">What you're preparing for</a>
+      <a href="#set-week">Your week</a>, because a ceiling on its own implies that
+        more is always better. Today's plan is filled up to the ceiling with whatever you find
+        hardest and have not seen in longest; the rest waits in the refresher queue rather than
+        being piled onto today.</p>
 ${timeboxCardHtml(store.state)}
 ${designCardHtml(store.state)}
 ${liveSyncCardHtml(store.state)}
@@ -537,12 +545,8 @@ ${clockCardHtml(store.state)}
     toast("Saved — this affects when problems next come up.");
   });
 
-  root.querySelector("#budget-form").addEventListener("submit", (e) => {
-    e.preventDefault();
-    const v = Number(new FormData(e.target).get("dailyBudgetMin")) || 75;
-    store.mutate((s) => { s.settings.dailyBudgetMin = v; }, "Ledger: update daily budget");
-    toast("Saved.");
-  });
+  wirePrepSection(root, store);
+  wireWeekSection(root, store);
 
   root.querySelector("#disconnect").addEventListener("click", () => {
     if (confirmLoss({
@@ -609,5 +613,360 @@ ${clockCardHtml(store.state)}
     const v = themeSelect.value;
     localStorage.setItem(storageKey("ledger.theme"), v);
     document.documentElement.dataset.theme = v === "system" ? "" : v;
+  });
+}
+
+/**
+ * What you are preparing for, and what the app does differently because of it.
+ *
+ * Four answers, none of them required. They are saved as they change rather
+ * than behind a Save button: these are choices, every one is reversible, and a
+ * form that makes you confirm a radio button is a form nobody finishes.
+ */
+function prepSectionHtml(state) {
+  const prep = prepOf(state);
+  const status = prepStatus(state);
+  const plan = dayPlan(state);
+  const suggested = status.suggestedIntensity;
+
+  const choice = (name, items, current, extra = (i) => "") => `
+    <div class="choice-row" data-prep-field="${name}">
+      ${items.map((i) => `
+        <label class="field checkbox-field">
+          <input type="radio" name="${name}" value="${esc(i.key)}" ${i.key === current ? "checked" : ""} />
+          <span><strong>${esc(i.label)}</strong>${i.hint ? ` <span class="muted small">${esc(i.hint)}</span>` : ""}${extra(i)}<br />
+          <span class="muted small">${esc(i.note)}</span></span>
+        </label>`).join("")}
+    </div>`;
+
+  return `
+    <section class="settings-section">
+      <h2 id="set-prep" tabindex="-1">What you're preparing for</h2>
+      <p class="muted small">All of it optional, and saved as you change it. Answer none of it and
+      the app behaves exactly as it did before — these only exist because the same advice is wrong
+      for somebody six months out and somebody interviewing on Friday.</p>
+
+      <div class="card">
+        <h3>The run-up</h3>
+        <p class="muted small">A date turns the plan into a run-up with a shape: patterns one at a
+        time early, interleaved in the middle, and randomised under a hard clock at the end. Without
+        one everything stays interleaved, which is the sensible default and what the app already did.</p>
+        <form id="prep-when" class="settings-form">
+          <label class="field inline"><span class="label">Interview on</span>
+            <input class="input" type="date" name="targetDate" value="${esc(prep.targetDate || "")}"
+              style="max-width:11rem" /></label>
+          ${prep.targetDate ? `<button class="btn btn-ghost btn-sm" type="button" id="prep-clear-date">No date yet</button>` : ""}
+        </form>
+        ${status.weeksOut != null ? `
+          <p class="prep-readout">
+            <strong>${status.weeksOut} week${status.weeksOut === 1 ? "" : "s"}</strong> out ·
+            <span class="pill pill-muted">${esc(status.phase.label)}</span>
+          </p>
+          <p class="muted small">${esc(status.phase.detail)}</p>` : ""}
+
+        <h4 class="small-heading">Where you're starting</h4>
+        ${choice("startingPoint", STARTING_POINTS, prep.startingPoint)}
+        ${status.tight ? `
+          <p class="banner banner-warn prep-warn">A ${status.weeksOut}-week run-up from here is
+          tight — ${esc(status.startingPoint.label.toLowerCase())} usually wants about
+          ${status.startingPoint.weeksNeeded}. Worth knowing rather than worth changing: it is your
+          date. It does mean the day has to be denser, which is what the suggestion below reflects.</p>` : ""}
+      </div>
+
+      <div class="card">
+        <h3>What you're aiming at</h3>
+        <p class="muted small">Not the company's name — what the loop assumes you already have. A
+        top-tier loop treats fluency and clean first-draft code as the floor and spends its time on
+        ambiguity; elsewhere, a correct answer is the bar.</p>
+        ${choice("target", TARGETS, prep.target)}
+        <h4 class="small-heading">Level</h4>
+        ${choice("level", LEVELS, prep.level, (i) =>
+          i.designShare > 0 ? ` <span class="pill pill-muted">${Math.round(i.designShare * 100)}% design</span>` : "")}
+      </div>
+
+      <div class="card">
+        <h3>How much a day</h3>
+        <p class="muted small">A band rather than a number: a floor below which there was no room for
+        the review, and a ceiling past which deliberate practice stops being deliberate. Two hours is
+        the top of what most people sustain at this kind of work.</p>
+        ${choice("intensity", INTENSITIES, prep.intensity, (i) =>
+          i.key === suggested.key && !prep.intensity
+            ? ` <span class="pill pill-good">suggested</span>`
+            : i.key === suggested.key ? ` <span class="pill pill-muted">suggested</span>` : "")}
+        ${prep.intensity ? `<button class="btn btn-ghost btn-sm" type="button" id="prep-follow">Follow the suggestion instead</button>` : ""}
+
+        <form id="prep-band" class="settings-form" style="margin-top:0.8rem">
+          <label class="field inline"><span class="label">Floor</span>
+            <input class="input" type="number" name="dailyFloorMin" min="5" max="480"
+              value="${plan.band.min}" style="max-width:5.5rem" /></label>
+          <label class="field inline"><span class="label">Ceiling</span>
+            <input class="input" type="number" name="dailyBudgetMin" min="10" max="480"
+              value="${plan.band.max}" style="max-width:5.5rem" /></label>
+          <button class="btn btn-primary btn-sm" type="submit">Save</button>
+        </form>
+        ${status.advice.level === "ok" ? "" : `
+          <p class="banner ${status.advice.level === "bad" ? "banner-bad" : "banner-warn"} prep-warn">
+            ${esc(status.advice.message)}</p>`}
+
+        <h4 class="small-heading">A day this size</h4>
+        <ol class="prep-blocks">
+          ${plan.blocks.map((b) => `
+            <li>
+              <p class="prep-block-head"><strong>${esc(b.label)}</strong>
+                <span class="muted small">${b.minutes} min</span></p>
+              <ul class="tight-list">
+                ${b.parts.map((part) => `<li><strong>${esc(part.label)}</strong>
+                  <span class="muted small">${part.minutes}m — ${esc(part.prompt)}</span></li>`).join("")}
+              </ul>
+            </li>`).join("")}
+        </ol>
+        ${plan.blocks.length > 1 ? `<p class="muted small">${esc(plan.splitReason)}</p>` : ""}
+      </div>
+    </section>`;
+}
+
+/** Saved on change: every one of these is a choice, and all of them reverse. */
+function wirePrepSection(root, store) {
+  const save = (fn, message) => store.mutate((s) => {
+    s.settings.prep = { ...DEFAULT_PREP, ...(s.settings.prep || {}) };
+    fn(s.settings.prep, s);
+  }, message);
+
+  root.querySelectorAll('[data-prep-field] input[type="radio"]').forEach((input) => {
+    input.addEventListener("change", () => {
+      const field = input.closest("[data-prep-field]").dataset.prepField;
+      save((prep) => { prep[field] = input.value; }, `Ledger: prep — ${field}`);
+      // Choosing an intensity writes the band it stands for, because a band
+      // that did not move would make the choice look like it did nothing.
+      if (field === "intensity") {
+        const chosen = intensityByKey(input.value);
+        if (chosen) {
+          store.mutate((s) => {
+            s.settings.dailyFloorMin = chosen.band[0];
+            s.settings.dailyBudgetMin = chosen.band[1];
+          }, "Ledger: prep — day band");
+        }
+      }
+    });
+  });
+
+  root.querySelector('#prep-when input[name="targetDate"]')?.addEventListener("change", (e) => {
+    const value = e.target.value || null;
+    save((prep) => {
+      prep.targetDate = value;
+      // The phases divide the span between starting and the date, so a plan
+      // with no start has nothing to divide.
+      if (value && !prep.startedOn) prep.startedOn = planStart();
+      if (!value) prep.startedOn = null;
+    }, "Ledger: prep — interview date");
+  });
+
+  root.querySelector("#prep-clear-date")?.addEventListener("click", () => {
+    save((prep) => { prep.targetDate = null; prep.startedOn = null; }, "Ledger: prep — no date");
+  });
+
+  root.querySelector("#prep-follow")?.addEventListener("click", () => {
+    save((prep) => { prep.intensity = null; }, "Ledger: prep — follow the suggestion");
+  });
+
+  root.querySelector("#prep-band")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    const floor = Number(form.get("dailyFloorMin")) || 45;
+    const ceiling = Number(form.get("dailyBudgetMin")) || 75;
+    store.mutate((s) => {
+      s.settings.dailyBudgetMin = Math.max(ceiling, floor);
+      s.settings.dailyFloorMin = Math.min(floor, ceiling);
+    }, "Ledger: update the day band");
+    toast("Saved.");
+  });
+}
+
+/**
+ * The week: which days, and what each one is for.
+ *
+ * Pick a shape and a number of problems and the seven days fall out of it;
+ * change any single day and the whole week is kept as edited from then on. The
+ * editor is per day rather than a grid, because the question somebody actually
+ * has is "what is Tuesday" and a grid makes them answer it by counting
+ * columns.
+ */
+function weekSectionHtml(state) {
+  const settings = weekSettings(state);
+  const plan = weekPlan(state);
+  const band = dailyBand(state);
+  const suggestedProblems = problemsForBand(band, codingDays(plan) || 5);
+  const totalMin = weeklyMinutes(plan);
+  const today = dayKeyOf(todayISO());
+
+  const countable = Object.values(ITEM_KINDS).filter((k) => k.key !== "rest");
+
+  return `
+    <section class="settings-section">
+      <h2 id="set-week" tabindex="-1">Your week</h2>
+      <p class="muted small">Set once. Everything else — what the dashboard asks for, what gets
+      recommended, when it says you are done — reads from this. Problems rather than minutes,
+      because eight problems a week is a commitment somebody keeps and "75 minutes a day" is one
+      they break on the first Thursday they work late.</p>
+
+      <div class="card">
+        <h3>Shape</h3>
+        <div class="choice-row" data-week-field="template">
+          ${WEEK_TEMPLATES.map((t) => `
+            <label class="field checkbox-field">
+              <input type="radio" name="weekTemplate" value="${esc(t.key)}"
+                ${t.key === settings.template && !plan.edited ? "checked" : ""} />
+              <span><strong>${esc(t.label)}</strong><br />
+              <span class="muted small">${esc(t.blurb)}</span></span>
+            </label>`).join("")}
+        </div>
+
+        <form id="week-volume" class="settings-form" style="margin-top:0.8rem">
+          <label class="field inline"><span class="label">Problems a week</span>
+            <input class="input" type="number" name="problems" min="1" max="40"
+              value="${settings.problems}" style="max-width:5.5rem" /></label>
+          <label class="field inline"><span class="label">Design days a week</span>
+            <input class="input" type="number" name="designPerWeek" min="0" max="7"
+              value="${settings.design?.perWeek ?? 0}" style="max-width:5.5rem" /></label>
+          <button class="btn btn-primary btn-sm" type="submit">Apply</button>
+        </form>
+        <p class="muted small">Your band suggests about <strong>${suggestedProblems}</strong> a week
+        at ${ITEM_KINDS.coding.minutesEach} minutes each including the review.
+        ${plan.edited ? `This week has been edited by hand, so the shape above is not driving it —
+          <button type="button" class="link-button" id="week-reset">rebuild it from a shape</button>.` : ""}</p>
+      </div>
+
+      <div class="card">
+        <h3>The week</h3>
+        <p class="muted small">${weeklyProblems(plan)} problems ·
+          ${Math.round(totalMin / 60)}h ${totalMin % 60}m planned ·
+          ${plan.days.filter(isRestDay).length} rest day${plan.days.filter(isRestDay).length === 1 ? "" : "s"}</p>
+        <ul class="week-grid">
+          ${plan.days.map((d) => {
+            const meta = DAYS.find((x) => x.key === d.day);
+            const mins = dayMinutes(d);
+            return `
+            <li class="week-day${d.day === today ? " today" : ""}${isRestDay(d) ? " resting" : ""}"
+                data-week-day="${d.day}">
+              <p class="week-day-head">
+                <strong>${esc(meta.label)}</strong>
+                <span class="muted small">${isRestDay(d) ? "off" : `${mins}m`}</span>
+              </p>
+              <ul class="week-items">
+                ${d.items.map((item, i) => {
+                  const kind = itemKind(item.kind);
+                  return `<li>
+                    <select class="select select-xs" data-week-item="${d.day}:${i}" aria-label="What ${esc(meta.label)} is for">
+                      <option value="rest" ${item.kind === "rest" ? "selected" : ""}>Rest</option>
+                      ${countable.map((k) => `<option value="${k.key}" ${item.kind === k.key ? "selected" : ""}>${esc(k.label)}</option>`).join("")}
+                    </select>
+                    ${kind?.countable ? `<input class="input input-xs" type="number" min="1" max="9"
+                      value="${item.count ?? kind.defaultCount}" data-week-count="${d.day}:${i}"
+                      aria-label="How many" />` : ""}
+                    ${d.items.length > 1 ? `<button type="button" class="link-button week-drop"
+                      data-week-drop="${d.day}:${i}" aria-label="Remove">&times;</button>` : ""}
+                  </li>`;
+                }).join("")}
+              </ul>
+              ${isRestDay(d) ? "" : `<button type="button" class="link-button" data-week-add="${d.day}">+ add</button>`}
+            </li>`;
+          }).join("")}
+        </ul>
+      </div>
+    </section>`;
+}
+
+function wireWeekSection(root, store) {
+  /** Editing any day freezes the whole week, so a template change later cannot
+   *  silently undo the edit. */
+  const editWeek = (fn, message) => store.mutate((s) => {
+    const plan = weekPlan(s);
+    const days = plan.days.map((d) => ({ day: d.day, items: d.items.map((i) => ({ ...i })) }));
+    fn(days);
+    s.settings.week = { ...weekSettings(s), days };
+  }, message);
+
+  const at = (ref) => {
+    const [day, index] = ref.split(":");
+    return { day, index: Number(index) };
+  };
+
+  root.querySelector('[data-week-field="template"]')?.addEventListener("change", (e) => {
+    const value = e.target.value;
+    store.mutate((s) => {
+      // Back to derived: picking a shape means wanting that shape.
+      s.settings.week = { ...weekSettings(s), template: value, days: null };
+    }, "Ledger: week — shape");
+  });
+
+  root.querySelector("#week-reset")?.addEventListener("click", () => {
+    store.mutate((s) => { s.settings.week = { ...weekSettings(s), days: null }; },
+      "Ledger: week — back to a shape");
+  });
+
+  root.querySelector("#week-volume")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    const problems = Math.max(1, Number(form.get("problems")) || 8);
+    const perWeek = Math.max(0, Number(form.get("designPerWeek")) || 0);
+    store.mutate((s) => {
+      const week = weekSettings(s);
+      s.settings.week = {
+        ...week, problems,
+        design: { ...week.design, perWeek },
+        // Changing the volume is a request to reshape, not to patch.
+        days: null,
+      };
+    }, "Ledger: week — volume");
+    toast("Week rebuilt.");
+  });
+
+  root.querySelectorAll("[data-week-item]").forEach((select) => {
+    select.addEventListener("change", () => {
+      const { day, index } = at(select.dataset.weekItem);
+      editWeek((days) => {
+        const target = days.find((d) => d.day === day);
+        const kind = itemKind(select.value);
+        target.items[index] = select.value === "rest"
+          ? { kind: "rest" }
+          : { kind: select.value, ...(kind?.countable ? { count: kind.defaultCount } : {}) };
+        // Rest is exclusive: a day is off or it is not.
+        if (select.value === "rest") target.items = [{ kind: "rest" }];
+        else target.items = target.items.filter((i) => i.kind !== "rest");
+      }, `Ledger: week — ${day}`);
+    });
+  });
+
+  root.querySelectorAll("[data-week-count]").forEach((input) => {
+    input.addEventListener("change", () => {
+      const { day, index } = at(input.dataset.weekCount);
+      const count = Math.max(1, Number(input.value) || 1);
+      editWeek((days) => {
+        const item = days.find((d) => d.day === day).items[index];
+        if (item) item.count = count;
+      }, `Ledger: week — ${day} count`);
+    });
+  });
+
+  root.querySelectorAll("[data-week-add]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const day = btn.dataset.weekAdd;
+      editWeek((days) => {
+        const target = days.find((d) => d.day === day);
+        target.items = target.items.filter((i) => i.kind !== "rest");
+        target.items.push({ kind: "designStudy", count: 1 });
+      }, `Ledger: week — ${day}`);
+    });
+  });
+
+  root.querySelectorAll("[data-week-drop]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const { day, index } = at(btn.dataset.weekDrop);
+      editWeek((days) => {
+        const target = days.find((d) => d.day === day);
+        target.items.splice(index, 1);
+        if (!target.items.length) target.items = [{ kind: "rest" }];
+      }, `Ledger: week — ${day}`);
+    });
   });
 }

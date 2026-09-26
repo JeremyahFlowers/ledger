@@ -63,6 +63,8 @@ const SHELL = [
   "./js/github-client.js",
   "./js/icons.js",
   "./js/plant.js",
+  "./js/prep.js",
+  "./js/week.js",
   "./js/topics-content.js",
   "./js/whiteboard.js",
   "./js/codemirror-loader.js",

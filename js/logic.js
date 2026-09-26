@@ -1124,6 +1124,92 @@ function countTrailing(list, predicate) {
  * if there are hundreds of unstarted problems sitting there — it should be a
  * specific next problem, chosen for the pattern that needs the work.
  */
+/** How long a pattern is worked before moving on, while building foundations. */
+export const BLOCK_CLEAN_RATE = 0.7;
+export const BLOCK_MIN_ATTEMPTS = 3;
+
+/**
+ * The pattern to stay on, or null when there is nothing to block on.
+ *
+ * Whatever was last worked, as long as it still has material and has not been
+ * got right often enough to be worth leaving. Moving on the moment a pattern
+ * is merely finished is what turns block practice back into interleaving.
+ */
+function blockPattern(state, due) {
+  const attempts = allAttempts(state);
+  const last = attempts[attempts.length - 1];
+  const stats = Object.fromEntries(patternStats(state).map((s) => [s.pattern.id, s]));
+
+  const material = (patternId) => due.find((p) => p.patternId === patternId)
+    || backlogProblems(state, patternId)[0]
+    || state.problems.find((p) => p.patternId === patternId);
+
+  const mastered = (patternId) => {
+    const st = stats[patternId];
+    return st && st.attempts >= BLOCK_MIN_ATTEMPTS
+      && (st.solvedCleanRate ?? 0) >= BLOCK_CLEAN_RATE;
+  };
+
+  if (last && !mastered(last.patternId)) {
+    const problem = material(last.patternId);
+    const pattern = state.patterns.find((p) => p.id === last.patternId);
+    if (problem && pattern) {
+      const st = stats[last.patternId];
+      const rate = st?.solvedCleanRate;
+      return {
+        type: "block", problem, patternId: pattern.id,
+        message: `Staying on ${pattern.name}${rate != null ? ` — ${Math.round(rate * 100)}% clean so far` : ""}. `
+          + `Block practice while you are this far out: the point is to see it coming, and that only `
+          + `happens after several in a row.`,
+      };
+    }
+  }
+
+  // Nothing in hand, so open the block that has the most ground to cover.
+  const next = patternStats(state)
+    .filter((st) => material(st.pattern.id))
+    .sort((a, b) => (a.attempts ? a.solvedCleanRate ?? 1 : -1) - (b.attempts ? b.solvedCleanRate ?? 1 : -1))[0];
+  if (!next) return null;
+  return {
+    type: "block", problem: material(next.pattern.id), patternId: next.pattern.id,
+    message: `Starting a block on ${next.pattern.name}. Stay on it until the shape of it is obvious — `
+      + `read the topic first if it is new.`,
+  };
+}
+
+/** How long without a mock before simulation asks for one. */
+export const MOCK_GAP_DAYS = 4;
+
+/**
+ * Close to the date: a mock if one is overdue, otherwise a problem picked
+ * without regard to pattern.
+ *
+ * "Without regard to pattern" rather than genuinely random: it rotates by the
+ * date so the choice is stable through the day. A recommendation that changed
+ * every time the dashboard re-rendered would be noise.
+ */
+function simulationPick(state, due, today) {
+  const mocks = state.mocks || [];
+  const lastMock = mocks.length ? mocks[mocks.length - 1].date : null;
+  if (due.length && (!lastMock || daysBetween(lastMock, today) >= MOCK_GAP_DAYS)) {
+    const offset = Number(today.replaceAll("-", "")) % due.length;
+    return {
+      type: "simulate", problem: due[offset], patternId: due[offset].patternId, mock: true,
+      message: `${due[offset].name}, as a mock — clock running, talking out loud, no hints. `
+        + `${lastMock ? `Your last one was ${daysBetween(lastMock, today)} days ago. ` : ""}`
+        + `This close in, what is still missing is performing it rather than knowing it.`,
+    };
+  }
+  if (!due.length) return null;
+  const offset = Number(today.replaceAll("-", "")) % due.length;
+  const problem = due[offset];
+  return {
+    type: "simulate", problem, patternId: problem.patternId,
+    message: `${problem.name}, picked without regard to pattern. Not knowing what is coming is the `
+      + `part being practised now.`,
+  };
+}
+
 function freshFromBank(state) {
   const bank = backlogProblems(state);
   if (!bank.length) return null;
@@ -1149,7 +1235,25 @@ function freshFromBank(state) {
   };
 }
 
-export function recommendSession(state) {
+/**
+ * What to do next, in the part of the preparation this is.
+ *
+ * `phase` is passed in rather than read, because prep.js already imports this
+ * file and the dependency cannot run both ways. It defaults to the interleaved
+ * behaviour, which is what this did before phases existed and what somebody
+ * who has not told the app about an interview still gets.
+ *
+ * What each phase changes:
+ *
+ *  * **foundations** stays on one pattern until it is obvious. Mixing too
+ *    early feels harder and teaches less: every problem becomes a fresh search
+ *    instead of a recognition, and the recognition is the thing being built.
+ *  * **mixed** is the queue as the scheduler sees it — spaced and interleaved.
+ *  * **simulation** stops caring what pattern anything is. Two weeks out the
+ *    gap being closed is performance rather than knowledge, so the point is
+ *    not knowing what is coming.
+ */
+export function recommendSession(state, phase = "mixed") {
   const today = todayISO();
   const todaysAttempts = allAttempts(state).filter((a) => a.date === today);
   const due = dueProblems(state);
@@ -1164,6 +1268,21 @@ export function recommendSession(state) {
     if (daysSince >= STALE_DAYS && (!stale || daysSince > stale.daysSince)) {
       stale = { pattern: pat, daysSince };
     }
+  }
+
+  // Block practice, and it comes before everything else: while foundations are
+  // being built, staying on a pattern matters more than what the queue thinks
+  // is overdue.
+  if (phase === "foundations") {
+    const block = blockPattern(state, due);
+    if (block) return block;
+  }
+
+  // Two weeks out, a mock is worth more than another rep — the thing that is
+  // still missing is performing it, not knowing it.
+  if (phase === "simulation") {
+    const sim = simulationPick(state, due, today);
+    if (sim) return sim;
   }
 
   if (todaysAttempts.length === 0) {

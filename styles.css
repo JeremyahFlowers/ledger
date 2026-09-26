@@ -2015,3 +2015,61 @@ input[type="checkbox"]:focus-visible {
 /* A stage that ran over its box, said plainly. Spending nine minutes naming
    three nouns is the specific mistake the timebox exists to surface. */
 .over-box { color: var(--warn); font-weight: 650; }
+
+/* ---------- What you're preparing for ----------
+
+   Four answers that decide what the rest of the app recommends. The readouts
+   below them exist so the effect of an answer is visible in the same breath as
+   the answer — a profile whose consequences are three screens away is a
+   profile nobody trusts. */
+
+.prep-readout { margin: 0.7rem 0 0.2rem; font-size: 0.95rem; }
+.prep-warn { margin-top: 0.8rem; padding: 0.6rem 0.8rem; border-radius: 6px; font-size: 0.85rem; }
+
+.prep-blocks {
+  list-style: none; margin: 0.5rem 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: 0.9rem;
+}
+.prep-block-head {
+  display: flex; align-items: baseline; gap: 0.5rem;
+  margin: 0 0 0.35rem; padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ---------- The week ----------
+
+   Seven cards rather than a grid of checkboxes. The question somebody has is
+   "what is Tuesday", and a grid makes them answer it by counting columns. */
+
+.week-grid {
+  list-style: none; margin: 0.6rem 0 0; padding: 0;
+  display: grid; gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr));
+}
+.week-day {
+  padding: 0.6rem 0.7rem; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface-alt);
+}
+/* Today is marked because the week is read to answer one question most of the
+   time, and that question is about today. */
+.week-day.today { border-color: var(--accent); }
+.week-day.resting { opacity: 0.75; }
+.week-day-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 0.4rem; margin: 0 0 0.45rem;
+}
+.week-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.week-items li { display: flex; align-items: center; gap: 0.3rem; }
+.week-items .select-xs { flex: 1 1 auto; min-width: 0; }
+.week-drop { flex: none; color: var(--text-muted); font-size: 1rem; line-height: 1; }
+.week-drop:hover { color: var(--bad); }
+
+/* Today, according to the week. Above the recommendation because it decides
+   whether there is one: on a rest day there is nothing to recommend. */
+.today-card.complete { border-color: color-mix(in srgb, var(--good) 45%, var(--border)); }
+.today-card.resting { opacity: 0.9; }
+.today-items { list-style: none; margin: 0.7rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.today-items li { display: flex; align-items: flex-start; gap: 0.5rem; }
+.today-items li.met { color: var(--text-muted); }
+.today-tick { flex: none; width: 1.1rem; font-weight: 700; color: var(--text-muted); }
+.today-items li.met .today-tick { color: var(--good); }

@@ -24,6 +24,8 @@ import {
   MOCK_CHECKLIST, mockReview,
   recommendSession, computePlantState, streakGraceInfo, refresherStatus, STATUS_ACTIVE,
 } from "./logic.js";
+import { prepPhase } from "./prep.js";
+import { dayProgress, weekProgress, itemKind } from "./week.js";
 
 import { migrateState } from "./seed.js";
 import {
@@ -93,7 +95,7 @@ function designCardHtml(state) {
 
 export function renderDashboard(root, store, actions) {
   const state = store.state;
-  const rec = recommendSession(state);
+  const rec = recommendSession(state, prepPhase(state).key);
   const plant = computePlantState(state);
   const { plan, overflow, usedMin, budgetMin } = planToday(state);
   const stats = patternStats(state).filter((s) => s.attempts > 0).sort((a, b) => a.solvedCleanRate - b.solvedCleanRate);
@@ -112,6 +114,7 @@ export function renderDashboard(root, store, actions) {
 
   root.innerHTML = `
     ${plantCardHtml(plant)}
+    ${todayCardHtml(state)}
     ${hasActiveSession() ? `
     <!-- An unfinished session is the only thing more urgent than today's
          recommendation, and without this there is no way back to one you
@@ -125,6 +128,7 @@ export function renderDashboard(root, store, actions) {
         <button class="btn btn-primary" id="cta-resume">Back to it</button>
       </div>
     </div>` : ""}
+    ${wantsCodingToday(state) ? `
     <div class="card session-cta-card">
       <div class="row space-between session-cta-row">
         <div>
@@ -143,7 +147,7 @@ export function renderDashboard(root, store, actions) {
           : rec.problem ? `<button class="btn btn-primary" id="cta-start">${rec.type === "deep-dive" ? "Drill it" : "Start session"}</button>` : ""}
         </div>
       </div>
-    </div>
+    </div>` : offDutyCardHtml(state)}
 
     ${designCardHtml(state)}
 
@@ -1249,4 +1253,97 @@ export function renderLeetCode(root, store, actions) {
       actions.switchTab("log");
     });
   });
+}
+
+/**
+ * What today is for, according to the week.
+ *
+ * Above the recommendation rather than beside it, because it is the thing that
+ * decides whether the recommendation is even wanted: on a rest day there is
+ * nothing to recommend, and an app that asks for one more problem on the day
+ * you set aside to stop is an app people stop trusting.
+ *
+ * Counted from the log rather than from anything anyone ticks, so it cannot
+ * drift from what actually happened.
+ */
+function todayCardHtml(state) {
+  const progress = dayProgress(state);
+  const week = weekProgress(state);
+  const slot = progress.slot;
+
+  if (progress.rested) {
+    return `
+      <div class="card today-card resting">
+        <h2>${esc(slot.label)} — rest</h2>
+        <p class="muted">Your week puts a day off here, so this one is already done. Seven days of
+        this is what people quit in three.</p>
+        <p class="muted small">${week.got} of ${week.want} problems over the last seven days.</p>
+      </div>`;
+  }
+
+  const done = progress.complete;
+  return `
+    <div class="card today-card${done ? " complete" : ""}">
+      <div class="row space-between" style="align-items:flex-start;gap:0.75rem;flex-wrap:wrap">
+        <div>
+          <h2>${esc(slot.label)}${done ? " — done" : ""}</h2>
+          <p class="muted">${done
+            ? "Everything the week asked for today. Anything more is a bonus, not a debt."
+            : "What the week asks for today."}</p>
+        </div>
+        <span class="muted small">${week.got} of ${week.want} this week</span>
+      </div>
+      <ul class="today-items">
+        ${progress.items.map((item) => `
+          <li class="${item.met ? "met" : ""}">
+            <span class="today-tick" aria-hidden="true">${item.met ? "✓" : "○"}</span>
+            <span><strong>${esc(item.label)}</strong>
+              ${item.want > 1 || item.got > 0 ? `<span class="muted small">${item.got} of ${item.want}</span>` : ""}
+              <br /><span class="muted small">${esc(itemKind(item.kind)?.blurb || "")}</span></span>
+          </li>`).join("")}
+      </ul>
+    </div>`;
+}
+
+/**
+ * Whether today is a day the week asks for coding at all.
+ *
+ * The recommendation is only worth making if the answer is yes. A day set
+ * aside for design that still opens with "here is your next coding problem" is
+ * two parts of the same app disagreeing in front of the user, and the one that
+ * loses is the plan they wrote.
+ */
+function wantsCodingToday(state) {
+  const progress = dayProgress(state);
+  if (progress.rested) return false;
+  return progress.items.some((i) => i.kind === "coding" || i.kind === "mock");
+}
+
+/** What to offer instead, on a day the week has given to something else. */
+function offDutyCardHtml(state) {
+  const progress = dayProgress(state);
+  if (progress.rested) return "";      // the Today card has already said it
+
+  const design = progress.items.find((i) => i.kind.startsWith("design"));
+  if (!design) return "";
+  const ACTION = {
+    designMock: { tab: "designBank", label: "Start the long session" },
+    designProblem: { tab: "designBank", label: "Pick a problem" },
+    designStudy: { tab: "components", label: "Open the components" },
+  };
+  const action = ACTION[design.kind] || ACTION.designStudy;
+  return `
+    <div class="card session-cta-card">
+      <div class="row space-between session-cta-row">
+        <div>
+          <h2>${esc(itemKind(design.kind)?.label || "Design")}</h2>
+          <p class="muted">Today is a design day in your week — no coding problem is scheduled.
+          ${esc(itemKind(design.kind)?.blurb || "")}</p>
+        </div>
+        <div class="row gap-sm">
+          <button class="btn btn-ghost" id="cta-warmup">5-min warmup</button>
+          <button class="btn btn-primary" data-tab="${action.tab}">${esc(action.label)}</button>
+        </div>
+      </div>
+    </div>`;
 }

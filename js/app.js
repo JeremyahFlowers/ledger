@@ -29,6 +29,7 @@ import {
   computePlantState, dueProblems, allAttempts, patternStats, systemDesignUnlock,
   backlogProblems, progressSummary, startDayTimer, stopDayTimer,
 } from "./logic.js";
+import { prepPhase } from "./prep.js";
 
 import { navIcon } from "./icons.js";
 import { renderAnalyze } from "./analyze-view.js";
@@ -635,7 +636,7 @@ function renderViewInner() {
  * keypress falls through instead of appearing to do nothing. */
 function startRecommendedSession() {
   if (!store.state || hasActiveSession()) return false;
-  const rec = recommendSession(store.state);
+  const rec = recommendSession(store.state, prepPhase(store.state).key);
   if (!rec || !rec.problem) return false;
   startSession(rec.problem);
   actions.switchTab("workspace");

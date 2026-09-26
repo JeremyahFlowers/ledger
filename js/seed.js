@@ -5,6 +5,8 @@ import {
   todayISO, newDayTimer, DEFAULT_QUESTION_MINUTES, DEFAULT_PLAN_MINUTES, STATUS_ACTIVE,
 } from "./logic.js";
 import { DEFAULT_DESIGN_MINUTES } from "./design-logic.js";
+import { DEFAULT_PREP } from "./prep.js";
+import { DEFAULT_WEEK } from "./week.js";
 import { DESIGN_PROBLEMS } from "./design-problems.js";
 import { APP_VERSION } from "./version.js";
 
@@ -84,6 +86,16 @@ export function buildSeedState() {
       // silently takes minutes from somebody who never asked for it.
       designMinutes: { ...DEFAULT_DESIGN_MINUTES },
       designShare: 0,
+      // The other end of the band. The budget above has always been a ceiling;
+      // this is the floor below which a day did not really happen, because
+      // there was no room for the review and the review is what teaches.
+      dailyFloorMin: 45,
+      // What you are preparing for. Every field is optional — with none of
+      // them answered the app behaves exactly as it did before this existed.
+      prep: { ...DEFAULT_PREP },
+      // Which days, and what each is for. Derived from the template until
+      // somebody edits a day, at which point the whole week is stored.
+      week: { ...DEFAULT_WEEK },
       systemDesignUnlockThreshold: { minMocks: 10, minSolvedCleanRate: 0.7 },
     },
     patterns: PATTERNS,
