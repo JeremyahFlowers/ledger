@@ -291,7 +291,7 @@ export function renderDesignProblem(root, store, actions) {
         ${attempts.length ? `· ${attempts.length} attempt${attempts.length === 1 ? "" : "s"}` : ""}</p>
       <p>${esc(problem.prompt)}</p>
       <div class="row gap-sm" style="margin-top:0.6rem;flex-wrap:wrap">
-        <button class="btn btn-primary btn-sm" data-start-design="${esc(problem.id)}">Work it on the board</button>
+        <button class="btn btn-primary btn-sm" data-start-design="${esc(problem.id)}">Work it, stage by stage</button>
       </div>
     </div>
 
@@ -373,7 +373,9 @@ export function renderDesignProblem(root, store, actions) {
 
     <div class="card">
       <h2>What they ask next</h2>
-      ${list(problem.followUps)}
+      <p class="muted small">The deep-dive stage puts these to you one at a time, with an answer
+      after each. Listed here without them, so reading the page is not reading the answers.</p>
+      ${list((problem.deepDives || []).map((d) => d.q))}
     </div>
 
     <div class="card">

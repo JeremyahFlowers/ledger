@@ -15,36 +15,63 @@ import { todayISO, addDaysISO, daysBetween, isCleanSolve } from "./logic.js";
 import { COMPONENTS } from "./design-components.js";
 import { DESIGN_PROBLEMS } from "./design-problems.js";
 
-/** How a design interview actually runs, in the order it runs. */
-export const DESIGN_PHASES = [
+/**
+ * How a design interview actually runs, in the order it runs.
+ *
+ * This is the order every published framework teaches and the order an
+ * interviewer expects, and the order matters more than any one part: an API
+ * designed before the entities exist has nothing to carry, and a diagram drawn
+ * before the requirements are agreed is a drawing of the wrong system. The
+ * session walks them one at a time and will not let the whole thing collapse
+ * into "draw boxes for forty minutes", which is what a single open-ended
+ * timebox becomes.
+ *
+ * Each stage is worked, then checked against the answer key before the next
+ * one starts. Checking at the end instead — which is what this used to do —
+ * finds out on minute forty that the requirements were wrong on minute four,
+ * by which point everything built on them was wasted.
+ *
+ * `kind` is what the stage is worked *in*: a list you write, the board you
+ * draw on, or a series of questions put to you. `share` is its slice of the
+ * box. Entities is deliberately the shortest — naming the nouns is a two
+ * minute job that people routinely spend ten on.
+ */
+export const DESIGN_STAGES = [
   {
-    key: "clarify", label: "Clarify", share: 0.15,
-    prompt: "What is in scope and what is not? Get the functional requirements agreed, then the non-functional ones — scale, latency, consistency. Write them where you can both see them.",
+    key: "requirements", label: "Requirements", kind: "write", share: 0.14,
+    prompt: "What must it do, and what must be true of how it does it? Functional first, then the non-functional ones that actually decide the design — scale, latency, consistency, availability.",
+    hint: "Ask rather than assume, and write down the numbers you are given. A requirement nobody stated is a requirement you invented.",
+    placeholder: "Functional:\n- \n\nNon-functional:\n- ",
   },
   {
-    key: "estimate", label: "Estimate", share: 0.12,
-    prompt: "Back of the envelope: users, requests per second, storage per year. You are not looking for accuracy, you are looking for the order of magnitude that decides the design.",
+    key: "entities", label: "Core entities", kind: "write", share: 0.07,
+    prompt: "The nouns the system is about, and the few fields that matter. Not a schema — the handful of things every later part of the design will be moving around.",
+    hint: "Two minutes. If you are still here at five you are designing the database instead of naming the problem.",
+    placeholder: "- User: id, ...\n- ",
   },
   {
-    key: "highlevel", label: "High level", share: 0.33,
-    prompt: "Boxes and arrows, end to end, on the board. Get a complete path from client to storage and back before you make any of it good.",
+    key: "api", label: "API", kind: "write", share: 0.14,
+    prompt: "The calls a client makes, with what goes in and what comes back. One line each. This is the contract the high-level design has to satisfy.",
+    hint: "Work from the functional requirements: each one should turn into a call. If a requirement has no call, you have missed something.",
+    placeholder: "POST /things  { ... } -> { id }\nGET  /things/:id -> { ... }",
   },
   {
-    key: "deepdive", label: "Deep dive", share: 0.28,
-    prompt: "Pick the part that carries the risk and justify it. Why this component, what it costs you, and what you would have used instead.",
+    key: "highlevel", label: "High-level design", kind: "draw", share: 0.37,
+    prompt: "Boxes and arrows, end to end, on the board. A complete path from client to storage and back before you make any part of it good.",
+    hint: "Satisfy the API you just wrote, and nothing more. Optimising a path you have not drawn yet is the most common way to run out of time.",
   },
   {
-    key: "wrap", label: "Bottlenecks", share: 0.12,
-    prompt: "Name what breaks first as this grows, what you would monitor, and what you knowingly left out. Saying it before they ask is the point.",
+    key: "deepdive", label: "Deep dives", kind: "questions", share: 0.28,
+    prompt: "Now it gets stress-tested. Each question is somewhere the design is likely to break — answer with what you would change and what it costs.",
+    hint: "\"It depends\" is not an answer. Name the thing you would do, then name what you gave up to do it.",
   },
 ];
 
-/** Minutes for one design problem, by difficulty. Longer than a coding box
- *  because the format is longer: a real design round is 45 minutes of talking
- *  and drawing, and practising it in fifteen teaches the wrong pace. */
+/** The default box per difficulty. A harder system is not harder to draw so
+ *  much as it has more to agree about before anything can be drawn. */
 export const DEFAULT_DESIGN_MINUTES = { Easy: 30, Medium: 40, Hard: 50, Unrated: 40 };
 
-/** Below this the phases are ceremony rather than guidance. */
+/** Below this the stages are ceremony rather than guidance. */
 const MIN_DIVISIBLE = 15;
 
 export function designMinutes(state, difficulty) {
@@ -52,56 +79,76 @@ export function designMinutes(state, difficulty) {
   return table[difficulty] ?? table.Unrated ?? DEFAULT_DESIGN_MINUTES.Unrated;
 }
 
-/**
- * The phases of one design session, with real minute boundaries.
- *
- * Proportional, unlike the coding timebox — and that difference is real rather
- * than an inconsistency. Reading a coding problem takes five minutes whether it
- * is easy or hard; clarifying requirements genuinely takes longer on a harder
- * system, because there is more to agree about before anything can be drawn.
- */
+/** A design session's box, in minutes, and how it is divided between stages. */
 export function designPlan(state, difficulty) {
   const totalMin = Math.max(1, Math.round(designMinutes(state, difficulty)));
   if (totalMin < MIN_DIVISIBLE) {
     return {
       totalMin,
-      phases: [{
-        key: "sketch", label: "Sketch", startMin: 0, endMin: totalMin, minutes: totalMin,
+      stages: [{
+        key: "sketch", label: "Sketch", kind: "draw", index: 0,
+        startMin: 0, endMin: totalMin, minutes: totalMin,
         prompt: "Short box — requirements, one diagram, one tradeoff named out loud.",
+        hint: "",
       }],
     };
   }
 
-  // Allocated by share and then reconciled, so the phases sum to the box
+  // Allocated by share and then reconciled, so the stages sum to the box
   // exactly. Rounding each independently leaves a box that reports a minute it
   // does not have — the same bug the coding timebox had before it was swept.
   let cursor = 0;
-  const phases = DESIGN_PHASES.map((phase, i) => {
-    const last = i === DESIGN_PHASES.length - 1;
-    const minutes = last ? totalMin - cursor : Math.max(1, Math.round(totalMin * phase.share));
+  const stages = DESIGN_STAGES.map((stage, i) => {
+    const last = i === DESIGN_STAGES.length - 1;
+    const minutes = last ? totalMin - cursor : Math.max(1, Math.round(totalMin * stage.share));
     const startMin = cursor;
     cursor += minutes;
-    return { key: phase.key, label: phase.label, prompt: phase.prompt, startMin, endMin: cursor, minutes };
+    return {
+      key: stage.key, label: stage.label, kind: stage.kind, index: i,
+      prompt: stage.prompt, hint: stage.hint, placeholder: stage.placeholder,
+      startMin, endMin: cursor, minutes,
+    };
   });
-  return { totalMin, phases };
+  return { totalMin, stages };
 }
 
-/** Where you are in a design session. Same shape as questionPhase, so the
- *  workspace can render either without knowing which it has. */
-export function designPhase(elapsedMin, plan) {
-  const { phases, totalMin } = plan;
-  const current = phases.find((p) => elapsedMin < p.endMin) || phases[phases.length - 1];
-  const index = phases.indexOf(current);
-  const remainingInPhase = current.endMin - elapsedMin;
-  const remainingMin = totalMin - elapsedMin;
+/**
+ * The clock for the stage in hand.
+ *
+ * Per stage rather than cumulative, because the stages are advanced by hand:
+ * you move on when you are done, not when a clock decides. What the box is for
+ * is telling you that you have spent nine minutes naming three nouns, which is
+ * the mistake it exists to catch. Running over is allowed and shown — it is
+ * information, not a buzzer.
+ */
+export function stageClock(stage, elapsedMs) {
+  const usedMin = Math.max(0, elapsedMs) / 60000;
+  const remainingMin = stage.minutes - usedMin;
   return {
-    key: current.key, label: current.label, prompt: current.prompt, index,
-    remainingInPhase, remainingMin,
-    fraction: totalMin > 0 ? elapsedMin / totalMin : 0,
+    usedMin, remainingMin,
     overrun: remainingMin < 0,
-    endingSoon: remainingInPhase <= 1 && remainingInPhase > 0,
-    nextLabel: phases[index + 1]?.label ?? null,
+    endingSoon: remainingMin <= 1 && remainingMin > 0,
+    fraction: stage.minutes > 0 ? Math.min(1, usedMin / stage.minutes) : 1,
   };
+}
+
+/** The stage after this one, or null at the end. */
+export function nextStage(plan, key) {
+  const i = plan.stages.findIndex((s) => s.key === key);
+  return i >= 0 ? plan.stages[i + 1] || null : null;
+}
+
+/** The part of the answer key a stage is checked against. */
+export function keyFor(problem, stageKey) {
+  if (!problem) return null;
+  switch (stageKey) {
+    case "requirements": return problem.requirements || null;
+    case "entities": return problem.entities || null;
+    case "api": return problem.api || null;
+    case "highlevel": return problem.walkthrough || null;
+    case "deepdive": return problem.deepDives || null;
+    default: return null;
+  }
 }
 
 // ---------- the bank ----------

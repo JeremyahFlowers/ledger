@@ -174,8 +174,11 @@ function tick(state) {
     + String(Math.floor((abs % 1) * 60)).padStart(2, "0");
   clockEl.classList.toggle("clock-overrun", over);
 
-  const phase = (state.plan.phases || []).find((p) => elapsedMin < p.endMin)
-    || (state.plan.phases || [])[(state.plan.phases || []).length - 1];
+  // A coding session sends `phases`, a design session sends `stages`. The
+  // watcher does not care which it is looking at, and should not have to know
+  // before it can put a label on the screen.
+  const steps = state.plan.phases || state.plan.stages || [];
+  const phase = steps.find((p) => elapsedMin < p.endMin) || steps[steps.length - 1];
   if (phase) {
     phaseEl.innerHTML = "";
     const label = document.createElement("span");

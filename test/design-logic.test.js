@@ -13,10 +13,11 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import {
-  DESIGN_PHASES, DEFAULT_DESIGN_MINUTES, DEFAULT_DESIGN_SHARE,
-  designPlan, designPhase, designMinutes, splitBudget, designShare,
+  DESIGN_STAGES, DEFAULT_DESIGN_MINUTES, DEFAULT_DESIGN_SHARE,
+  designPlan, stageClock, nextStage, keyFor, designMinutes, splitBudget, designShare,
   componentById, componentsFor, problemsUsing, designProblemById,
   componentStats, blindSpots, designAttempts, dueDesignProblems,
   planDesignToday, recommendDesign, componentRecency, BLIND_SPOT_MIN,
@@ -131,7 +132,7 @@ describe("the problem bank", () => {
     // reproducing the reference teaches the wrong thing.
     for (const p of DESIGN_PROBLEMS) {
       assert.ok(p.rubric?.length >= 5, `${p.id} has a thin rubric`);
-      assert.ok(p.followUps?.length, `${p.id} has no follow-up questions`);
+      assert.ok(p.deepDives?.length, `${p.id} has nothing to stress-test it with`);
     }
   });
 
@@ -154,46 +155,73 @@ describe("the problem bank", () => {
   });
 });
 
-describe("timeboxing a design session", () => {
-  test("test_design_phasesFollowHowTheInterviewRuns", () => {
-    assert.deepEqual(DESIGN_PHASES.map((p) => p.key),
-      ["clarify", "estimate", "highlevel", "deepdive", "wrap"]);
+describe("the shape of a design interview", () => {
+  test("test_design_stagesRunInTheOrderAnInterviewRunsThem", () => {
+    // The order is the part being taught. An API designed before the entities
+    // exist has nothing to carry, and a diagram drawn before the requirements
+    // are agreed is a careful drawing of the wrong system.
+    assert.deepEqual(DESIGN_STAGES.map((s) => s.key),
+      ["requirements", "entities", "api", "highlevel", "deepdive"]);
   });
 
   test("test_design_theSharesSumToOne", () => {
-    const total = DESIGN_PHASES.reduce((n, p) => n + p.share, 0);
+    const total = DESIGN_STAGES.reduce((n, s) => n + s.share, 0);
     assert.ok(Math.abs(total - 1) < 1e-9, `shares sum to ${total}`);
   });
 
-  test("test_design_everyPhaseSaysWhatToBeDoing", () => {
-    for (const p of DESIGN_PHASES) assert.ok(p.prompt.length > 40, `${p.key} has no guidance`);
+  test("test_design_everyStageSaysWhatToBeDoing", () => {
+    for (const s of DESIGN_STAGES) assert.ok(s.prompt.length > 40, `${s.key} has no guidance`);
   });
 
-  test("test_design_theBoxAlwaysAddsUp", () => {
-    // Swept rather than spot-checked: the coding timebox had exactly this bug,
-    // where rounding each phase independently left a box reporting a minute it
-    // did not have.
-    for (const total of [1, 10, 14, 15, 20, 30, 40, 50, 75, 120]) {
-      const plan = designPlan({ settings: { designMinutes: { Unrated: total } } }, "Unrated");
-      const sum = plan.phases.reduce((n, p) => n + p.minutes, 0);
-      assert.equal(plan.totalMin, total, `${total}m box`);
-      assert.equal(sum, total, `${total}m box: phases sum to ${sum}`);
-      assert.equal(plan.phases[plan.phases.length - 1].endMin, total, `${total}m box`);
-      assert.ok(plan.phases.every((p) => p.minutes >= 1), `${total}m box has an empty phase`);
+  test("test_design_everyStageSaysHowItIsWorked", () => {
+    // The kind decides whether the stage is a list you write, the board, or a
+    // run of questions — and there is no sensible default.
+    for (const s of DESIGN_STAGES) {
+      assert.ok(["write", "draw", "questions"].includes(s.kind), `${s.key}: ${s.kind}`);
     }
   });
 
-  test("test_design_aVeryShortBoxStopsPretendingToHavePhases", () => {
-    const plan = designPlan({ settings: { designMinutes: { Unrated: 10 } } }, "Unrated");
-    assert.equal(plan.phases.length, 1);
+  test("test_design_entitiesIsTheShortStage", () => {
+    // Naming the nouns is a two minute job that routinely takes ten, and the
+    // box is the only thing that says so.
+    const share = (k) => DESIGN_STAGES.find((s) => s.key === k).share;
+    for (const other of ["requirements", "api", "highlevel", "deepdive"]) {
+      assert.ok(share("entities") < share(other), `entities is not shorter than ${other}`);
+    }
   });
 
-  test("test_design_clarifyingScalesWithDifficultyUnlikeReadingACodingProblem", () => {
+  test("test_design_theDrawingStageGetsTheMostTime", () => {
+    const biggest = [...DESIGN_STAGES].sort((a, b) => b.share - a.share)[0];
+    assert.equal(biggest.key, "highlevel");
+  });
+});
+
+describe("timeboxing a design session", () => {
+  test("test_design_theBoxAlwaysAddsUp", () => {
+    // Swept rather than spot-checked: the coding timebox had exactly this bug,
+    // where rounding each stage independently left a box reporting a minute it
+    // did not have.
+    for (const total of [1, 10, 14, 15, 20, 30, 40, 50, 75, 120]) {
+      const plan = designPlan({ settings: { designMinutes: { Unrated: total } } }, "Unrated");
+      const sum = plan.stages.reduce((n, s) => n + s.minutes, 0);
+      assert.equal(plan.totalMin, total, `${total}m box`);
+      assert.equal(sum, total, `${total}m box: stages sum to ${sum}`);
+      assert.equal(plan.stages[plan.stages.length - 1].endMin, total, `${total}m box`);
+      assert.ok(plan.stages.every((s) => s.minutes >= 1), `${total}m box has an empty stage`);
+    }
+  });
+
+  test("test_design_aVeryShortBoxStopsPretendingToHaveStages", () => {
+    const plan = designPlan({ settings: { designMinutes: { Unrated: 10 } } }, "Unrated");
+    assert.equal(plan.stages.length, 1);
+  });
+
+  test("test_design_requirementsScaleWithDifficultyUnlikeReadingACodingProblem", () => {
     // Deliberately different from the coding timebox, where reading is a flat
-    // five minutes. A harder system has more to agree about before anything can
-    // be drawn.
-    const clarify = (d) => designPlan({}, d).phases.find((p) => p.key === "clarify").minutes;
-    assert.ok(clarify("Hard") > clarify("Easy"));
+    // five minutes. A harder system has more to agree about before anything
+    // can be drawn.
+    const req = (d) => designPlan({}, d).stages.find((s) => s.key === "requirements").minutes;
+    assert.ok(req("Hard") > req("Easy"));
   });
 
   test("test_design_defaultsAreLongerThanACodingBox", () => {
@@ -202,24 +230,127 @@ describe("timeboxing a design session", () => {
     assert.deepEqual(DEFAULT_DESIGN_MINUTES, { Easy: 30, Medium: 40, Hard: 50, Unrated: 40 });
   });
 
-  test("test_design_phaseBoundariesHandOverExactlyOnce", () => {
-    const plan = designPlan({}, "Medium");
-    const first = plan.phases[0];
-    assert.equal(designPhase(first.endMin - 0.1, plan).key, first.key);
-    assert.equal(designPhase(first.endMin, plan).key, plan.phases[1].key);
+  test("test_design_everyStageCarriesWhatTheUiNeedsToRenderIt", () => {
+    for (const s of designPlan({}, "Medium").stages) {
+      assert.ok(s.label && s.kind && s.prompt, `${s.key} is missing something`);
+      assert.equal(typeof s.index, "number");
+    }
+  });
+});
+
+describe("a stage's own clock", () => {
+  const stage = { key: "api", minutes: 6 };
+
+  test("test_design_stageClock_countsDownFromItsOwnBox", () => {
+    const c = stageClock(stage, 2 * 60_000);
+    assert.equal(Math.round(c.remainingMin), 4);
+    assert.equal(c.overrun, false);
   });
 
-  test("test_design_pastTheBoxItCountsOverrunRatherThanStopping", () => {
-    const plan = designPlan({}, "Medium");
-    const over = designPhase(plan.totalMin + 6, plan);
-    assert.equal(over.overrun, true);
-    assert.equal(over.remainingMin, -6);
-    assert.equal(over.key, "wrap");
+  test("test_design_stageClock_pastTheBoxCountsOverrunRatherThanStopping", () => {
+    // Information, not a buzzer. Nothing about a design stage should stop.
+    const c = stageClock(stage, 9 * 60_000);
+    assert.equal(c.overrun, true);
+    assert.equal(Math.round(c.remainingMin), -3);
   });
 
-  test("test_design_aCustomBoxIsHonoured", () => {
-    assert.equal(designMinutes({ settings: { designMinutes: { Hard: 60 } } }, "Hard"), 60);
-    assert.equal(designMinutes(undefined, "Hard"), DEFAULT_DESIGN_MINUTES.Hard);
+  test("test_design_stageClock_warnsBeforeItRunsOut", () => {
+    assert.equal(stageClock(stage, 5.5 * 60_000).endingSoon, true);
+    assert.equal(stageClock(stage, 2 * 60_000).endingSoon, false);
+    assert.equal(stageClock(stage, 9 * 60_000).endingSoon, false, "already over is not ending soon");
+  });
+
+  test("test_design_stageClock_atTheStartIsFullyUnspent", () => {
+    const c = stageClock(stage, 0);
+    assert.equal(c.usedMin, 0);
+    assert.equal(c.fraction, 0);
+  });
+
+  test("test_design_stageClock_negativeElapsedDoesNotRunBackwards", () => {
+    // A clock started in the future — a clock skew, a restored session — must
+    // not report more time than the box has.
+    assert.equal(stageClock(stage, -10_000).usedMin, 0);
+  });
+});
+
+describe("the stage running order", () => {
+  test("test_design_nextStage_handsOnInOrder", () => {
+    const plan = designPlan({}, "Medium");
+    assert.equal(nextStage(plan, "requirements").key, "entities");
+    assert.equal(nextStage(plan, "highlevel").key, "deepdive");
+  });
+
+  test("test_design_nextStage_afterTheLastIsNull", () => {
+    assert.equal(nextStage(designPlan({}, "Medium"), "deepdive"), null);
+  });
+
+  test("test_design_nextStage_ofSomethingThatIsNotAStageIsNull", () => {
+    assert.equal(nextStage(designPlan({}, "Medium"), "nonsense"), null);
+  });
+});
+
+describe("the answer key each stage is checked against", () => {
+  const problem = designProblemById("url-shortener");
+
+  test("test_design_everyStageHasAKeyToCheckAgainst", () => {
+    // A stage you are asked to answer and then cannot check is worse than not
+    // asking: it is the format without the part that teaches.
+    for (const s of DESIGN_STAGES) {
+      assert.ok(keyFor(problem, s.key), `${s.key} has no key`);
+    }
+  });
+
+  test("test_design_keyFor_anUnknownStageIsNull", () => {
+    assert.equal(keyFor(problem, "nonsense"), null);
+  });
+
+  test("test_design_keyFor_noProblemIsNull", () => {
+    assert.equal(keyFor(null, "api"), null);
+  });
+
+  test("test_design_everyProblemCanBeRunEndToEnd", () => {
+    // The format only works if every problem in the bank answers all five
+    // stages. One that cannot is a dead end halfway through a session.
+    for (const p of DESIGN_PROBLEMS) {
+      for (const s of DESIGN_STAGES) {
+        const key = keyFor(p, s.key);
+        assert.ok(key, `${p.id} has no key for ${s.key}`);
+        if (Array.isArray(key)) assert.ok(key.length, `${p.id}'s ${s.key} key is empty`);
+      }
+    }
+  });
+
+  test("test_design_entitiesNameTheirFields", () => {
+    for (const p of DESIGN_PROBLEMS) {
+      for (const e of p.entities) {
+        assert.ok(e.name && e.fields, `${p.id}: an entity is missing a name or its fields`);
+      }
+    }
+  });
+
+  test("test_design_everyApiCallSaysWhatGoesInAndWhatComesBack", () => {
+    for (const p of DESIGN_PROBLEMS) {
+      for (const a of p.api) {
+        assert.ok(a.call && a.body && a.returns, `${p.id}: ${a.call} is incomplete`);
+      }
+    }
+  });
+
+  test("test_design_everyDeepDiveHasAnAnswerNotJustAQuestion", () => {
+    // A stress-test question with no answer is a quiz, and the point of the
+    // stage is finding out where the design breaks, not being marked.
+    for (const p of DESIGN_PROBLEMS) {
+      for (const d of p.deepDives) {
+        assert.ok(d.q?.length > 20, `${p.id}: a thin deep-dive question`);
+        assert.ok(d.answer?.length > 80, `${p.id}: "${d.q}" has no real answer`);
+      }
+    }
+  });
+
+  test("test_design_deepDivesStressTheDesignRatherThanRecapIt", () => {
+    for (const p of DESIGN_PROBLEMS) {
+      assert.ok(p.deepDives.length >= 4, `${p.id} has only ${p.deepDives.length} deep dives`);
+    }
   });
 });
 
@@ -409,5 +540,25 @@ describe("design problems are scheduled like any other problem", () => {
       problem("settled", { box: 4 }), problem("shaky", { box: 0 }),
     ] });
     assert.deepEqual(dueDesignProblems(state).map((p) => p.id), ["shaky", "settled"]);
+  });
+});
+
+describe("showing somebody their own answer back", () => {
+  test("test_design_typedAnswersAreEscapedExactlyOnce", () => {
+    // richText escapes on its way in, so wrapping esc() round it escapes
+    // twice: an arrow typed into an API sketch came back as "-&gt;", which is
+    // the kind of thing that makes people distrust the whole screen.
+    const src = readFileSync(new URL("../js/design-session.js", import.meta.url), "utf8");
+    assert.equal(src.includes("richText(esc("), false,
+      "a typed answer is being escaped twice before it is shown back");
+  });
+
+  test("test_design_typedAnswersAreNeverInsertedRaw", () => {
+    // The other direction, which matters more: what somebody types is the one
+    // untrusted string on this screen.
+    const src = readFileSync(new URL("../js/design-session.js", import.meta.url), "utf8");
+    for (const m of src.matchAll(/\$\{\s*session\.(answers|deepAnswers)[^}]*\}/g)) {
+      assert.ok(/richText|esc\(/.test(m[0]), `inserted without escaping: ${m[0]}`);
+    }
   });
 });

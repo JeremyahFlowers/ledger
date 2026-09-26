@@ -1828,13 +1828,20 @@ input[type="checkbox"]:focus-visible {
   display: flex; gap: 2px; align-items: stretch;
 }
 .box-phases li {
-  flex-basis: 0; min-width: 0;
+  /* A floor as well as a share: the shortest stage is two minutes out of
+     thirty, and at its true proportion the bar clipped its own label to
+     "Core en". The widths stay proportional above the floor, which is what
+     the bar is for. */
+  flex-basis: 0; min-width: 7rem;
   padding: 0.4rem 0.5rem; border-radius: 3px;
   background: var(--surface-2, var(--border)); overflow: hidden;
 }
+/* Five stages at their 7rem floor need 35rem. Below that the bar stops being
+   a bar and becomes a list, which is still readable — a clipped label is not. */
+@media (max-width: 620px) { .box-phases { flex-wrap: wrap; } }
 .box-phases li:first-child { border-radius: 4px 3px 3px 4px; }
 .box-phases li:last-child { border-radius: 3px 4px 4px 3px; }
-.box-phase-label { display: block; font-weight: 600; font-size: 0.8rem; white-space: nowrap; }
+.box-phase-label { display: block; font-weight: 600; font-size: 0.8rem; }
 /* The nudge a minute before a phase ends. Only appears then, so it can afford
    to be loud. */
 .mock-phase-next {
@@ -1911,3 +1918,100 @@ input[type="checkbox"]:focus-visible {
    above it without competing with it — the two halves are one day, and the
    coding one owns the headline. */
 .design-card { border-left: 3px solid var(--accent); }
+
+/* ---------- A design session, stage by stage ----------
+
+   The interview has a shape — requirements, entities, API, high-level, deep
+   dives — and the shape is on screen the whole way through rather than being
+   explained once at the start. Every stage is the same two-column idea: what
+   you wrote on the left, the reference on the right, and never the reference
+   first. */
+
+.ds-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
+
+/* The strip of stages in the bar. Numbered, because the order is the part
+   being taught: an API designed before the entities exist has nothing to
+   carry. */
+.ds-steps {
+  list-style: none; display: flex; flex-wrap: wrap; gap: 0.3rem;
+  margin: 0.35rem 0 0; padding: 0;
+}
+.ds-step {
+  display: flex; align-items: center; gap: 0.3rem;
+  padding: 0.15rem 0.5rem 0.15rem 0.2rem; border-radius: 999px;
+  border: 1px solid transparent; font-size: 0.72rem; color: var(--text-muted);
+}
+.ds-step.current { border-color: var(--accent); color: var(--text); }
+.ds-step.done { color: var(--good); }
+.ds-step-n {
+  width: 1.15rem; height: 1.15rem; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: var(--surface-alt);
+  font-size: 0.66rem; font-weight: 700;
+}
+.ds-step.current .ds-step-n { background: var(--accent); color: #0c1512; }
+.ds-step.done .ds-step-n { background: var(--good-bg); color: var(--good); }
+.ds-step-label { font-weight: 600; }
+.ds-step-min { font-variant-numeric: tabular-nums; opacity: 0.7; }
+
+/* Writing a stage: the answer takes the room, the brief sits beside it. The
+   brief is there because every stage after the first is supposed to be built
+   on the ones before, and it cannot be if they are off screen. */
+.ds-write {
+  display: grid; grid-template-columns: 1fr; gap: 1rem;
+  padding: var(--page-pad); align-content: start;
+}
+@media (min-width: 900px) { .ds-write { grid-template-columns: minmax(0, 2fr) minmax(16rem, 1fr); } }
+.ds-write-card { margin-bottom: 0; }
+.ds-aside { margin-bottom: 0; align-self: start; }
+.ds-hint { border-left: 2px solid var(--border); padding-left: 0.6rem; margin: 0.4rem 0 0.8rem; }
+.ds-answer { font-family: var(--font-mono); font-size: 0.85rem; line-height: 1.5; resize: vertical; }
+.ds-question { font-size: 1.1rem; margin: 0.2rem 0 0.6rem; }
+
+/* Typed answers are read back as prose: newlines are how somebody wrote a
+   list, and collapsing them would show them something they did not type. */
+.ds-recall { white-space: pre-wrap; }
+
+.ds-key { margin-top: 0.9rem; padding-top: 0.9rem; border-top: 1px solid var(--border); }
+.ds-watch { color: var(--warn); font-size: 0.82rem; }
+.ds-thumb {
+  display: block; width: 100%; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface-alt);
+}
+
+/* The check. Two columns on a laptop so the gap is visible at a glance rather
+   than by scrolling between them; stacked below that, yours first. */
+.ds-compare {
+  display: grid; grid-template-columns: 1fr; gap: 1rem;
+  padding: var(--page-pad); align-content: start;
+}
+@media (min-width: 1000px) { .ds-compare { grid-template-columns: 1fr 1fr; } }
+.ds-compare > .card { margin-bottom: 0; }
+.ds-key-card { border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
+
+.ds-check { margin-top: 0.9rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+.ds-check .label { display: block; margin-bottom: 0.4rem; }
+.ds-check-btn.active { border-color: var(--accent); color: var(--text); }
+
+.ds-recap { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 0.9rem; }
+.ds-recap-q { font-weight: 650; margin: 0 0 0.3rem; }
+
+.ds-entities, .ds-api {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 0.8rem;
+}
+.ds-entity-name { font-weight: 650; margin: 0; }
+.ds-entity-fields, .ds-api-call { margin: 0.15rem 0; }
+.ds-entity-fields code, .ds-api-call code { font-size: 0.8rem; }
+.ds-api-call { font-weight: 650; }
+
+.ds-walk { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 1rem; }
+.ds-walk h3 { font-size: 0.95rem; margin: 0 0 0.3rem; }
+.ds-walk p { margin: 0 0 0.3rem; }
+
+.ds-covered { margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--border); }
+
+.ds-summary td, .ds-summary th { font-size: 0.85rem; }
+/* A stage that ran over its box, said plainly. Spending nine minutes naming
+   three nouns is the specific mistake the timebox exists to surface. */
+.over-box { color: var(--warn); font-weight: 650; }
