@@ -63,6 +63,10 @@ export function snapshotOf(session, now = Date.now()) {
   return {
     problemId: session.problem.id,
     isMock: !!session.isMock,
+    // Which half of a two-mediums round this is, and its budget. Without it a
+    // reload mid-round comes back as an ordinary mock with a 45-minute clock,
+    // and saving it never hands back to the round.
+    pair: session.pair || null,
     startedAt: session.startedAt,
     insightAt: session.insightAt,
     codeLang: session.codeLang,

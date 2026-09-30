@@ -14,6 +14,7 @@ import { prepPhase, prepOf } from "./prep.js";
 import {
   LANGUAGES, GRADES, pickFluencyCard, recordFluency, fluencySummary,
 } from "./fluency.js";
+import { CLARIFY_KINDS, pickClarifyPrompt, recordClarify, blindKinds } from "./clarify.js";
 import { patternIcon } from "./icons.js";
 import { esc, pct, patternName } from "./ui.js";
 import { emptyState, ringSvg } from "./chrome.js";
@@ -50,6 +51,7 @@ export function openFluencyDrill() {
 export function renderQuiz(root, store, actions) {
   if (quizMode === "component") return renderComponentQuiz(root, store, actions);
   if (quizMode === "language") return renderFluencyDrill(root, store, actions);
+  if (quizMode === "clarify") return renderClarifyDrill(root, store, actions);
   return renderPatternQuiz(root, store, actions);
 }
 
@@ -130,6 +132,8 @@ function modeSwitchHtml(active) {
           data-quiz-mode="component" aria-pressed="${active === "component"}">Components</button>
         <button type="button" class="btn ${active === "language" ? "btn-primary" : "btn-ghost"} btn-sm"
           data-quiz-mode="language" aria-pressed="${active === "language"}">Your language</button>
+        <button type="button" class="btn ${active === "clarify" ? "btn-primary" : "btn-ghost"} btn-sm"
+          data-quiz-mode="clarify" aria-pressed="${active === "clarify"}">Clarify</button>
       </div>
     </div>`;
 }
@@ -538,6 +542,119 @@ function renderFluencyDrill(root, store, actions) {
       nextFluencyCard(store.state, lang);
       actions.rerender();
     });
+  });
+}
+
+// ---------- Clarify ----------
+
+/**
+ * A deliberately vague prompt: write the questions you would ask, then see
+ * the ones that matter and what each answer changes.
+ *
+ * Written before revealed, for the same reason as the fluency drill: picking
+ * the good questions out of a list is recognition, and the habit being built
+ * is producing them unprompted in the first minute of a round. The tick after
+ * the reveal is yours to be honest with — the drill cannot tell whether
+ * "sorted?" and "is the input in order?" are the same question, and you can.
+ */
+let clarifyDrill = { prompt: null, written: "", revealed: false, ticked: new Set(), saved: false, recent: [] };
+const CLARIFY_RECENT = 3;
+
+function nextClarifyPrompt(state) {
+  clarifyDrill = {
+    ...clarifyDrill,
+    prompt: pickClarifyPrompt(state, clarifyDrill.recent),
+    written: "", revealed: false, ticked: new Set(), saved: false,
+  };
+}
+
+function renderClarifyDrill(root, store, actions) {
+  const state = store.state;
+  if (!clarifyDrill.prompt) nextClarifyPrompt(state);
+  const { prompt, revealed, saved } = clarifyDrill;
+  const blind = blindKinds(state);
+  const mine = clarifyDrill.written.split("\n").map((l) => l.trim()).filter(Boolean);
+
+  root.innerHTML = `
+    ${modeSwitchHtml("clarify")}
+    ${blind.length ? `
+    <div class="card clarify-habit">
+      <p class="small"><strong>You tend not to ask about</strong>
+        ${blind.map((b) => `<span class="pill pill-warn">${esc(b.label)} · ${b.asked} of ${b.of}</span>`).join(" ")}</p>
+    </div>` : ""}
+
+    <div class="card">
+      <p class="label">The interviewer says</p>
+      <h2 class="clarify-prompt">“${esc(prompt.prompt)}”</h2>
+      ${revealed ? "" : `
+      <p class="muted small">Before any code: what would you ask? One question per line. In a real round
+      this is the first two or three minutes, and the interviewer is grading it.</p>
+      <textarea class="textarea" id="clarify-written" rows="7" spellcheck="true"
+        placeholder="Is the input sorted?&#10;What should I return if…">${esc(clarifyDrill.written)}</textarea>
+      <div class="row gap-sm" style="margin-top:0.6rem">
+        <button type="button" class="btn btn-primary" id="clarify-reveal">Show what matters</button>
+        <span class="muted small">Cmd/Ctrl-Enter</span>
+      </div>`}
+    </div>
+
+    ${revealed ? `
+    <div class="clarify-compare">
+      <div class="card">
+        <h3>You asked</h3>
+        ${mine.length ? `<ol class="tight-list">${mine.map((q) => `<li>${esc(q)}</li>`).join("")}</ol>`
+          : `<p class="muted">Nothing — which is what starting to code straight away looks like from the other side of the table.</p>`}
+      </div>
+      <div class="card">
+        <h3>What matters here</h3>
+        <p class="muted small">Tick the ones you asked, in any wording. Each says what its answer would
+        have changed.</p>
+        <ul class="checklist clarify-list">
+          ${prompt.questions.map((q, i) => `<li><label>
+            <input type="checkbox" data-clarify-q="${i}" ${clarifyDrill.ticked.has(i) ? "checked" : ""} ${saved ? "disabled" : ""} />
+            <span><strong>${esc(q.q)}</strong> <span class="pill pill-muted">${esc(CLARIFY_KINDS[q.kind].label)}</span><br />
+            <span class="muted small">${esc(q.changes)}</span></span>
+          </label></li>`).join("")}
+        </ul>
+        <div class="row gap-sm" style="margin-top:0.7rem">
+          ${saved
+            ? `<button type="button" class="btn btn-primary" id="clarify-next">Next prompt</button>
+               <span class="muted small">Asked ${clarifyDrill.ticked.size} of ${prompt.questions.length}.</span>`
+            : `<button type="button" class="btn btn-primary" id="clarify-save">Save</button>`}
+        </div>
+      </div>
+    </div>` : ""}`;
+
+  wireModeSwitch(root, actions);
+
+  const box = root.querySelector("#clarify-written");
+  const reveal = () => {
+    clarifyDrill.written = box?.value || "";
+    clarifyDrill.revealed = true;
+    actions.rerender();
+  };
+  if (box) {
+    requestAnimationFrame(() => box.focus({ preventScroll: true }));
+    box.addEventListener("input", () => { clarifyDrill.written = box.value; });
+    box.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); reveal(); }
+    });
+  }
+  root.querySelector("#clarify-reveal")?.addEventListener("click", reveal);
+
+  root.querySelectorAll("[data-clarify-q]").forEach((cb) => {
+    cb.addEventListener("change", () => {
+      const i = Number(cb.dataset.clarifyQ);
+      if (cb.checked) clarifyDrill.ticked.add(i); else clarifyDrill.ticked.delete(i);
+    });
+  });
+  root.querySelector("#clarify-save")?.addEventListener("click", () => {
+    clarifyDrill.saved = true;
+    clarifyDrill.recent = [prompt.id, ...clarifyDrill.recent].slice(0, CLARIFY_RECENT);
+    store.mutate((st) => recordClarify(st, prompt.id, [...clarifyDrill.ticked]), `Ledger: clarify — ${prompt.id}`);
+  });
+  root.querySelector("#clarify-next")?.addEventListener("click", () => {
+    nextClarifyPrompt(store.state);
+    actions.rerender();
   });
 }
 

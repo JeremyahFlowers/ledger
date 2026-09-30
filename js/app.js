@@ -14,6 +14,7 @@ import {
   hasActiveDesignSession, discardDesignSession, currentDesignProblemName,
 } from "./design-session.js";
 import { renderLongSession } from "./long-session-view.js";
+import { renderPairMock } from "./pair-mock-view.js";
 import { COMPONENTS } from "./design-components.js";
 
 /** Read once for the nav's index card, which runs on every render. */
@@ -166,6 +167,7 @@ function currentViewName() {
   if (activeTab === "problemDetail") return "Problem history";
   if (activeTab === "dayDetail") return "That day's practice";
   if (activeTab === "longSession") return "Today's long session";
+  if (activeTab === "pairMock") return "Two-mediums mock";
   const owner = PAGE_TO_SECTION[activeTab];
   const page = owner && SECTIONS[owner].pages.find((p) => p.id === activeTab);
   return page ? `${SECTIONS[owner].label}, ${page.label}` : "Ledger";
@@ -430,6 +432,7 @@ const PAGE_WIDTH = {
   problemDetail: "page-read", // a history to read, not a dashboard
   dayDetail: "page-read",
   longSession: "page-read",   // one step at a time, read and acted on
+  pairMock: "page-read",
   componentDetail: "page-read",
   designProblem: "page-read",
   dashboard: "page-wide",     // a grid of cards, and the more of them visible the better
@@ -643,6 +646,7 @@ function renderViewInner() {
   if (activeTab === "componentDetail") return renderComponentDetail(root, store, actions);
   if (activeTab === "designProblem") return renderDesignProblem(root, store, actions);
   if (activeTab === "longSession") return renderLongSession(root, store, actions);
+  if (activeTab === "pairMock") return renderPairMock(root, store, actions);
   if (STANDALONE[activeTab]) return STANDALONE[activeTab].render(root, store, actions);
   if (SECTIONS[activeTab]) return renderSectionIndex(root, SECTIONS[activeTab], actions);
 

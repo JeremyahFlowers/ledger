@@ -2138,3 +2138,20 @@ input[type="checkbox"]:focus-visible {
 .long-step.current .long-step-mark { background: var(--accent); color: #0c1512; }
 .long-step-body { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem; }
 .long-resume { margin: 0.8rem 0 0; padding-top: 0.6rem; border-top: 1px solid var(--border); font-size: 0.85rem; }
+
+/* ---------- Clarify ----------
+
+   The prompt is set as a quotation because it is one: this is what the
+   interviewer says, and its vagueness is the point. */
+.clarify-prompt { font-size: 1.15rem; font-style: italic; margin: 0.25rem 0 0.7rem; }
+.clarify-habit { padding-block: 0.6rem; }
+.clarify-habit p { margin: 0; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.clarify-compare { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+@media (min-width: 900px) { .clarify-compare { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); } }
+.clarify-compare > .card { margin-bottom: 0; }
+.clarify-list li { padding-block: 0.45rem; border-bottom: 1px solid var(--border); }
+.clarify-list li:last-child { border-bottom: 0; }
+
+/* The round's two results, one line each: what it was, how long, how it went. */
+.pair-results { margin: 0.6rem 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.pair-results li span { margin-left: 0.4rem; }

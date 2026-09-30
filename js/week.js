@@ -23,6 +23,8 @@
 //     diff against a template that might later change under it.
 
 import { todayISO, daysBetween } from "./logic.js";
+import { clarifyToday } from "./clarify.js";
+import { pairMocksToday } from "./pair-mock.js";
 
 /** Monday first: the week people plan in starts on Monday, whatever
  *  Date.getDay() thinks. */
@@ -68,6 +70,16 @@ export const ITEM_KINDS = {
     key: "designMock", label: "Design deep session", unit: "session",
     blurb: "The long one. Two blocks with a break: a system end to end, then stress-tested.",
     countable: false, defaultCount: 1, minutesEach: 180,
+  },
+  pairMock: {
+    key: "pairMock", label: "Two-mediums mock", unit: "round",
+    blurb: "Two mediums in forty-five minutes — the pace some top-tier rounds run at.",
+    countable: false, defaultCount: 1, minutesEach: 55,
+  },
+  clarify: {
+    key: "clarify", label: "Clarify drill", unit: "prompt",
+    blurb: "A vague prompt: the questions to ask before writing a line.",
+    countable: true, defaultCount: 2, minutesEach: 5,
   },
   drill: {
     key: "drill", label: "Pattern drill", unit: "drill",
@@ -339,6 +351,8 @@ export function dayProgress(state, today = todayISO()) {
     mock: mocksToday,
     designProblem: designToday,
     designMock: designToday,
+    pairMock: pairMocksToday(state, today),
+    clarify: clarifyToday(state, today),
   };
   // What the log cannot see — reading a topic, a drill — is ticked by hand.
   // Counting it as silently done told somebody their Tuesday was finished
@@ -390,7 +404,7 @@ export function setDayCheck(state, kind, on, today = todayISO()) {
 }
 
 /** The kinds the log can actually confirm. */
-const CAN_DETECT = new Set(["coding", "mock", "designProblem", "designMock"]);
+const CAN_DETECT = new Set(["coding", "mock", "designProblem", "designMock", "pairMock", "clarify"]);
 
 /** Problems recorded across the last seven days, against what the week asks
  *  for. The honest unit for "am I keeping to this". */

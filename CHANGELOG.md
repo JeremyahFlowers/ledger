@@ -28,6 +28,44 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 2.6.0 — 2026-09-29
+
+Two drills for what a top-tier loop tests beyond correctness.
+
+### Clarify — the vague prompt
+
+A fourth mode under Learn → Quiz. The interviewer says something deliberately
+vague — "find two numbers that add up to the target" — and you write the
+questions you would ask before any code. Then you see the ones that matter, each
+with what its answer *changes*: sorted means two pointers in constant space,
+indices rule out sorting, "can an element pair with itself" is the order of two
+lines. Ten prompts, sixty-one questions, grouped into nine kinds — size, range,
+duplicates, empty inputs, the shape of the input, what to return, the rules,
+how it is used, text. After a few rounds the drill names the kinds you
+habitually skip, because "you never ask about duplicates" is actionable and
+"you missed question four" is not.
+
+### Two mediums in forty-five minutes
+
+The pace some top-tier rounds run at. Two medium problems from different
+patterns, unattempted first, not shown in advance. The second gets whatever
+the first left of the forty-five minutes. Each half is an ordinary mock session
+with a short Clarify / Approach / Code / Test plan sized to its budget, and the
+round survives a reload mid-problem. The verdict is in words — met the bar,
+close, or missed — with where the time went.
+
+The clock counts working time only: each problem is reflected on while fresh,
+and that does not come out of the second problem's minutes.
+
+### Where they appear
+
+Both can be scheduled in your week and are counted from the log. A target that
+weights speed offers the round beside the day's recommendation; one that
+weights ambiguity offers the clarify drill. With no target chosen, neither
+appears.
+
+---
+
 ## 2.5.0 — 2026-09-29
 
 The long day, run as a guided session: two sittings with a real break between

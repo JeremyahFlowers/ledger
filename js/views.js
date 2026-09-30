@@ -24,7 +24,7 @@ import {
   MOCK_CHECKLIST, mockReview,
   recommendSession, computePlantState, streakGraceInfo, refresherStatus, STATUS_ACTIVE,
 } from "./logic.js";
-import { prepPhase, warmupFor } from "./prep.js";
+import { prepPhase, warmupFor, prepStatus } from "./prep.js";
 import { dayProgress, weekProgress, itemKind, setDayCheck, weekConfigured } from "./week.js";
 
 import { migrateState } from "./seed.js";
@@ -39,7 +39,7 @@ import { loadCodeMirror, CODE_MODES } from "./codemirror-loader.js";
 import { createWhiteboard } from "./whiteboard.js";
 
 import { patternIcon } from "./icons.js";
-import { resetWarmup, openFluencyDrill } from "./drill-view.js";
+import { resetWarmup, openFluencyDrill, openQuizMode } from "./drill-view.js";
 import { currentLongRun } from "./long-session-view.js";
 import { showProblem, showDay } from "./detail-view.js";
 import {
@@ -140,6 +140,7 @@ export function renderDashboard(root, store, actions) {
         </div>
         <div class="row gap-sm">
           <button class="btn btn-ghost" id="cta-warmup">${warmupFor(state).kind === "fluency" ? "Fluency warm-up" : "5-min warmup"}</button>
+          ${emphasisButtons(state)}
           ${rec.type === "deep-dive" || rec.type === "stale-nudge" ? `<button class="btn btn-ghost" data-tab="topics">Review pattern</button>` : ""}
           ${rec.type === "stuck" ? `
             <button class="btn btn-primary" data-goto-topic="${esc(rec.patternId)}">Read the pattern</button>
@@ -247,6 +248,13 @@ export function renderDashboard(root, store, actions) {
     }
     resetWarmup();
     actions.switchTab("warmup");
+  });
+
+  root.querySelectorAll("[data-open-quiz]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      openQuizMode(btn.dataset.openQuiz);
+      actions.switchTab("quiz");
+    });
   });
 
   root.querySelectorAll("[data-day-check]").forEach((btn) => {
@@ -1353,12 +1361,38 @@ function todayCardHtml(state) {
             <span><strong>${esc(item.label)}</strong>
               ${!item.manual && (item.want > 1 || item.got > 0) ? `<span class="muted small">${item.got} of ${item.want}</span>` : ""}
               ${item.manual && !item.met ? `<span class="muted small">tick it when it's done</span>` : ""}
+              ${!item.met && ITEM_GO[item.kind]
+                ? `<button type="button" class="link-button"
+                     ${ITEM_GO[item.kind].tab ? `data-tab="${ITEM_GO[item.kind].tab}"` : `data-open-quiz="${ITEM_GO[item.kind].quiz}"`}>${ITEM_GO[item.kind].label}</button>`
+                : ""}
               <br /><span class="muted small">${esc(itemKind(item.kind)?.blurb || "")}</span></span>
           </li>`).join("")}
       </ul>
       ${longLine}
     </div>`;
 }
+
+/**
+ * The drills a target weights, offered where the day's work is offered.
+ *
+ * Only what the target says it cares about: speed gets the two-mediums round,
+ * ambiguity gets the clarify drill. Somebody who has not chosen a target sees
+ * neither, which is the rule every part of this profile follows.
+ */
+function emphasisButtons(state) {
+  const emphasis = prepStatus(state).emphasis;
+  return [
+    emphasis.includes("speed") ? `<button class="btn btn-ghost" data-tab="pairMock">Two-mediums mock</button>` : "",
+    emphasis.includes("ambiguity") ? `<button class="btn btn-ghost" data-open-quiz="clarify">Clarify drill</button>` : "",
+  ].join("");
+}
+
+/** Where a scheduled item that the dashboard can start is started from. */
+const ITEM_GO = {
+  pairMock: { tab: "pairMock", label: "start the round" },
+  clarify: { quiz: "clarify", label: "open the drill" },
+  drill: { quiz: "pattern", label: "open the drill" },
+};
 
 /**
  * Whether today is a day the week asks for coding at all.

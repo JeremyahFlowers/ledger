@@ -28,6 +28,7 @@ import {
 import { TOPICS } from "./topics-content.js";
 import { loadCodeMirror, CODE_MODES } from "./codemirror-loader.js";
 import { updateDayBudget } from "./chrome.js";
+import { pairPlan, readPair, writePair, recordPairStep, pairFinished, recordPairMock } from "./pair-mock.js";
 import { createWhiteboard } from "./whiteboard.js";
 import { createRepoChannel, createEmitter } from "./session-sync.js";
 import { createLiveChannel } from "./live-channel.js";
@@ -96,6 +97,7 @@ export function restoreSession(state, now = Date.now()) {
   session = {
     problem,
     isMock: snap.isMock,
+    pair: snap.pair || null,
     // Moved forward by however long the tab was closed, so the clock shows
     // time spent working rather than time since you started.
     startedAt: adjustedStart(snap, now),
@@ -116,9 +118,13 @@ export function restoreSession(state, now = Date.now()) {
   return true;
 }
 
-export function startSession(problem, { isMock = false } = {}) {
+export function startSession(problem, { isMock = false, pair = null } = {}) {
   session = {
-    problem, isMock,
+    problem, isMock: isMock || !!pair,
+    // Half of a two-mediums round: { runId, index, budgetMin }. The round
+    // itself lives in pair-mock.js; the session only needs its own budget and
+    // where to hand back to when it is saved.
+    pair,
     // Resolved on first mount by renderWorkspace, which has the store — eight
     // call sites start a session and none of them should have to know about
     // timeboxing. Fixed once and then left alone: changing the box in Settings
@@ -221,9 +227,11 @@ export function renderWorkspace(root, store, actions) {
 
   // The box for this question, from this user's settings, decided once.
   if (!session.plan) {
-    session.plan = session.isMock
-      ? { totalMin: MOCK_MINUTES, phases: [] }
-      : questionPlan(store.state, session.problem.difficulty);
+    session.plan = session.pair
+      ? pairPlan(session.pair.budgetMin)
+      : session.isMock
+        ? { totalMin: MOCK_MINUTES, phases: [] }
+        : questionPlan(store.state, session.problem.difficulty);
   }
 
   const state = store.state;
@@ -233,7 +241,9 @@ export function renderWorkspace(root, store, actions) {
       <span class="pill">${esc(patternName(state, p.patternId))}</span>
       <span class="pill pill-muted">${esc(p.difficulty)}</span>
       ${p.number ? `<span class="pill pill-muted">#${p.number}</span>` : ""}
-      ${session.isMock ? `<span class="pill pill-warn">Mock</span>` : ""}
+      ${session.pair
+        ? `<span class="pill pill-warn">Two-mediums mock · ${session.pair.index + 1} of 2</span>`
+        : session.isMock ? `<span class="pill pill-warn">Mock</span>` : ""}
     </div>
     <h2 class="session-problem-title">${esc(p.name)}</h2>`;
   const readUrl = problemUrl(p);
@@ -251,15 +261,21 @@ export function renderWorkspace(root, store, actions) {
           <li>Start the clock when you begin thinking about a solution.</li>
         </ol>` : `
         <p class="muted small">No link for this one — open it wherever you keep it.</p>`}
-        ${session.isMock ? "" : boxPreviewHtml(session.plan, p.difficulty)}
-        <label class="field checkbox-field">
+        ${session.pair ? `
+        <p class="muted small"><strong>${session.pair.budgetMin} minutes</strong> for this one —
+        ${session.pair.index === 0
+          ? "the whole round, so leave room for the second. Aim to be done by twenty-two."
+          : "what the first left you."} Two questions, the approach in two sentences, then write it.</p>
+        ${boxPreviewHtml(session.plan, p.difficulty)}`
+        : session.isMock ? "" : boxPreviewHtml(session.plan, p.difficulty)}
+        ${session.pair ? "" : `<label class="field checkbox-field">
           <input type="checkbox" id="ws-mock-toggle" ${session.isMock ? "checked" : ""} />
           Verbalized mock — ${MOCK_MINUTES} minutes, counting down, with the prompts an
           interviewer would expect you to hit on your own
-        </label>
+        </label>`}
         <button class="btn btn-primary" id="ws-start">Start timer</button>
       </div>`;
-    root.querySelector("#ws-mock-toggle").addEventListener("change", (e) => {
+    root.querySelector("#ws-mock-toggle")?.addEventListener("change", (e) => {
       session.isMock = e.target.checked;
     });
     root.querySelector("#ws-start").addEventListener("click", () => {
@@ -299,7 +315,7 @@ export function renderWorkspace(root, store, actions) {
             title="Re-read the problem without losing the timer">Problem &#8599;</a>
           <button type="button" class="btn btn-ghost btn-sm" id="ws-run-on-leetcode"
             title="Copy your code and open the problem, ready to paste and run">Run on LeetCode &#8599;</button>` : ""}
-          <button class="btn btn-primary btn-sm" id="ws-submit">Submit solution</button>
+          <button class="btn btn-primary btn-sm" id="ws-submit">${session.pair?.index === 0 ? "Submit — then the second" : "Submit solution"}</button>
           <button class="btn btn-ghost btn-sm session-exit" id="ws-exit">Exit</button>
         </div>
       </div>
@@ -377,7 +393,7 @@ export function renderWorkspace(root, store, actions) {
     // interview is the constraint rather than a stopwatch, and a session with
     // no box could absorb the whole day's budget on one medium — which is not
     // the thing being practised.
-    const phase = session.isMock
+    const phase = session.isMock && !session.pair
       ? mockPhase(elapsedMin)
       : questionPhase(elapsedMin, session.plan);
 
@@ -1135,6 +1151,14 @@ export function renderReflect(root, store, actions) {
     const outcome = f.get("outcome");
     const patternCorrect = reflectState.patternAnswered === p.patternId;
     const isMock = session.isMock;
+    // Half of a two-mediums round hands its result back to the round. Worked
+    // out before the save so the finished round can be logged in the same
+    // mutation as its second attempt — two saves would be two commits, and a
+    // failure between them would leave an attempt with no round.
+    const pairRun = session.pair ? readPair() : null;
+    const nextPair = pairRun && pairRun.id === session.pair.runId
+      ? recordPairStep(pairRun, { problemId: p.id, workMin: solveMin, outcome })
+      : null;
     const capturedCode = session.capturedCode;
     const capturedCodeLang = session.codeLang;
     const whiteboardDataUrl = session.capturedWhiteboardDataUrl;
@@ -1211,12 +1235,18 @@ export function renderReflect(root, store, actions) {
             observedBy,
           });
         }
+        if (nextPair && pairFinished(nextPair)) recordPairMock(s, nextPair);
       }, `Ledger: session — ${p.name}`);
       // Saved: the attempt and the board PNG are now the durable record, so the
       // session's scratch log is cleaned up rather than left to accumulate one
       // file per session forever.
       abandonSession({ saved: true });
       toast("Saved.");
+      if (nextPair) {
+        writePair(nextPair);
+        actions.switchTab("pairMock");
+        return;
+      }
       actions.switchTab("sessionSummary");
     };
 

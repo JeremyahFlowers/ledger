@@ -352,3 +352,31 @@ describe("somebody who has not set up a week", () => {
     assert.equal(buildSeedState().settings.week, undefined);
   });
 });
+
+describe("the drills a week can schedule", () => {
+  const oneDay = (items) => ({
+    template: "weekdays", problems: 0,
+    days: DAYS.map((d) => ({ day: d.key, items })),
+  });
+
+  test("test_week_aClarifyDrillIsCountedFromItsOwnLog", () => {
+    const s = makeSubject({ week: oneDay([{ kind: "clarify", count: 2 }]) });
+    s.clarify = { log: [{ id: "two-sum", date: MONDAY, asked: [] }] };
+    assert.equal(dayProgress(s, MONDAY).complete, false, "one round finished a two-round day");
+    s.clarify.log.push({ id: "maze", date: MONDAY, asked: [] });
+    assert.equal(dayProgress(s, MONDAY).complete, true);
+  });
+
+  test("test_week_aTwoMediumsRoundIsCountedWhenItFinishes", () => {
+    const s = makeSubject({ week: oneDay([{ kind: "pairMock" }]) });
+    assert.equal(dayProgress(s, MONDAY).complete, false);
+    s.pairMocks = [{ id: "r", date: MONDAY, results: [], totalMin: 40, bar: "met" }];
+    assert.equal(dayProgress(s, MONDAY).complete, true);
+  });
+
+  test("test_week_neitherNeedsAHandTick", () => {
+    // Both leave a record, so neither is offered the manual tick.
+    const s = makeSubject({ week: oneDay([{ kind: "clarify", count: 1 }, { kind: "pairMock" }]) });
+    assert.ok(dayProgress(s, MONDAY).items.every((i) => !i.manual));
+  });
+});
