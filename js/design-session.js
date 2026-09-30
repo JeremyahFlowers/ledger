@@ -29,7 +29,9 @@ import { createRepoChannel, createEmitter } from "./session-sync.js";
 import { createLiveChannel } from "./live-channel.js";
 import { deviceId } from "./session-log.js";
 import { storageKey } from "./channel.js";
-import { uid, todayISO, applyOutcome, updateStreak } from "./logic.js";
+import {
+  uid, todayISO, applyOutcome, updateStreak, claimDayTimer, dayTimerRunning, stopDayTimer,
+} from "./logic.js";
 import { esc, richText, toast, confirmLoss } from "./ui.js";
 import { resetWalkthrough } from "./design-view.js";
 
@@ -72,7 +74,9 @@ export function startDesignSession(problemId) {
   return true;
 }
 
-export function abandonDesignSession() {
+export function abandonDesignSession({ saved = false } = {}) {
+  // A recorded session stops its clock inside the save, in the same commit.
+  if (!saved) session?.releaseDayClock?.();
   if (session?.intervalId) clearInterval(session.intervalId);
   if (session?.whiteboardCtl) session.whiteboardCtl.destroy();
   session?.sync?.stop({ discard: true }).catch(() => {});
@@ -550,6 +554,13 @@ function renderPrestart(root, store, actions) {
     session.startedAt = Date.now();
     session.stageStartedAt = Date.now();
     session.mountKey = null;
+    // The session runs the day clock, as a coding session does, so the day's
+    // time moves while you work rather than landing when you record it.
+    const held = session;
+    store.mutate((s) => { held.ownsDayClock = claimDayTimer(s); }, "Ledger: day clock");
+    held.releaseDayClock = () => {
+      if (held.ownsDayClock) store.mutate((s) => stopDayTimer(s), "Ledger: day clock");
+    };
     startSync(store);
     actions.rerender();
   });
@@ -691,6 +702,7 @@ export function renderDesignCompare(root, store, actions) {
       spentMin: session.spent[s.key] != null ? Math.round(session.spent[s.key]) : null,
     }));
 
+    const ownsDayClock = !!session.ownsDayClock;
     store.mutate((s) => {
       const record = (s.designProblems || []).find((x) => x.id === problemId);
       if (!record) return;
@@ -700,15 +712,16 @@ export function renderDesignCompare(root, store, actions) {
         minutes,
         // Whether the day clock was already counting these minutes — the same
         // flag the coding side records, for the same reason.
-        onClock: !!(s.dayTimer?.running && s.dayTimer.date === date),
+        onClock: dayTimerRunning(s),
       });
+      if (ownsDayClock) stopDayTimer(s);
       // Scored on the same ladder as a coding problem: a strong pass moves it
       // up a box, a weak one holds, not knowing where to start resets it.
       applyOutcome(record, outcomeFor(selfScore), s.settings);
       updateStreak(s);
     }, `Ledger: design — ${p.name}`);
 
-    abandonDesignSession();
+    abandonDesignSession({ saved: true });
     toast("Recorded.");
     actions.switchTab("designBank");
   });

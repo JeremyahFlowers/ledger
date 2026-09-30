@@ -320,9 +320,46 @@ export function ringSvg(fraction, { size = 44, stroke = 5, color = "var(--accent
     </svg>`;
 }
 
-/* The dashboard keeps its plain ring: the live countdown, the plant response
-   and the pause control all live in the standing widget now, and a second
-   copy of them on Home was the same information twice. */
+/** Ring geometry for Home's day clock, kept with the markup so the update
+ *  below can find the arc it drew. */
+const DAY_RING = { size: 40, stroke: 4 };
+
+/**
+ * Home's day clock: time actually used today, counting down live.
+ *
+ * This used to be "N/75 min of work lined up", the estimates of the problems
+ * queued for today. Finishing one took it off the queue, so the number fell by
+ * the estimate, all at once, however long the problem had really taken — which
+ * read as the app subtracting the wrong time. This is the clock instead:
+ * minutes spent, as they are spent. What is lined up is a sentence in Today's
+ * plan, where it belongs.
+ */
+export function dayRingHtml(state, now = Date.now()) {
+  const b = budgetProgress(state, now);
+  return `
+    <div class="row gap-sm day-ring" id="dash-day" style="align-items:center">
+      ${ringSvg(b.fraction, { ...DAY_RING, description: `${Math.round(b.usedMin)} of ${b.budgetMin} minutes used today` })}
+      <span class="stat-label"><span class="day-ring-left">${dayRingText(b)}</span><br/>of today's ${b.budgetMin} min</span>
+    </div>`;
+}
+
+const dayRingText = (b) => (b.over ? `+${fmtCountdown(b.overMin)} over` : `${fmtCountdown(b.remainingMin)} left`);
+
+/** Move Home's day clock on, in place, once a tick. */
+export function updateDayRing(host, state, now = Date.now()) {
+  if (!host || !state) return;
+  const b = budgetProgress(state, now);
+  const left = host.querySelector(".day-ring-left");
+  const text = dayRingText(b);
+  if (left && left.textContent !== text) left.textContent = text;
+  const arc = host.querySelectorAll("circle")[1];
+  if (arc) {
+    const circ = 2 * Math.PI * ((DAY_RING.size - DAY_RING.stroke) / 2);
+    arc.setAttribute("stroke-dashoffset", String(circ * (1 - Math.max(0, Math.min(1, b.fraction)))));
+  }
+  host.classList.toggle("budget-over", b.overrun);
+  host.classList.toggle("budget-warn", b.over && !b.overrun);
+}
 
 /**
  * The plant as a standing presence on every page except Home.

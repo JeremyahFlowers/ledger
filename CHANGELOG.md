@@ -28,6 +28,47 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 2.7.0 — 2026-09-29
+
+The coding session, reworked from the moment you press Start.
+
+### Start means start
+
+There is no page in between any more. Start opens the timed workspace with the
+statement, your code and the whiteboard all on screen; the Read phase is the
+first minutes of the clock rather than a screen before it. A session can still
+become a verbalized mock — "Make it a mock" sits in the bar for the first five
+minutes and restarts the clock at forty-five.
+
+### A whiteboard that keeps out of your way
+
+- **Tools stay in hand.** Drawing a box no longer hands you back Select; draw
+  five in a row. Escape steps back — out of the selection, then to Select.
+- **Select more than one thing.** Drag on empty board to catch everything the
+  box touches, Shift-click to add or remove, ⌘A for all. A selection moves,
+  nudges, recolours, deletes and undoes as one.
+- **Copy, cut, paste** (⌘C / ⌘X / ⌘V), with repeated pastes fanning out rather
+  than stacking. ⌘Y redoes, ⌘= / ⌘− zoom.
+- **Number keys** pick tools, 1 to 0 in toolbar order, alongside the letters.
+- **`?`** opens the board's own shortcut sheet.
+- The text tool edits existing words when you press on them instead of stacking
+  a new empty label on top.
+- Fixed: Escape on the board also reached the page, which asked whether to end
+  the session. The board now keeps the keys it uses.
+
+### The day's time, as it is spent
+
+- A session runs the day clock. It starts when the session does (unless you
+  already had it running) and stops when you save or discard, so the day's
+  minutes move while you work rather than landing all at once on save. Design
+  sessions do the same.
+- Home shows time actually used, counting down live. It used to show "minutes
+  of work lined up" — estimates of the queued problems — which fell by an
+  estimate whenever one was finished, however long it had really taken. What is
+  lined up is now a line in Today's plan.
+- A session restored after closing the tab gives back the time the tab was
+  gone, on the day clock as well as its own.
+
 ## 2.6.0 — 2026-09-29
 
 Two drills for what a top-tier loop tests beyond correctness.

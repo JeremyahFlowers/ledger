@@ -20,7 +20,7 @@ import { COMPONENTS } from "./design-components.js";
 /** Read once for the nav's index card, which runs on every render. */
 const COMPONENT_COUNT = COMPONENTS.length;
 import {
-  plantWidgetHtml, updatePlantWidget, wireNavigationTargets, wireListRows,
+  plantWidgetHtml, updatePlantWidget, wireNavigationTargets, wireListRows, updateDayRing,
 } from "./chrome.js";
 import { toast, showTopic } from "./ui.js";
 import {
@@ -505,6 +505,7 @@ function startClocks() {
     // cold start are exactly when it hasn't.
     if (!store.state) return;
     renderPlantWidget();
+    updateDayRing(document.getElementById("dash-day"), store.state);
   }, "updating the day clock"), 1000);
 }
 

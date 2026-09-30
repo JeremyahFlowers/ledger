@@ -53,7 +53,7 @@ import {
 import {
   loadDiagramModules, plantCardHtml, prefill, recencyPill, heatmapSvg,
   leetcodeCalendarToDateCounts, emptyState, trendLineHtml, sparklineSvg, ringSvg, outcomeIcon,
-  weekStripSvg, wireBoardViewers,
+  weekStripSvg, wireBoardViewers, dayRingHtml,
 } from "./chrome.js";
 
 /**
@@ -170,16 +170,7 @@ export function renderDashboard(root, store, actions) {
             </div>
             <div class="stat"><span class="stat-num">${state.streak.longest}</span><span class="stat-label">longest</span></div>
           </div>
-          <div class="row gap-sm" style="align-items:center">
-            ${ringSvg(budgetMin ? usedMin / budgetMin : 0, { size: 40, stroke: 4,
-              description: `${usedMin} of ${budgetMin} minutes of work lined up today` })}
-            <!-- "lined up", not "today": the standing plant shows minutes
-                 actually spent against the same budget, and two rings both
-                 labelled "today" against the same denominator read as the
-                 same number disagreeing with itself. This one is the size of
-                 the work queued; that one is the clock. -->
-            <span class="stat-label">${usedMin}/${budgetMin} min<br/>of work lined up</span>
-          </div>
+          ${dayRingHtml(state)}
         </div>
         <p class="muted small" style="margin:0.6rem 0 0">Last 7 days</p>
         ${weekStripSvg(state)}
@@ -188,6 +179,7 @@ export function renderDashboard(root, store, actions) {
 
       <div class="card">
         <h2>Today's plan</h2>
+        ${plan.length ? `<p class="muted small">About ${usedMin} min of refreshers lined up, against today's ${budgetMin}.</p>` : ""}
         ${plan.length === 0 ? `<p class="empty">Nothing needs a refresher right now.</p>` : `
         <ul class="queue-list">
           ${plan.map((p) => queueItemHtml(state, p)).join("")}

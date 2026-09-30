@@ -15,7 +15,9 @@ import assert from "node:assert/strict";
 
 import { readFileSync } from "node:fs";
 
-import { budgetProgress, todayISO, addDaysISO } from "../js/logic.js";
+import {
+  budgetProgress, todayISO, addDaysISO, claimDayTimer, dayTimerRunning, stopDayTimer, dayTimerElapsedMs,
+} from "../js/logic.js";
 
 const MIN = 60_000;
 const NOW = 1_800_000_000_000;
@@ -103,7 +105,7 @@ describe("the flag is set from what was actually true", () => {
   test("test_budget_onlySetWhenTheClockWasRunningToday", () => {
     // Not "a session happened", which would exclude the minutes of anyone who
     // never uses the day clock and make their budget read as empty all day.
-    assert.match(src, /onClock: !!\(s\.dayTimer\?\.running && s\.dayTimer\.date === date\)/);
+    assert.match(src, /onClock: dayTimerRunning\(s\)/);
   });
 });
 
@@ -149,5 +151,55 @@ describe("the attempt that was already saved before the fix existed", () => {
   test("test_budget_theManualLogPathSaysSoOutright", () => {
     const views = readFileSync(new URL("../js/views.js", import.meta.url), "utf8");
     assert.match(views, /onClock: false/);
+  });
+});
+
+describe("a session runs the day clock", () => {
+  // "I would rather this timer count down so that I can see in real time how
+  // many minutes have been taken up instead of it suddenly dropping all at
+  // once after a problem is completed." A session that did not start the
+  // clock left the day still for its whole length, then landed at once.
+  const makeSubject = ({ running = false, date = todayISO() } = {}) => ({
+    settings: { dailyBudgetMin: 75 },
+    dayTimer: { date, running, startedAt: running ? NOW - 10 * MIN : null, accumulatedMs: 0, adjustmentMs: 0 },
+    problems: [],
+  });
+
+  test("test_claimDayTimer_stoppedClock_startsItAndClaimsIt", () => {
+    const s = makeSubject();
+    assert.equal(claimDayTimer(s, NOW), true);
+    assert.equal(dayTimerRunning(s), true);
+  });
+
+  test("test_claimDayTimer_runningClock_leavesItToWhoeverStartedIt", () => {
+    const s = makeSubject({ running: true });
+    assert.equal(claimDayTimer(s, NOW), false);
+    assert.equal(s.dayTimer.startedAt, NOW - 10 * MIN, "the running stretch was restarted");
+  });
+
+  test("test_claimDayTimer_yesterdaysClockStillRunning_startsTodaysFresh", () => {
+    const s = makeSubject({ running: true, date: addDaysISO(todayISO(), -1) });
+    assert.equal(claimDayTimer(s, NOW), true);
+    assert.equal(s.dayTimer.date, todayISO());
+    assert.equal(dayTimerElapsedMs(s, NOW), 0);
+  });
+
+  test("test_claimedClock_countsTheSessionAsItPasses", () => {
+    const s = makeSubject();
+    claimDayTimer(s, NOW);
+    assert.equal(Math.round(budgetProgress(s, NOW + 20 * MIN).usedMin), 20);
+    assert.equal(Math.round(budgetProgress(s, NOW + 20 * MIN).remainingMin), 55);
+  });
+
+  test("test_claimedClock_stoppedAtTheEnd_keepsTheMinutesAndStopsCounting", () => {
+    const s = makeSubject();
+    claimDayTimer(s, NOW);
+    stopDayTimer(s, NOW + 30 * MIN);
+    assert.equal(dayTimerRunning(s), false);
+    assert.equal(Math.round(budgetProgress(s, NOW + 90 * MIN).usedMin), 30);
+  });
+
+  test("test_dayTimerRunning_noTimerAtAll_isFalse", () => {
+    assert.equal(dayTimerRunning({ settings: {} }), false);
   });
 });

@@ -18,7 +18,7 @@ import {
   quizOptions, updateStreak, computePlantState, recommendSession, allAttempts,
   normalizeStatement, MAX_STATEMENT_CHARS, lastAttemptWithCode, mockPhase, MOCK_MINUTES,
   questionPlan, questionPhase, phaseLayout,
-  priorAttemptSummary,
+  priorAttemptSummary, dayTimerRunning, claimDayTimer, stopDayTimer, adjustDayTimer,
 } from "./logic.js";
 import { prepPhase, prepOf, wantsCleanBar, CLEAN_CODE_BAR } from "./prep.js";
 import {
@@ -101,6 +101,11 @@ export function restoreSession(state, now = Date.now()) {
     // Moved forward by however long the tab was closed, so the clock shows
     // time spent working rather than time since you started.
     startedAt: adjustedStart(snap, now),
+    ownsDayClock: snap.ownsDayClock ?? null,
+    // How long the tab was gone. The session clock skips it (above); a day
+    // clock this session started has been running all that time and gives it
+    // back on mount, so the two never disagree about how long you worked.
+    awayMs: typeof snap.startedAt === "number" ? Math.max(0, adjustedStart(snap, now) - snap.startedAt) : 0,
     insightAt: snap.insightAt,
     endedAt: null,
     intervalId: null,
@@ -167,6 +172,8 @@ export function discardSession(actions) {
 
 /** Called when the user exits Workspace or Reflect without saving. */
 export function abandonSession({ saved = false } = {}) {
+  // A saved session stops its clock inside the save, in the same commit.
+  if (!saved) session?.releaseDayClock?.();
   clearCheckpoint();
   if (session?.intervalId) clearInterval(session.intervalId);
   if (session?.whiteboardCtl) session.whiteboardCtl.destroy();
@@ -181,6 +188,32 @@ export function abandonSession({ saved = false } = {}) {
   session?.live?.stop().catch(() => {});
   session = null;
   reflectState = null;
+}
+
+/**
+ * Run the day clock for as long as this session is open.
+ *
+ * Starts it if it is not already running and remembers that the session did,
+ * so ending the session — saved or discarded — stops it again. A clock you
+ * started yourself is left alone at both ends. Runs on every mount, because a
+ * restored session has to settle the time it was away (see restoreSession)
+ * and needs its release hook back.
+ */
+function holdDayClock(store) {
+  const held = session;
+  if (held.ownsDayClock == null) {
+    let claimed = false;
+    store.mutate((s) => { claimed = claimDayTimer(s); }, "Ledger: day clock");
+    held.ownsDayClock = claimed;
+    checkpoint(held);
+  } else if (held.ownsDayClock && held.awayMs > 0) {
+    const awayMin = held.awayMs / 60000;
+    store.mutate((s) => { if (dayTimerRunning(s)) adjustDayTimer(s, -awayMin); }, "Ledger: day clock");
+  }
+  held.awayMs = 0;
+  held.releaseDayClock = () => {
+    if (held.ownsDayClock) store.mutate((s) => stopDayTimer(s), "Ledger: day clock");
+  };
 }
 
 /** Checkpoint the live session, if there is one. Called when the tab is hidden. */
@@ -361,6 +394,7 @@ export function renderWorkspace(root, store, actions) {
       </div>
     </div>`;
   session.mounted = true;
+  holdDayClock(store);
 
   clearInterval(session.intervalId);
   session.intervalId = setInterval(() => {
@@ -1142,6 +1176,7 @@ export function renderReflect(root, store, actions) {
     const checklist = observed ? { ...session.checklist, ...observed } : { ...session.checklist };
     const observedBy = observed ? "interviewer" : "self";
     const date = todayISO();
+    const ownsDayClock = !!session.ownsDayClock;
 
     const finish = () => {
       store.mutate((s) => {
@@ -1172,7 +1207,7 @@ export function renderReflect(root, store, actions) {
           // clock's time to the attempt's time and charged the same session
           // twice — a 45-minute problem turned "30 minutes left" into "15 over"
           // the moment it was saved.
-          onClock: !!(s.dayTimer?.running && s.dayTimer.date === date),
+          onClock: dayTimerRunning(s),
           code: capturedCode,
           codeLang: capturedCode ? capturedCodeLang : "",
         };
@@ -1208,6 +1243,8 @@ export function renderReflect(root, store, actions) {
           });
         }
         if (nextPair && pairFinished(nextPair)) recordPairMock(s, nextPair);
+        // After the attempt, which has just recorded the clock as running.
+        if (ownsDayClock) stopDayTimer(s);
       }, `Ledger: session — ${p.name}`);
       // Saved: the attempt and the board PNG are now the durable record, so the
       // session's scratch log is cleaned up rather than left to accumulate one

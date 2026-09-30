@@ -1120,6 +1120,10 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 
 .budget-warn { color: var(--warn); font-weight: 600; }
 .budget-over { color: var(--bad); font-weight: 700; }
+.day-ring { flex-wrap: nowrap; }
+.day-ring-left { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
+.day-ring.budget-warn .day-ring-left { color: var(--warn); }
+.day-ring.budget-over .day-ring-left { color: var(--bad); }
 
 /* A shortcut hint inside a button. Quiet enough not to compete with the label,
    present enough to be discovered — a shortcut nobody knows about may as well

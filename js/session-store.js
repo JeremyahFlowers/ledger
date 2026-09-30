@@ -68,6 +68,8 @@ export function snapshotOf(session, now = Date.now()) {
     // and saving it never hands back to the round.
     pair: session.pair || null,
     startedAt: session.startedAt,
+    // Whether this session started the day clock, and so stops it when it ends.
+    ownsDayClock: session.ownsDayClock ?? null,
     insightAt: session.insightAt,
     codeLang: session.codeLang,
     code: session.cm ? session.cm.getValue() : session.capturedCode || "",

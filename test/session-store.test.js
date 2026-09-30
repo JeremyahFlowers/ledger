@@ -94,6 +94,17 @@ describe("snapshotOf", () => {
     assert.equal(snap.problem, undefined);
   });
 
+  test("test_snapshotOf_keepsWhetherTheSessionStartedTheDayClock", () => {
+    // Lost on reload, a restored session would either leave the clock running
+    // after it ended or stop one you had started yourself.
+    assert.equal(snapshotOf({ ...session(), ownsDayClock: true }).ownsDayClock, true);
+    assert.equal(snapshotOf({ ...session(), ownsDayClock: false }).ownsDayClock, false);
+  });
+
+  test("test_snapshotOf_undecidedDayClock_staysUndecided", () => {
+    assert.equal(snapshotOf(session()).ownsDayClock, null);
+  });
+
   test("test_snapshotOf_prefersLiveEditorContentOverTheCapturedCopy", () => {
     const s = { ...session(), cm: { getValue: () => "live text" } };
     assert.equal(snapshotOf(s).code, "live text");

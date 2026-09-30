@@ -715,6 +715,29 @@ export function startDayTimer(state, now = Date.now()) {
   state.dayTimer.startedAt = now;
 }
 
+/** Whether today's clock is running now. A clock left running overnight is
+ *  yesterday's, and does not count. */
+export function dayTimerRunning(state) {
+  return !!(state.dayTimer?.running && state.dayTimer.date === todayISO());
+}
+
+/**
+ * Start today's clock for a session, and say whether this call is what started
+ * it.
+ *
+ * A session is study time by definition, so it runs the clock. Before this,
+ * the day's time moved only if you remembered to start the clock yourself;
+ * otherwise nothing happened for forty minutes and then the whole session
+ * landed at once when it was saved. The answer matters for the end: a clock
+ * the session started stops with it, and one you started yourself is yours,
+ * and keeps running.
+ */
+export function claimDayTimer(state, now = Date.now()) {
+  if (dayTimerRunning(state)) return false;
+  startDayTimer(state, now);
+  return true;
+}
+
 /** Stop the clock, banking the stretch that was running. */
 export function stopDayTimer(state, now = Date.now()) {
   const timer = state.dayTimer;
@@ -827,7 +850,7 @@ export function budgetProgress(state, now = Date.now()) {
     fraction: budgetMin > 0 ? usedMin / budgetMin : 0,
     over: usedMin > budgetMin,
     overrun: usedMin > budgetMin * OVERRUN_MULTIPLE,
-    running: !!(state.dayTimer?.running && state.dayTimer.date === today),
+    running: dayTimerRunning(state),
   };
 }
 

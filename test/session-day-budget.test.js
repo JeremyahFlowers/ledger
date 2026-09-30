@@ -10,7 +10,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { updateDayBudget } from "../js/chrome.js";
+import { updateDayBudget, updateDayRing, dayRingHtml } from "../js/chrome.js";
 import { todayISO } from "../js/logic.js";
 
 const MIN = 60_000;
@@ -93,6 +93,60 @@ describe("how it is marked", () => {
     updateDayBudget(over.el, over.state, NOW);
     assert.equal(over.classes.has("budget-over"), false, "the marking outlived the overrun");
     assert.equal(over.classes.has("budget-warn"), false);
+  });
+});
+
+describe("Home's day clock", () => {
+  /** A host with the two nodes updateDayRing writes: the text and the arc. */
+  function makeRing() {
+    const arc = { attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } };
+    const left = { textContent: "" };
+    const classes = new Set();
+    const host = {
+      querySelector: (sel) => (sel === ".day-ring-left" ? left : null),
+      querySelectorAll: (sel) => (sel === "circle" ? [{}, arc] : []),
+      classList: { toggle(n, on) { if (on) classes.add(n); else classes.delete(n); } },
+    };
+    return { host, left, arc, classes };
+  }
+
+  test("test_updateDayRing_runningClock_countsDownAsTimePasses", () => {
+    // The whole complaint: time used should move while you work, not drop by
+    // an estimate when a problem is finished.
+    const { state } = makeSubject({ clockMin: 10, budget: 75 });
+    const ring = makeRing();
+    updateDayRing(ring.host, state, NOW);
+    assert.equal(ring.left.textContent, "1:05:00 left");
+    updateDayRing(ring.host, state, NOW + 90_000);
+    assert.equal(ring.left.textContent, "1:03:30 left");
+  });
+
+  test("test_updateDayRing_arcFollowsTheFractionUsed", () => {
+    const { state } = makeSubject({ clockMin: 0, budget: 60 });
+    const ring = makeRing();
+    updateDayRing(ring.host, state, NOW);
+    const full = Number(ring.arc.attrs["stroke-dashoffset"]);
+    updateDayRing(ring.host, state, NOW + 30 * MIN);
+    assert.ok(Math.abs(Number(ring.arc.attrs["stroke-dashoffset"]) - full / 2) < 0.01,
+      "half the day did not draw half the ring");
+  });
+
+  test("test_updateDayRing_pastBudget_saysHowFarOver", () => {
+    const { state } = makeSubject({ clockMin: 80, budget: 75 });
+    const ring = makeRing();
+    updateDayRing(ring.host, state, NOW);
+    assert.equal(ring.left.textContent, "+5:00 over");
+    assert.equal(ring.classes.has("budget-warn"), true);
+  });
+
+  test("test_updateDayRing_notOnHome_doesNothing", () => {
+    const { state } = makeSubject();
+    assert.doesNotThrow(() => updateDayRing(null, state, NOW));
+  });
+
+  test("test_dayRingHtml_saysWhatTheClockSays", () => {
+    const { state } = makeSubject({ clockMin: 15, budget: 75 });
+    assert.match(dayRingHtml(state, NOW), /1:00:00 left/);
   });
 });
 

@@ -65,7 +65,7 @@ describe("it is part of the same app", () => {
 
   test("test_integration_aDesignAttemptRecordsWhetherTheClockCountedIt", () => {
     // The double-count bug the coding half had, not repeated on this one.
-    assert.match(session, /onClock: !!\(s\.dayTimer\?\.running && s\.dayTimer\.date === date\)/);
+    assert.match(session, /onClock: dayTimerRunning\(s\)/);
   });
 
   test("test_integration_theDashboardHasOneRecommendationNotTwo", () => {
