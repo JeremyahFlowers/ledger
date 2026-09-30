@@ -148,7 +148,7 @@ export function renderDashboard(root, store, actions) {
             <!-- Still offered, and deliberately last and plain. The app has
                  said what it thinks; it does not get to refuse. -->
             <button class="btn btn-ghost" id="cta-start">Try it anyway</button>`
-          : rec.problem ? `<button class="btn btn-primary" id="cta-start">${rec.type === "deep-dive" ? "Drill it" : "Start session"}</button>` : ""}
+          : rec.problem ? `<button class="btn btn-primary" id="cta-start">${rec.mock ? "Start the mock" : rec.type === "deep-dive" ? "Drill it" : "Start session"}</button>` : ""}
         </div>
       </div>
     </div>` : offDutyCardHtml(state)}
@@ -230,7 +230,9 @@ export function renderDashboard(root, store, actions) {
   const startBtn = root.querySelector("#cta-start");
   if (startBtn) {
     startBtn.addEventListener("click", () => {
-      startSession(rec.problem);
+      // The simulation phase recommends mocks. Nothing read that flag before,
+      // so "do this one as a mock" was said and never honoured.
+      startSession(rec.problem, { isMock: !!rec.mock });
       actions.switchTab("workspace");
     });
   }

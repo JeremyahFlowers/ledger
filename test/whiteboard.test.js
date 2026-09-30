@@ -190,15 +190,29 @@ describe("placing something", () => {
     assert.equal(s.board.toJSON().length, 1);
   });
 
-  test("test_whiteboard_placingAShape_handsBackTheSelectTool", () => {
-    // The usual next thing is to move, size or label what was just drawn, and
-    // that should not be a trip back to the toolbar. Drawing again immediately
-    // would therefore drag the shape rather than make a second one.
+  test("test_whiteboard_placingAShape_keepsTheToolInHand", () => {
+    // A diagram is a row of boxes, not one. Being handed a different tool after
+    // each shape was the first thing the owner complained about.
     const s = makeSubject();
     setTool(s.canvas, "r");
     drag(s.canvas, { x: 100, y: 100 }, { x: 300, y: 250 });
-    drag(s.canvas, { x: 150, y: 150 }, { x: 160, y: 160 });
-    assert.equal(s.board.toJSON().length, 1, "the second drag drew instead of moving");
+    drag(s.canvas, { x: 400, y: 100 }, { x: 600, y: 250 });
+    assert.equal(s.board.toJSON().length, 2, "the second drag did not draw");
+  });
+
+  test("test_whiteboard_digits_pickToolsLikeLetters", () => {
+    const s = makeSubject();
+    setTool(s.canvas, "7");           // Box
+    drag(s.canvas, { x: 100, y: 100 }, { x: 300, y: 250 });
+    assert.equal(s.board.toJSON()[0].kind, "rect");
+  });
+
+  test("test_whiteboard_escape_withNothingSelected_returnsToSelect", () => {
+    const s = makeSubject();
+    setTool(s.canvas, "r");
+    s.canvas.dispatch("keydown", { key: "Escape" });
+    drag(s.canvas, { x: 100, y: 100 }, { x: 300, y: 250 });
+    assert.equal(s.board.toJSON().length, 0, "still drawing boxes after Escape");
   });
 
   test("test_whiteboard_thePenStaysThePen", () => {
@@ -213,11 +227,14 @@ describe("placing something", () => {
 });
 
 describe("picking it up again", () => {
-  /** A board with one box from (100,100) to (300,250), select tool in hand. */
+  /** A board with one box from (100,100) to (300,250), selected, with the
+   *  select tool in hand. */
   function withBox() {
     const s = makeSubject();
     setTool(s.canvas, "r");
     drag(s.canvas, { x: 100, y: 100 }, { x: 300, y: 250 });
+    setTool(s.canvas, "v");
+    drag(s.canvas, { x: 150, y: 100 }, { x: 150, y: 100 });
     return s;
   }
 
@@ -289,6 +306,141 @@ describe("picking it up again", () => {
     assert.equal(all.length, 2);
     assert.deepEqual(all[0].points[0], { x: 100, y: 100 });
     assert.notDeepEqual(all[1].points[0], all[0].points[0], "the copy landed exactly on top");
+  });
+});
+
+describe("more than one thing at once", () => {
+  /** Boxes at (100,100)-(200,200) and (400,100)-(500,200), nothing selected,
+   *  select tool in hand. */
+  function withTwoBoxes() {
+    const s = makeSubject();
+    setTool(s.canvas, "r");
+    drag(s.canvas, { x: 100, y: 100 }, { x: 200, y: 200 });
+    drag(s.canvas, { x: 400, y: 100 }, { x: 500, y: 200 });
+    setTool(s.canvas, "v");
+    return s;
+  }
+  const key = (s, k, mods = {}) =>
+    s.canvas.dispatch("keydown", { key: k, metaKey: false, ctrlKey: false, shiftKey: false, ...mods });
+
+  test("test_whiteboard_marquee_selectsEverythingItTouches", () => {
+    const s = withTwoBoxes();
+    drag(s.canvas, { x: 50, y: 50 }, { x: 450, y: 150 });    // clips the second
+    key(s, "Backspace");
+    assert.equal(s.board.toJSON().length, 0);
+  });
+
+  test("test_whiteboard_marquee_leavesWhatItMissed", () => {
+    const s = withTwoBoxes();
+    drag(s.canvas, { x: 50, y: 50 }, { x: 250, y: 250 });
+    key(s, "Backspace");
+    assert.equal(s.board.toJSON().length, 1);
+    assert.equal(s.board.toJSON()[0].points[0].x, 400);
+  });
+
+  test("test_whiteboard_shiftClick_addsToTheSelection", () => {
+    const s = withTwoBoxes();
+    drag(s.canvas, { x: 150, y: 100 }, { x: 150, y: 100 });
+    drag(s.canvas, { x: 450, y: 100 }, { x: 450, y: 100 }, { shiftKey: true });
+    key(s, "Backspace");
+    assert.equal(s.board.toJSON().length, 0);
+  });
+
+  test("test_whiteboard_shiftClick_onASelectedThing_removesIt", () => {
+    const s = withTwoBoxes();
+    key(s, "a", { metaKey: true });
+    drag(s.canvas, { x: 450, y: 100 }, { x: 450, y: 100 }, { shiftKey: true });
+    key(s, "Backspace");
+    assert.equal(s.board.toJSON().length, 1);
+    assert.equal(s.board.toJSON()[0].points[0].x, 400);
+  });
+
+  test("test_whiteboard_selectAllThenDelete_isOneUndo", () => {
+    const s = withTwoBoxes();
+    key(s, "a", { metaKey: true });
+    key(s, "Delete");
+    assert.equal(s.board.toJSON().length, 0);
+    key(s, "z", { metaKey: true });
+    assert.equal(s.board.toJSON().length, 2, "undo brought back only part of it");
+  });
+
+  test("test_whiteboard_draggingAGroup_movesEveryPart", () => {
+    const s = withTwoBoxes();
+    key(s, "a", { metaKey: true });
+    drag(s.canvas, { x: 150, y: 100 }, { x: 150, y: 160 });
+    const [a, b] = s.board.toJSON();
+    assert.equal(a.points[0].y, 160);
+    assert.equal(b.points[0].y, 160, "the other box stayed behind");
+    assert.equal(s.events.updated.length, 2, "each moved box is reported once");
+  });
+
+  test("test_whiteboard_aGroupMove_isOneUndo", () => {
+    const s = withTwoBoxes();
+    key(s, "a", { metaKey: true });
+    drag(s.canvas, { x: 150, y: 100 }, { x: 150, y: 160 });
+    key(s, "z", { metaKey: true });
+    assert.deepEqual(s.board.toJSON().map((e) => e.points[0].y), [100, 100]);
+  });
+
+  test("test_whiteboard_copyPaste_addsOffsetCopiesAndSelectsThem", () => {
+    const s = withTwoBoxes();
+    key(s, "a", { metaKey: true });
+    key(s, "c", { metaKey: true });
+    key(s, "v", { metaKey: true });
+    const all = s.board.toJSON();
+    assert.equal(all.length, 4);
+    assert.notDeepEqual(all[2].points[0], all[0].points[0], "the copy landed exactly on top");
+    key(s, "Backspace");                                  // the pasted pair is what is selected
+    assert.equal(s.board.toJSON().length, 2);
+  });
+
+  test("test_whiteboard_pastingTwice_fansOutRatherThanStacking", () => {
+    const s = withTwoBoxes();
+    drag(s.canvas, { x: 150, y: 100 }, { x: 150, y: 100 });
+    key(s, "c", { metaKey: true });
+    key(s, "v", { metaKey: true });
+    key(s, "v", { metaKey: true });
+    const [, , first, second] = s.board.toJSON();
+    assert.notDeepEqual(first.points[0], second.points[0]);
+  });
+
+  test("test_whiteboard_paste_withNothingCopied_doesNothing", () => {
+    const s = withTwoBoxes();
+    key(s, "v", { metaKey: true });
+    assert.equal(s.board.toJSON().length, 2);
+  });
+
+  test("test_whiteboard_cut_removesAndKeepsItForPaste", () => {
+    const s = withTwoBoxes();
+    drag(s.canvas, { x: 150, y: 100 }, { x: 150, y: 100 });
+    key(s, "x", { metaKey: true });
+    assert.equal(s.board.toJSON().length, 1);
+    key(s, "v", { metaKey: true });
+    assert.equal(s.board.toJSON().length, 2);
+  });
+
+  test("test_whiteboard_arrowKeys_nudgeTheWholeGroup", () => {
+    const s = withTwoBoxes();
+    key(s, "a", { metaKey: true });
+    key(s, "ArrowDown");
+    assert.deepEqual(s.board.toJSON().map((e) => e.points[0].y), [101, 101]);
+  });
+
+  test("test_whiteboard_escape_dropsTheSelectionBeforeTheTool", () => {
+    const s = withTwoBoxes();
+    key(s, "a", { metaKey: true });
+    key(s, "Escape");
+    key(s, "Backspace");
+    assert.equal(s.board.toJSON().length, 2, "Escape left things selected");
+  });
+
+  test("test_whiteboard_questionMark_togglesTheShortcutSheet", () => {
+    const s = withTwoBoxes();
+    const sheet = root.querySelector("#wb-help");
+    key(s, "?");
+    assert.equal(sheet.hidden, false);
+    key(s, "Escape");
+    assert.equal(sheet.hidden, true);
   });
 });
 

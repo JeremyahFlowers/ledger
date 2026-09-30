@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { GO_TO, DIRECT } from "../js/shortcuts.js";
+import { GO_TO, DIRECT, installShortcuts } from "../js/shortcuts.js";
 
 /** Tab ids registered in app.js, read from source rather than imported —
  * importing app.js would boot the whole application. */
@@ -76,5 +76,47 @@ describe("shortcut destinations", () => {
     // `g` begins a sequence; binding it as a direct action too would make one
     // of the two unreachable.
     assert.ok(!("g" in DIRECT));
+  });
+});
+
+describe("keys something else already handled", () => {
+  /** The page handler installed on a stub document, mid-session, counting
+   *  how often it tries to leave. */
+  function makeSubject() {
+    let handler = null;
+    const stub = {
+      addEventListener: (type, fn) => { if (type === "keydown") handler = fn; },
+      getElementById: () => null,
+    };
+    const saved = globalThis.document;
+    globalThis.document = stub;
+    const exits = { count: 0 };
+    installShortcuts({
+      switchTab: () => {}, inSession: () => true, exitSession: () => { exits.count += 1; },
+      startRecommended: () => false, isReady: () => true,
+      openSearch: () => {}, searchOpen: () => false, closeSearch: () => {},
+    });
+    globalThis.document = saved;
+    const press = (key, defaultPrevented = false) => {
+      const outside = globalThis.document;
+      globalThis.document = stub;
+      try { handler({ key, defaultPrevented, target: null, preventDefault: () => {} }); }
+      finally { globalThis.document = outside; }
+    };
+    return { press, exits };
+  }
+
+  test("test_escape_alreadyHandled_doesNotLeaveTheSession", () => {
+    // The whiteboard's Escape drops a selection; the page must not then also
+    // offer to end the session.
+    const s = makeSubject();
+    s.press("Escape", true);
+    assert.equal(s.exits.count, 0);
+  });
+
+  test("test_escape_unhandled_stillLeavesTheSession", () => {
+    const s = makeSubject();
+    s.press("Escape");
+    assert.equal(s.exits.count, 1);
   });
 });

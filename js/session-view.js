@@ -118,6 +118,12 @@ export function restoreSession(state, now = Date.now()) {
   return true;
 }
 
+/** How long after starting a session it can still be turned into a mock.
+ *  The switch restarts the clock, so it is offered only while little has been
+ *  done: the Read phase, roughly. Later, a mock would be a fresh start with
+ *  the problem already half-solved, which is not a mock of anything. */
+const MOCK_SWITCH_MIN = 5;
+
 export function startSession(problem, { isMock = false, pair = null } = {}) {
   session = {
     problem, isMock: isMock || !!pair,
@@ -131,7 +137,9 @@ export function startSession(problem, { isMock = false, pair = null } = {}) {
     // mid-session must not move the boundaries under someone inside them.
     plan: null,
     startedAt: null, insightAt: null, endedAt: null,
-    intervalId: null, whiteboardCtl: null, whiteboardShown: false,
+    // Open from the start. It used to appear five minutes in, at the Plan
+    // phase — after the first thinking had already happened somewhere else.
+    intervalId: null, whiteboardCtl: null, whiteboardShown: true,
     cm: null, codeLang: null, checklist: {},
     capturedCode: "", capturedWhiteboardDataUrl: null,
     mounted: false, teardownSplitters: null,
@@ -237,7 +245,7 @@ export function renderWorkspace(root, store, actions) {
   const state = store.state;
   const p = session.problem;
   const header = `
-    <div class="row gap-sm">
+    <div class="row gap-sm" id="ws-pills">
       <span class="pill">${esc(patternName(state, p.patternId))}</span>
       <span class="pill pill-muted">${esc(p.difficulty)}</span>
       ${p.number ? `<span class="pill pill-muted">#${p.number}</span>` : ""}
@@ -248,42 +256,14 @@ export function renderWorkspace(root, store, actions) {
     <h2 class="session-problem-title">${esc(p.name)}</h2>`;
   const readUrl = problemUrl(p);
 
+  // Arriving is starting. There used to be a page in between — "read it,
+  // then start the clock" — which did not show the problem, did not show the
+  // board, and was one more click between choosing a problem and working on
+  // it. The Read phase is the first five minutes of the clock instead, with
+  // the statement and the board both on screen.
   if (!session.startedAt) {
-    root.innerHTML = `
-      <div class="card session-card">
-        ${header}
-        <p class="muted">Read it through first, then start the clock when you actually begin working it —
-        that's what "time to insight" measures from.</p>
-        ${readUrl ? `
-        <ol class="session-steps">
-          <li><a class="btn btn-ghost btn-sm" href="${esc(readUrl)}" target="_blank" rel="noopener noreferrer">Open the problem &#8599;</a></li>
-          <li>Read it through.</li>
-          <li>Start the clock when you begin thinking about a solution.</li>
-        </ol>` : `
-        <p class="muted small">No link for this one — open it wherever you keep it.</p>`}
-        ${session.pair ? `
-        <p class="muted small"><strong>${session.pair.budgetMin} minutes</strong> for this one —
-        ${session.pair.index === 0
-          ? "the whole round, so leave room for the second. Aim to be done by twenty-two."
-          : "what the first left you."} Two questions, the approach in two sentences, then write it.</p>
-        ${boxPreviewHtml(session.plan, p.difficulty)}`
-        : session.isMock ? "" : boxPreviewHtml(session.plan, p.difficulty)}
-        ${session.pair ? "" : `<label class="field checkbox-field">
-          <input type="checkbox" id="ws-mock-toggle" ${session.isMock ? "checked" : ""} />
-          Verbalized mock — ${MOCK_MINUTES} minutes, counting down, with the prompts an
-          interviewer would expect you to hit on your own
-        </label>`}
-        <button class="btn btn-primary" id="ws-start">Start timer</button>
-      </div>`;
-    root.querySelector("#ws-mock-toggle")?.addEventListener("change", (e) => {
-      session.isMock = e.target.checked;
-    });
-    root.querySelector("#ws-start").addEventListener("click", () => {
-      session.startedAt = Date.now();
-      checkpoint(session);
-      actions.rerender(); // safe: nothing is mounted yet
-    });
-    return;
+    session.startedAt = Date.now();
+    checkpoint(session);
   }
 
   // The editor and board are live DOM widgets, so this markup may only ever be
@@ -306,6 +286,8 @@ export function renderWorkspace(root, store, actions) {
         </div>
         <div class="mock-phase" id="ws-mock-phase"></div>
         <div class="ws-bar-actions">
+          ${session.isMock ? "" : `<button type="button" class="btn btn-ghost btn-sm" id="ws-make-mock"
+            title="Restart the clock at ${MOCK_MINUTES} minutes, with the prompts an interviewer would give">Make it a mock</button>`}
           <button type="button" class="btn btn-ghost btn-sm" id="ws-mark-insight" ${session.insightAt ? "disabled" : ""}>
             ${session.insightAt ? `Insight at ${Math.round((session.insightAt - session.startedAt) / 60000)} min` : "I've got my approach"}
           </button>
@@ -415,6 +397,7 @@ export function renderWorkspace(root, store, actions) {
         <span class="mock-phase-prompt">${esc(phase.prompt)}</span>${nudge}`;
     }
     updateDayBudget(document.getElementById("ws-day"), store.state);
+    if (elapsedMin > MOCK_SWITCH_MIN) document.getElementById("ws-make-mock")?.remove();
 
     // Follows the phase, not the clock: only a change of phase moves anything,
     // so this costs nothing on the other three ticks a second.
@@ -598,6 +581,20 @@ export function renderWorkspace(root, store, actions) {
 
   wireStatementPane(root, store, p);
 
+  // Choosing a mock used to be a checkbox on a page before the clock started.
+  // That page is gone, so the choice moved here, for the first few minutes.
+  root.querySelector("#ws-make-mock")?.addEventListener("click", (e) => {
+    if (session.isMock) return;
+    session.isMock = true;
+    session.plan = { totalMin: MOCK_MINUTES, phases: [] };
+    session.startedAt = Date.now();
+    checkpoint(session);
+    e.target.remove();
+    root.querySelector("#ws-pills")?.insertAdjacentHTML("beforeend", `<span class="pill pill-warn">Mock</span>`);
+    const phaseHost = document.getElementById("ws-mock-phase");
+    if (phaseHost) delete phaseHost.dataset.phase;
+  });
+
   root.querySelector("#ws-mark-insight").addEventListener("click", (e) => {
     if (session.insightAt) return;
     session.insightAt = Date.now();
@@ -717,31 +714,6 @@ function priorHtml(problem) {
     </div>`;
 }
 
-/**
- * The box you are about to enter, before you enter it.
- *
- * Shown up front on purpose. The point of a timebox is that you know its shape
- * while you are inside it — a countdown that turns out to have been divided
- * into phases you were never told about is a surprise, not a guardrail.
- */
-function boxPreviewHtml(plan, difficulty) {
-  if (!plan || !plan.phases.length) return "";
-  return `
-    <div class="box-preview">
-      <p class="muted small"><strong>${plan.totalMin} minutes</strong> for
-        ${esc(String(difficulty).toLowerCase())}. Nothing stops when a phase ends — the app just
-        says where you are, so a good approach doesn't eat the time you needed to write it.</p>
-      <ol class="box-phases">
-        ${plan.phases.map((ph) => `
-          <li style="flex-grow:${ph.minutes}">
-            <span class="box-phase-label">${esc(ph.label)}</span>
-            <span class="muted small">${ph.minutes}m</span>
-          </li>`).join("")}
-      </ol>
-      <p class="muted small"><button type="button" class="link-button" data-goto="settings">Change
-        these times</button> per difficulty in Settings.</p>
-    </div>`;
-}
 
 /**
  * Attach this session to its durable log.

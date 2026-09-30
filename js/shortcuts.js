@@ -76,6 +76,9 @@ export function installShortcuts(deps) {
   document.addEventListener("keydown", (event) => {
     // Let the browser keep its own chords.
     if (event.metaKey || event.ctrlKey || event.altKey) return;
+    // Something on the page already acted on this key (the whiteboard's
+    // Escape, say); a second meaning on top of the first is never wanted.
+    if (event.defaultPrevented) return;
 
     if (event.key === "Escape") {
       if (deps.searchOpen()) { deps.closeSearch(); event.preventDefault(); return; }

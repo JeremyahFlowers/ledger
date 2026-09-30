@@ -861,6 +861,21 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
   font-variant-numeric: tabular-nums; cursor: pointer;
 }
 .wb-zoom-level:hover { color: var(--text); border-color: var(--border); }
+.wb-help {
+  position: absolute; inset: 0.6rem; z-index: 4;
+  overflow: auto; padding: 0.9rem 1rem;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  backdrop-filter: blur(4px);
+}
+.wb-help[hidden] { display: none; }
+.wb-help-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; }
+.wb-help-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.9rem 1.4rem; }
+.wb-help-grid h4 { margin: 0 0 0.35rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.wb-help-grid dl { display: grid; grid-template-columns: auto 1fr; gap: 0.3rem 0.7rem; margin: 0; align-items: baseline; }
+.wb-help-grid dt { margin: 0; white-space: nowrap; }
+.wb-help-grid dd { margin: 0; font-size: 0.84rem; color: var(--text-muted); }
+.wb-help-grid kbd { font-size: 0.72rem; white-space: pre; }
 .whiteboard-thumb-host img { max-width: 100%; border-radius: 6px; margin-top: 0.5rem; border: 1px solid var(--border); }
 
 

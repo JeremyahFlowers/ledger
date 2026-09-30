@@ -50,25 +50,31 @@ const FONT_STACK = `ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
 
 const FONT_SIZES = { min: 8, max: 120, step: 4 };
 
-/** Tool, keyboard shortcut, and what it makes. The letters follow the
- *  convention every drawing tool shares, so they are already known. */
+/** Tool, letter, number, and what it makes. The letters follow the convention
+ *  every drawing tool shares; the numbers follow Excalidraw's, for one hand on
+ *  the keyboard and one on the trackpad.
+ *
+ *  Every tool stays selected until you choose another. An earlier version
+ *  handed you back Select after each shape, on the theory that the next thing
+ *  you want is to move what you drew — and the owner's first complaint about
+ *  the rebuilt board was being switched to a tool they had not asked for. A
+ *  diagram is five boxes in a row, not one; Escape or V gets you back. */
 const TOOLS = [
-  { key: "v", id: "select", label: "Select", glyph: "↖" },
-  { key: "h", id: "hand", label: "Pan", glyph: "✋" },
-  { key: "p", id: "pen", label: "Pen", glyph: "✎" },
-  { key: "e", id: "eraser", label: "Eraser", glyph: "⌫" },
-  { key: "a", id: "arrow", label: "Arrow", glyph: "→" },
-  { key: "l", id: "line", label: "Line", glyph: "╱" },
-  { key: "r", id: "rect", label: "Box", glyph: "▭" },
-  { key: "o", id: "ellipse", label: "Circle", glyph: "◯" },
-  { key: "t", id: "text", label: "Text", glyph: "T" },
-  { key: "g", id: "cells", label: "Array", glyph: "▦" },
+  { key: "v", num: "1", id: "select", label: "Select", glyph: "↖" },
+  { key: "h", num: "2", id: "hand", label: "Pan", glyph: "✋" },
+  { key: "p", num: "3", id: "pen", label: "Pen", glyph: "✎" },
+  { key: "e", num: "4", id: "eraser", label: "Eraser", glyph: "⌫" },
+  { key: "a", num: "5", id: "arrow", label: "Arrow", glyph: "→" },
+  { key: "l", num: "6", id: "line", label: "Line", glyph: "╱" },
+  { key: "r", num: "7", id: "rect", label: "Box", glyph: "▭" },
+  { key: "o", num: "8", id: "ellipse", label: "Circle", glyph: "◯" },
+  { key: "t", num: "9", id: "text", label: "Text", glyph: "T" },
+  { key: "g", num: "0", id: "cells", label: "Array", glyph: "▦" },
 ];
 
-/** Tools that place one thing and hand you back the select tool with it
- *  selected. Pen and eraser are excluded because they are used in strokes,
- *  and being thrown out of them after every mark would be maddening. */
-const ONE_SHOT = new Set(["arrow", "line", "rect", "ellipse", "cells", "text"]);
+/** Where a paste lands relative to what was copied, per paste, so repeated
+ *  pastes fan out instead of stacking invisibly on top of each other. */
+const PASTE_OFFSET = 16;
 
 /** Arrows are straightened by default. The reason to reach for an arrow tool
  *  rather than freehand is that it comes out straight; a wobbly one between two
@@ -90,6 +96,57 @@ const ERASER_PX = 14;
 /** How far a pointer may travel and still count as a tap rather than a drag. */
 const TAP_PX = 4;
 
+/** Whether two boxes touch. */
+const overlaps = (a, b) => !!a && a.x <= b.x + b.w && a.x + a.w >= b.x && a.y <= b.y + b.h && a.y + a.h >= b.y;
+
+/** Every shortcut, in one place, so the sheet cannot fall out of step with
+ *  the keys. Read by the overlay; the keys themselves are handled in onKeyDown. */
+const SHORTCUTS = [
+  ["Tools", [
+    ...TOOLS.map((t) => [`${t.key.toUpperCase()}  or  ${t.num}`, t.label]),
+    ["Esc", "Back to Select"],
+    ["Space + drag", "Pan"],
+  ]],
+  ["Selecting", [
+    ["Drag on empty board", "Select everything it touches"],
+    ["Shift + click", "Add or remove one thing"],
+    ["⌘/Ctrl + A", "Select everything"],
+    ["Esc", "Clear the selection"],
+  ]],
+  ["Editing", [
+    ["⌘/Ctrl + C / X / V", "Copy, cut, paste"],
+    ["⌘/Ctrl + D", "Duplicate"],
+    ["Delete", "Delete the selection"],
+    ["Arrows  (Shift = 10)", "Nudge"],
+    ["Enter  or  double-click", "Edit text"],
+    ["Shift while drawing", "Square, circle, free angle"],
+    ["Shift on a corner grip", "Keep the proportions"],
+    ["⌘/Ctrl + Z,  ⌘/Ctrl + Shift + Z", "Undo, redo"],
+  ]],
+  ["View", [
+    ["Scroll", "Pan"],
+    ["Pinch  or  ⌘/Ctrl + scroll", "Zoom"],
+    ["⌘/Ctrl + =  /  −", "Zoom in, out"],
+    ["⌘/Ctrl + 0", "Fit everything"],
+    ["?", "This sheet"],
+  ]],
+];
+
+const helpHtml = () => `
+  <div class="wb-help" id="wb-help" hidden role="dialog" aria-label="Whiteboard shortcuts">
+    <div class="wb-help-head">
+      <strong>Shortcuts</strong>
+      <button type="button" class="link-button" id="wb-help-close" aria-label="Close">Close</button>
+    </div>
+    <div class="wb-help-grid">
+      ${SHORTCUTS.map(([group, rows]) => `
+        <section>
+          <h4>${group}</h4>
+          <dl>${rows.map(([k, v]) => `<dt><kbd>${k}</kbd></dt><dd>${v}</dd>`).join("")}</dl>
+        </section>`).join("")}
+    </div>
+  </div>`;
+
 const cssVar = (root, name, fallback) =>
   (getComputedStyle(root).getPropertyValue(name) || "").trim() || fallback;
 
@@ -109,7 +166,7 @@ export function createWhiteboard(root, hooks = {}) {
     ${readOnly ? "" : `<div class="whiteboard-toolbar">
       <div class="wb-tools" role="toolbar" aria-label="Drawing tools">
         ${TOOLS.map((t) => `<button type="button" class="wb-tool" data-tool="${t.id}"
-          title="${t.label} — ${t.key.toUpperCase()}" aria-label="${t.label}"
+          title="${t.label} — ${t.key.toUpperCase()} or ${t.num}" aria-label="${t.label}"
           aria-pressed="${t.id === "pen"}">${t.glyph}</button>`).join("")}
       </div>
       <div class="wb-sep" role="separator"></div>
@@ -131,11 +188,13 @@ export function createWhiteboard(root, hooks = {}) {
       <button type="button" class="btn btn-ghost btn-sm" id="wb-undo" title="Undo — Cmd/Ctrl-Z">Undo</button>
       <button type="button" class="btn btn-ghost btn-sm" id="wb-redo" title="Redo — Cmd/Ctrl-Shift-Z">Redo</button>
       <button type="button" class="btn btn-ghost btn-sm" id="wb-clear">Clear</button>
+      <button type="button" class="wb-step" id="wb-help-toggle" title="Shortcuts — ?" aria-label="Keyboard shortcuts">?</button>
     </div>`}
     <div class="wb-stage">
       <canvas class="whiteboard-canvas" id="wb-canvas" ${readOnly ? "" : 'tabindex="0"'}></canvas>
       ${readOnly ? "" : `<textarea class="wb-text-editor" id="wb-editor" hidden spellcheck="false"
         aria-label="Text"></textarea>
+      ${helpHtml()}
       <div class="wb-zoom" role="group" aria-label="Zoom">
         <button type="button" class="wb-step" id="wb-zoom-out" aria-label="Zoom out">&minus;</button>
         <button type="button" class="wb-zoom-level" id="wb-zoom-level"
@@ -157,7 +216,13 @@ export function createWhiteboard(root, hooks = {}) {
   let view = { scale: 1, x: 0, y: 0 };
 
   let drafting = null;      // the element being drawn right now
-  let selectedId = null;
+  // What is selected, by id. A set rather than one id: marquee, shift-click,
+  // select-all, group move and copy-paste all need more than one.
+  let selection = new Set();
+  // What was last copied, as data. Kept per board, not on the system
+  // clipboard: pasting a drawing into a text field is not a thing to support.
+  let clipboard = [];
+  let pasteCount = 0;
   let action = null;        // { type: "move" | "resize" | "pan" | "erase", ... }
   let editing = null;       // { id, before, created }
   let hoverHandle = null;
@@ -195,7 +260,14 @@ export function createWhiteboard(root, hooks = {}) {
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
 
-  const selected = () => elements.find((e) => e.id === selectedId) || null;
+/** The one selected element, or null when there are none or several. Grips,
+   *  the text editor and the property bar all act on exactly one thing. */
+  const selected = () => (selection.size === 1
+    ? elements.find((e) => selection.has(e.id)) || null
+    : null);
+  /** Everything selected, in stacking order. */
+  const selectedList = () => elements.filter((e) => selection.has(e.id));
+  const selectOnly = (id) => { selection = new Set(id ? [id] : []); };
 
   // ---- measuring text ----
 
@@ -252,8 +324,48 @@ export function createWhiteboard(root, hooks = {}) {
     }
     if (drafting) draw(drafting);
 
-    const sel = selected();
-    if (sel && !editing) drawSelection(sel);
+    if (!editing) {
+      const sel = selected();
+      if (sel) drawSelection(sel);
+      else if (selection.size > 1) drawGroupSelection(selectedList());
+    }
+    if (action?.type === "marquee") drawMarquee(action.from, action.to);
+  }
+
+  /** Several selected: each outlined, one box round the lot, and no grips —
+   *  resizing a mixed group has no single right answer, so it is not offered. */
+  function drawGroupSelection(list) {
+    const accent = cssVar(root, "--accent", "#4fc3b8");
+    ctx.save();
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = inUnits(1);
+    ctx.setLineDash([inUnits(3), inUnits(3)]);
+    for (const el of list) {
+      const b = elementBounds(el);
+      if (b) ctx.strokeRect(b.x - inUnits(3), b.y - inUnits(3), b.w + inUnits(6), b.h + inUnits(6));
+    }
+    const all = boundsOf(list);
+    if (all) {
+      ctx.lineWidth = inUnits(1.25);
+      ctx.setLineDash([inUnits(6), inUnits(4)]);
+      const pad = inUnits(8);
+      ctx.strokeRect(all.x - pad, all.y - pad, all.w + pad * 2, all.h + pad * 2);
+    }
+    ctx.restore();
+  }
+
+  function drawMarquee(from, to) {
+    const b = normalizeBounds({ x: from.x, y: from.y, w: to.x - from.x, h: to.y - from.y });
+    ctx.save();
+    ctx.fillStyle = cssVar(root, "--accent", "#4fc3b8");
+    ctx.globalAlpha = 0.08;
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = cssVar(root, "--accent", "#4fc3b8");
+    ctx.lineWidth = inUnits(1);
+    ctx.setLineDash([inUnits(4), inUnits(3)]);
+    ctx.strokeRect(b.x, b.y, b.w, b.h);
+    ctx.restore();
   }
 
   function setStroke(el) {
@@ -409,7 +521,7 @@ export function createWhiteboard(root, hooks = {}) {
     const i = elements.findIndex((e) => e.id === id);
     if (i < 0) return;
     const [gone] = elements.splice(i, 1);
-    if (selectedId === id) selectedId = null;
+    selection.delete(id);
     history.record({ undo: () => add(gone), redo: () => removeById(id) });
     redraw();
     onRemove?.(id);
@@ -425,7 +537,7 @@ export function createWhiteboard(root, hooks = {}) {
     const going = before.filter((e) => ids.has(e.id));
     if (!going.length) return;
     elements = before.filter((e) => !ids.has(e.id));
-    if (ids.has(selectedId)) selectedId = null;
+    for (const id of ids) selection.delete(id);
     history.record({
       undo: () => {
         elements = before.slice();
@@ -434,7 +546,7 @@ export function createWhiteboard(root, hooks = {}) {
       },
       redo: () => {
         elements = elements.filter((e) => !ids.has(e.id));
-        selectedId = null;
+        selection = new Set();
         redraw();
         ids.forEach((id) => onRemove?.(id));
       },
@@ -451,6 +563,25 @@ export function createWhiteboard(root, hooks = {}) {
     history.record({ undo: () => replace(before), redo: () => replace(el) });
     redraw();
     onUpdate?.(el);
+  }
+
+  /** Several at once, as one step — a group moved, recoloured or nudged. */
+  function replaceMany(next) {
+    const before = next.map((el) => elements.find((e) => e.id === el.id)).filter(Boolean);
+    if (!before.length) return;
+    for (const el of next) put(el);
+    history.record({ undo: () => replaceMany(before), redo: () => replaceMany(next) });
+    redraw();
+    next.forEach((el) => onUpdate?.(el));
+  }
+
+  /** Several added as one step — a paste or a duplicate. */
+  function addMany(els) {
+    if (!els.length) return;
+    elements.push(...els);
+    history.record({ undo: () => removeMany(new Set(els.map((e) => e.id))), redo: () => addMany(els) });
+    redraw();
+    els.forEach((el) => onAdd?.(el));
   }
 
   /** Change without recording a step — for the middle of a drag or a keystroke,
@@ -481,7 +612,7 @@ export function createWhiteboard(root, hooks = {}) {
     if (readOnly) return;
     commitEditor();
     editing = { id: el.id, before: el, created };
-    selectedId = el.id;
+    selectOnly(el.id);
     editor.value = el.text || "";
     editor.hidden = false;
     positionEditor();
@@ -542,7 +673,7 @@ export function createWhiteboard(root, hooks = {}) {
     // mind, and changing your mind should leave no trace.
     if (!text.trim()) {
       elements = elements.filter((e) => e.id !== id);
-      if (selectedId === id) selectedId = null;
+      selection.delete(id);
       if (!created) {
         history.record({ undo: () => add(before), redo: () => removeById(id) });
         onRemove?.(id);
@@ -559,7 +690,9 @@ export function createWhiteboard(root, hooks = {}) {
     } else {
       replace(next);
     }
-    selectedId = next.id;
+    // Selected only in the select tool. With the text tool still in hand,
+    // grips on the words just committed would sit where the next click goes.
+    if (tool === "select") selectOnly(next.id);
     redraw();
   }
 
@@ -698,14 +831,34 @@ export function createWhiteboard(root, hooks = {}) {
         }
       }
       const hit = elementAt(elements, at, slopFor(e));
-      selectedId = hit ? hit.id : null;
-      action = hit ? { type: "move", id: hit.id, from: at, origin: hit, moved: false } : null;
+      if (hit && e.shiftKey) {
+        // Shift-click adds or removes one thing, the way every editor does.
+        if (selection.has(hit.id)) selection.delete(hit.id); else selection.add(hit.id);
+        action = null;
+      } else if (hit) {
+        // Pressing on something already in the selection moves the whole
+        // selection; pressing on anything else selects just that.
+        if (!selection.has(hit.id)) selectOnly(hit.id);
+        action = { type: "move", from: at, origins: selectedList(), moved: false };
+      } else {
+        // Empty board: drag a box to select everything it touches. Shift keeps
+        // what was already selected.
+        if (!e.shiftKey) selection = new Set();
+        action = { type: "marquee", from: at, to: at, base: new Set(selection) };
+      }
       syncProps();
       redraw();
       return;
     }
 
-    if (tool === "text") { startTextAt(at); return; }
+    if (tool === "text") {
+      // Pressing on words with the text tool edits them rather than stacking a
+      // new, empty box on top.
+      const hit = elementAt(elements, at, slopFor(e));
+      if (hit?.kind === "text") { openEditor(hit); return; }
+      startTextAt(at);
+      return;
+    }
 
     drafting = makeElement(tool, {
       id: nextId(), color, width, fontSize,
@@ -756,7 +909,19 @@ export function createWhiteboard(root, hooks = {}) {
       const dy = at.y - action.from.y;
       if (!action.moved && Math.hypot(dx, dy) * pxPerUnit() < TAP_PX) return;
       action.moved = true;
-      put(movedBy(action.origin, dx, dy));
+      for (const origin of action.origins) put(movedBy(origin, dx, dy));
+      redraw();
+      return;
+    }
+
+    if (action?.type === "marquee") {
+      action.to = at;
+      const box = normalizeBounds({ x: action.from.x, y: action.from.y,
+        w: at.x - action.from.x, h: at.y - action.from.y });
+      // Touching counts, not only containing: a long arrow is almost never
+      // wholly inside the box you drew to catch it.
+      const inside = elements.filter((el) => overlaps(elementBounds(el), box)).map((el) => el.id);
+      selection = new Set([...action.base, ...inside]);
       redraw();
       return;
     }
@@ -817,15 +982,26 @@ export function createWhiteboard(root, hooks = {}) {
         const marked = action.marked;
         action = null;
         removeMany(marked);
-      } else if ((type === "move" || type === "resize")) {
+      } else if (type === "move") {
+        const origins = action.origins;
+        const moved = action.moved;
+        action = null;
+        if (moved) {
+          const finals = origins.map((o) => elements.find((x) => x.id === o.id)).filter(Boolean);
+          for (const o of origins) put(o);      // back, so replaceMany records a real step
+          replaceMany(finals);
+        }
+      } else if (type === "resize") {
         const final = elements.find((x) => x.id === action.id);
         const origin = action.origin;
-        const changed = type === "resize" || action.moved;
         action = null;
-        if (final && changed) {
-          put(origin);          // back to where it was, so replace() records a real step
+        if (final) {
+          put(origin);
           replace(final);
         }
+      } else if (type === "marquee") {
+        action = null;
+        syncProps();
       } else {
         action = null;
       }
@@ -844,13 +1020,6 @@ export function createWhiteboard(root, hooks = {}) {
     const tiny = b && b.w * pxPerUnit() < TAP_PX && b.h * pxPerUnit() < TAP_PX;
     if (el.kind !== "pen" && tiny) { redraw(); return; }
     add(el);
-    if (ONE_SHOT.has(el.kind)) {
-      // Handed back the select tool with the new shape already selected, so
-      // moving, sizing or recolouring it is the next gesture rather than the
-      // next trip to the toolbar.
-      selectedId = el.id;
-      setTool("select");
-    }
     redraw();
   }
 
@@ -886,22 +1055,42 @@ export function createWhiteboard(root, hooks = {}) {
 
   // ---- keyboard ----
 
-  function nudge(dx, dy) {
-    const sel = selected();
-    if (!sel) return;
-    replace(movedBy(sel, dx, dy));
+  /** Copy what is selected, as data. */
+  function copySelection() {
+    const list = selectedList();
+    if (!list.length) return false;
+    clipboard = list.map((el) => ({ ...el, points: el.points.map((pt) => ({ ...pt })) }));
+    pasteCount = 0;
+    return true;
+  }
+
+  /** Paste the clipboard as new elements, offset so it is visibly a copy, and
+   *  select what was pasted so it can be moved straight away. */
+  function paste() {
+    if (!clipboard.length) return;
+    pasteCount += 1;
+    const d = PASTE_OFFSET * pasteCount;
+    const copies = clipboard.map((el) => ({
+      ...el, id: nextId(), points: el.points.map((pt) => ({ x: pt.x + d, y: pt.y + d })),
+    }));
+    addMany(copies);
+    setTool("select");
+    selection = new Set(copies.map((c) => c.id));
+    syncProps();
+    redraw();
   }
 
   function duplicate() {
-    const sel = selected();
-    if (!sel) return;
-    const offset = 12;
-    const copy = { ...sel, id: nextId(), points: sel.points.map((p) => ({ x: p.x + offset, y: p.y + offset })) };
-    add(copy);
-    selectedId = copy.id;
-    setTool("select");
-    redraw();
+    if (copySelection()) paste();
   }
+
+  function nudge(dx, dy) {
+    const list = selectedList();
+    if (list.length) replaceMany(list.map((el) => movedBy(el, dx, dy)));
+  }
+
+  /** Keep a key the board acted on from also reaching the page's shortcuts. */
+  const claim = (e) => { e.preventDefault(); e.stopPropagation(); };
 
   function onKeyDown(e) {
     if (readOnly) return;
@@ -915,15 +1104,49 @@ export function createWhiteboard(root, hooks = {}) {
     const key = e.key.toLowerCase();
 
     if (meta && key === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+    if (meta && key === "y") { e.preventDefault(); redo(); return; }
     if (meta && key === "d") { e.preventDefault(); duplicate(); return; }
-    if (meta && key === "0") { e.preventDefault(); zoomToFit(); return; }
-
-    if ((e.key === "Backspace" || e.key === "Delete") && selectedId) {
-      e.preventDefault();
-      removeById(selectedId);
+    if (meta && key === "c") { if (copySelection()) e.preventDefault(); return; }
+    if (meta && key === "x") {
+      if (copySelection()) { e.preventDefault(); removeMany(new Set(selection)); syncProps(); }
       return;
     }
-    if (e.key === "Escape") { selectedId = null; syncProps(); redraw(); return; }
+    if (meta && key === "v") { e.preventDefault(); paste(); return; }
+    if (meta && key === "a") {
+      e.preventDefault();
+      setTool("select");
+      selection = new Set(elements.map((el) => el.id));
+      syncProps();
+      redraw();
+      return;
+    }
+    if (meta && key === "0") { e.preventDefault(); zoomToFit(); return; }
+    if (meta && (key === "=" || key === "+")) { e.preventDefault(); zoomBy(1.25); return; }
+    if (meta && key === "-") { e.preventDefault(); zoomBy(0.8); return; }
+
+    if ((e.key === "Backspace" || e.key === "Delete") && selection.size) {
+      e.preventDefault();
+      removeMany(new Set(selection));
+      syncProps();
+      return;
+    }
+    // Escape steps back: the sheet, then the selection, then whatever tool is
+    // in hand, to Select. With tools that stay put, this is the way home. Each
+    // step is claimed, because the page's own Escape leaves the session — one
+    // press to deselect must not ask whether you want to quit. Only once there
+    // is nothing left to step back from does it reach the page.
+    if (e.key === "Escape") {
+      if (!helpOpen() && !selection.size && tool === "select") return;
+      claim(e);
+      if (helpOpen()) toggleHelp(false);
+      else if (selection.size) selection = new Set();
+      else setTool("select");
+      syncProps();
+      redraw();
+      return;
+    }
+    // The board's own sheet, not the page's: this is the list that applies here.
+    if (e.key === "?") { claim(e); toggleHelp(); return; }
     // Return opens whatever is selected for editing, which for a label is the
     // thing you most often want and for anything else does nothing.
     if (e.key === "Enter" && selected()?.kind === "text") {
@@ -933,7 +1156,7 @@ export function createWhiteboard(root, hooks = {}) {
     }
 
     const NUDGE = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
-    if (NUDGE[e.key] && selectedId) {
+    if (NUDGE[e.key] && selection.size) {
       e.preventDefault();
       const [dx, dy] = NUDGE[e.key];
       const step = e.shiftKey ? 10 : 1;
@@ -942,7 +1165,7 @@ export function createWhiteboard(root, hooks = {}) {
     }
 
     if (meta) return;
-    const match = TOOLS.find((t) => t.key === key);
+    const match = TOOLS.find((t) => t.key === key || t.num === key);
     if (match) { e.preventDefault(); setTool(match.id); }
   }
 
@@ -956,6 +1179,17 @@ export function createWhiteboard(root, hooks = {}) {
     onPointerUp(e);
   }
 
+  // ---- the shortcut sheet ----
+
+  let helpShown = false;
+  const helpOpen = () => helpShown;
+  function toggleHelp(open = !helpShown) {
+    helpShown = open;
+    const el = root.querySelector("#wb-help");
+    if (el) el.hidden = !open;
+    if (!open) canvas.focus?.({ preventScroll: true });
+  }
+
   // ---- the toolbar ----
 
   function setTool(id) {
@@ -965,7 +1199,7 @@ export function createWhiteboard(root, hooks = {}) {
     // otherwise sit on the board catching presses meant for the new tool.
     // Switching *to* it keeps whatever is selected — that is how a shape stays
     // selected after it is drawn.
-    if (id !== "select") selectedId = null;
+    if (id !== "select") selection = new Set();
     root.querySelectorAll(".wb-tool").forEach((b) =>
       b.setAttribute("aria-pressed", String(b.dataset.tool === id)));
     syncProps();
@@ -996,8 +1230,8 @@ export function createWhiteboard(root, hooks = {}) {
 
   function setFontSize(next) {
     fontSize = Math.max(FONT_SIZES.min, Math.min(FONT_SIZES.max, Math.round(next)));
-    const sel = selected();
-    if (sel?.kind === "text") replace(refit({ ...sel, fontSize }));
+    const texts = selectedList().filter((el) => el.kind === "text");
+    if (texts.length) replaceMany(texts.map((el) => refit({ ...el, fontSize })));
     if (editing) positionEditor();
     syncProps();
     redraw();
@@ -1049,16 +1283,16 @@ export function createWhiteboard(root, hooks = {}) {
         color = btn.dataset.color;
         // Recolours the selection, which is what clicking a colour with
         // something selected obviously means.
-        const sel = selected();
-        if (sel) replace({ ...sel, color });
+        const list = selectedList();
+        if (list.length) replaceMany(list.map((el) => ({ ...el, color })));
         if (editing) positionEditor();
         syncProps();
       });
     });
     root.querySelector("#wb-width")?.addEventListener("input", (e) => {
       width = Number(e.target.value);
-      const sel = selected();
-      if (sel && sel.kind !== "text") replace({ ...sel, width });
+      const list = selectedList().filter((el) => el.kind !== "text");
+      if (list.length) replaceMany(list.map((el) => ({ ...el, width })));
     });
     root.querySelector("#wb-font")?.addEventListener("input", (e) => {
       const n = Number(e.target.value);
@@ -1069,6 +1303,8 @@ export function createWhiteboard(root, hooks = {}) {
     root.querySelector("#wb-zoom-in")?.addEventListener("click", () => zoomBy(1.25));
     root.querySelector("#wb-zoom-out")?.addEventListener("click", () => zoomBy(0.8));
     root.querySelector("#wb-zoom-level")?.addEventListener("click", zoomToFit);
+    root.querySelector("#wb-help-toggle")?.addEventListener("click", () => toggleHelp());
+    root.querySelector("#wb-help-close")?.addEventListener("click", () => toggleHelp(false));
     root.querySelector("#wb-undo")?.addEventListener("click", undo);
     root.querySelector("#wb-redo")?.addEventListener("click", redo);
     root.querySelector("#wb-clear")?.addEventListener("click", () => {
@@ -1076,7 +1312,7 @@ export function createWhiteboard(root, hooks = {}) {
       if (!elements.length) return;
       const previous = elements;
       elements = [];
-      selectedId = null;
+      selection = new Set();
       // Undoing a clear puts the whole board back at once, and the caller is
       // told both ways — a clear on one device that could not be undone on the
       // other would leave the two permanently different.
@@ -1137,7 +1373,7 @@ export function createWhiteboard(root, hooks = {}) {
       if (!Array.isArray(saved)) return;
       commitEditor();
       elements = migrateBoard(saved);
-      selectedId = null;
+      selection = new Set();
       redraw();
     },
 
@@ -1152,7 +1388,7 @@ export function createWhiteboard(root, hooks = {}) {
     },
     removeRemote(id) {
       elements = elements.filter((e) => e.id !== id);
-      if (selectedId === id) selectedId = null;
+      selection.delete(id);
       redraw();
     },
 
@@ -1170,13 +1406,13 @@ export function createWhiteboard(root, hooks = {}) {
      */
     toDataUrl() {
       const wasView = view;
-      const wasSelected = selectedId;
-      selectedId = null;
+      const wasSelected = selection;
+      selection = new Set();
       zoomToFit();
       redraw();
       const url = canvas.toDataURL("image/png");
       view = wasView;
-      selectedId = wasSelected;
+      selection = wasSelected;
       showZoom();
       redraw();
       return url;

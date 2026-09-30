@@ -1478,7 +1478,7 @@ export function questionPlan(state, difficulty) {
  * `phaseLayoutIsAdvisory` in session-view.js.
  */
 export const PHASE_LAYOUTS = {
-  read:    [0.55, 0.30, 0.15],
+  read:    [0.42, 0.23, 0.35],   // the statement, and room to sketch while reading it
   plan:    [0.25, 0.20, 0.55],
   code:    [0.20, 0.52, 0.28],
   reflect: [0.34, 0.33, 0.33],
