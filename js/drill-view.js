@@ -35,11 +35,16 @@ let quizState = { current: null, options: [], answered: null, recentIds: [] };
  *  two places would be two habits to build; one page with a switch is one. */
 let quizMode = "pattern";
 
+/** Open the quiz page on a given drill: "pattern", "component" or "language". */
+export function openQuizMode(mode) {
+  quizMode = mode;
+  if (mode === "language") fluencyDrill = { ...fluencyDrill, card: null };
+}
+
 /** Open the quiz page on the fluency drill — the warm-up, for a target that
  *  assumes fluency. */
 export function openFluencyDrill() {
-  quizMode = "language";
-  fluencyDrill = { ...fluencyDrill, card: null };
+  openQuizMode("language");
 }
 
 export function renderQuiz(root, store, actions) {

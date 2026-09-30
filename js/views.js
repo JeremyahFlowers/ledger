@@ -40,6 +40,7 @@ import { createWhiteboard } from "./whiteboard.js";
 
 import { patternIcon } from "./icons.js";
 import { resetWarmup, openFluencyDrill } from "./drill-view.js";
+import { currentLongRun } from "./long-session-view.js";
 import { showProblem, showDay } from "./detail-view.js";
 import {
   esc, richText, pct, mins, fmtDate, patternName, toast, topicNav, showTopic, outcomeOptions,
@@ -1315,6 +1316,20 @@ function todayCardHtml(state) {
   }
 
   const done = progress.complete;
+  const long = currentLongRun(state);
+  // Where a long day is up to, or the offer to run it as one. The design
+  // Saturday already has its own card below, so only a long *coding* day is
+  // offered here.
+  const longLine = long.run && long.plan
+    ? `<p class="long-resume">${long.run.index >= long.plan.steps.length
+        ? "The long session is done."
+        : `Long session: step ${long.run.index + 1} of ${long.plan.steps.length} —
+           ${esc(long.plan.steps[long.run.index].label)}.`}
+        <button type="button" class="link-button" data-tab="longSession">Back to the plan</button></p>`
+    : long.plan && long.plan.kind === "coding"
+      ? `<p class="long-resume">Today is two sittings with a break between.
+          <button type="button" class="link-button" data-tab="longSession">Run it as a guided session</button></p>`
+      : "";
   return `
     <div class="card today-card${done ? " complete" : ""}">
       <div class="row space-between" style="align-items:flex-start;gap:0.75rem;flex-wrap:wrap">
@@ -1341,6 +1356,7 @@ function todayCardHtml(state) {
               <br /><span class="muted small">${esc(itemKind(item.kind)?.blurb || "")}</span></span>
           </li>`).join("")}
       </ul>
+      ${longLine}
     </div>`;
 }
 
@@ -1367,8 +1383,9 @@ function offDutyCardHtml(state) {
 
   const design = progress.items.find((i) => i.kind.startsWith("design"));
   if (!design) return "";
+  const { run: longRun } = currentLongRun(state);
   const ACTION = {
-    designMock: { tab: "designBank", label: "Start the long session" },
+    designMock: { tab: "longSession", label: longRun ? "Back to the long session" : "Start the long session" },
     designProblem: { tab: "designBank", label: "Pick a problem" },
     designStudy: { tab: "components", label: "Open the components" },
   };

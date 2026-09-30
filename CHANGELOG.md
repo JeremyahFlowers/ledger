@@ -28,6 +28,51 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 2.5.0 — 2026-09-29
+
+The long day, run as a guided session: two sittings with a real break between
+them, each step sending you to the screen where it happens.
+
+### Why
+
+"Saturday: three hours of system design" is a commitment with no shape, and
+three hours with no shape becomes ninety minutes of reading and ninety of
+feeling vaguely guilty. Past about two hours deliberate practice stops being
+deliberate, so a long day is two sittings with a genuine break, and each
+sitting has a job.
+
+### The long design session
+
+For a day your week gives to the design deep session — Saturday, in the
+"design Saturday" shape:
+
+1. **Components, read properly** — two you have been missing, end to end.
+2. **A system, end to end** — one design problem through all five stages.
+3. **Break** — twenty minutes away from the screen.
+4. **A harder system** — a second problem, most care on the deep dives.
+5. **Trade-off drill** — the component quiz, recall rather than reading.
+6. **What broke** — two sentences in the journal: the component you did not
+   reach for, the deep dive you could not answer. Next week's reading list.
+
+Scaled to whatever length the week gave the day.
+
+### Long coding days
+
+A day whose band splits into two blocks — Rigorous or Full time — runs the same
+way: warm-up, deliberate practice, review, break, and again. For a top-tier
+target the warm-up is the fluency drill in your language; deliberate practice
+starts the recommended problem directly.
+
+### Keeping your place
+
+Each step's clock is kept by when it started, not by the page, so it is right
+however long you spent on the screen it sent you to. The dashboard shows where
+you are and a way back to the plan. Skips are recorded rather than lost, and
+the end of the day says what was actually done. The run is a place-marker for
+one day on one device and lives in the browser, not the synced log.
+
+---
+
 ## 2.4.0 — 2026-09-29
 
 Being fluent in your language, and writing code a top-tier interviewer would
