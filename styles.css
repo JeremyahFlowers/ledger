@@ -2073,3 +2073,19 @@ input[type="checkbox"]:focus-visible {
 .today-items li.met { color: var(--text-muted); }
 .today-tick { flex: none; width: 1.1rem; font-weight: 700; color: var(--text-muted); }
 .today-items li.met .today-tick { color: var(--good); }
+/* A tick you press, for the things the log cannot see. Sized as a control and
+   shaped like the read-only tick beside it, so the two read as one list. */
+.today-check {
+  background: transparent; border: 1px solid var(--border); border-radius: 50%;
+  width: 1.4rem; height: 1.4rem; padding: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  font: inherit; font-size: 0.8rem; line-height: 1;
+}
+.today-check:hover { border-color: var(--accent); color: var(--text); }
+.today-items li.met .today-check { border-color: var(--good); }
+/* Once the day is done, more is an offer rather than an ask, and it should
+   look like one. */
+.session-cta-card.optional { border-color: var(--border); }
+.session-cta-card.optional .btn-primary { background: transparent; color: var(--text); border-color: var(--border); }
+.setup-nudge { padding-block: 0.7rem; }
+.setup-nudge p { margin: 0; }

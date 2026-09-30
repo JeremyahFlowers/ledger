@@ -14,7 +14,7 @@ import {
   DAYS, ITEM_KINDS, WEEK_TEMPLATES, DEFAULT_WEEK, LIGHT_DAY_PROBLEMS,
   weekPlan, weekSettings, templateByKey, dayKeyOf, todaysSlot, isRestDay,
   dayMinutes, weeklyCount, weeklyProblems, weeklyMinutes,
-  dayProgress, weekProgress, problemsForBand, itemKind,
+  dayProgress, weekProgress, problemsForBand, itemKind, setDayCheck,
 } from "../js/week.js";
 
 const MONDAY = "2026-09-28";      // a Monday
@@ -233,15 +233,59 @@ describe("how today is going", () => {
     assert.equal(p.remaining.length, 0);
   });
 
-  test("test_week_aDayOfOnlyReadingIsNeverReportedUnfinished", () => {
-    // Reading and drilling cannot be detected from the log, so counting them
-    // as outstanding would nag for ever.
-    const readingWeek = {
-      template: "weekdays", problems: 0,
-      days: DAYS.map((d) => ({ day: d.key, items: [{ kind: "designStudy", count: 1 }] })),
-    };
+  const readingWeek = {
+    template: "weekdays", problems: 0,
+    days: DAYS.map((d) => ({ day: d.key, items: [{ kind: "designStudy", count: 1 }] })),
+  };
+
+  test("test_week_somethingTheLogCannotSeeIsNotSilentlyDone", () => {
+    // It used to be: the card said "Tuesday — done" while the design topic
+    // sat unread, because reading leaves nothing in the log.
     const p = dayProgress(makeSubject({ week: readingWeek }), MONDAY);
-    assert.equal(p.complete, true);
+    assert.equal(p.complete, false);
+    assert.equal(p.items[0].manual, true, "an undetectable item is not marked as ticked by hand");
+  });
+
+  test("test_week_aTickFinishesIt", () => {
+    const s = makeSubject({ week: readingWeek });
+    setDayCheck(s, "designStudy", true, MONDAY);
+    assert.equal(dayProgress(s, MONDAY).complete, true);
+  });
+
+  test("test_week_anUntickReopensIt", () => {
+    const s = makeSubject({ week: readingWeek });
+    setDayCheck(s, "designStudy", true, MONDAY);
+    setDayCheck(s, "designStudy", false, MONDAY);
+    assert.equal(dayProgress(s, MONDAY).complete, false);
+  });
+
+  test("test_week_aTickDoesNotCarryIntoTomorrow", () => {
+    const s = makeSubject({ week: readingWeek });
+    setDayCheck(s, "designStudy", true, MONDAY);
+    assert.equal(dayProgress(s, "2026-09-29").complete, false);
+  });
+
+  test("test_week_aTickCannotFinishSomethingTheLogCanSee", () => {
+    // Coding is counted from the log. A tick on it would be a second source
+    // of truth about the same thing, and the two would disagree.
+    const s = makeSubject({ week: { template: "weekdays", problems: 10 } });
+    setDayCheck(s, "coding", true, MONDAY);
+    assert.equal(dayProgress(s, MONDAY).complete, false);
+  });
+
+  test("test_week_oldTicksArePrunedOnTheWayThrough", () => {
+    // Every byte of the synced file is paid for on every save.
+    const s = makeSubject({ week: readingWeek });
+    setDayCheck(s, "designStudy", true, "2026-08-01");
+    setDayCheck(s, "designStudy", true, MONDAY);
+    assert.deepEqual(Object.keys(s.dayChecks), [MONDAY]);
+  });
+
+  test("test_week_untickingTheLastThingLeavesNoEmptyDayBehind", () => {
+    const s = makeSubject({ week: readingWeek });
+    setDayCheck(s, "designStudy", true, MONDAY);
+    setDayCheck(s, "designStudy", false, MONDAY);
+    assert.deepEqual(s.dayChecks, {});
   });
 
   test("test_week_overdeliveringDoesNotBreakTheCount", () => {
@@ -290,5 +334,21 @@ describe("the item kinds", () => {
     const s = weekSettings({ settings: { week: { problems: 3 } } });
     assert.equal(s.problems, 3);
     assert.ok(s.template && s.design);
+  });
+});
+
+describe("somebody who has not set up a week", () => {
+  test("test_week_weekConfigured_isFalseUntilOneIsSaved", async () => {
+    const { weekConfigured } = await import("../js/week.js");
+    assert.equal(weekConfigured({ settings: {} }), false);
+    assert.equal(weekConfigured({ settings: { week: { template: "weekdays" } } }), true);
+  });
+
+  test("test_week_aNewLogDoesNotArriveWithAWeekAlreadyChosen", async () => {
+    // Its absence is how the app knows nobody chose one. A default here put
+    // rest days on weekends for people who never asked, and hid the coding
+    // recommendation every Saturday.
+    const { buildSeedState } = await import("../js/seed.js");
+    assert.equal(buildSeedState().settings.week, undefined);
   });
 });

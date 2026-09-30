@@ -271,6 +271,13 @@ export const DEFAULT_WEEK = {
   days: null,          // null means "derive from the template"
 };
 
+/** Whether somebody has set up a week at all. Until they have, nothing reads
+ *  from it: the dashboard's day card and the day's gating of the coding
+ *  recommendation both stay out of the way. */
+export function weekConfigured(state) {
+  return !!state?.settings?.week;
+}
+
 export function weekSettings(state) {
   return { ...DEFAULT_WEEK, ...(state?.settings?.week || {}) };
 }
@@ -331,26 +338,55 @@ export function dayProgress(state, today = todayISO()) {
     coding: attempts.filter((a) => !a.isMock).length,
     mock: mocksToday,
     designProblem: designToday,
-    designStudy: 0,      // reading is not recorded, so it is never "done" for you
     designMock: designToday,
-    drill: 0,
   };
+  // What the log cannot see — reading a topic, a drill — is ticked by hand.
+  // Counting it as silently done told somebody their Tuesday was finished
+  // while the design topic sat unread; counting it as outstanding with no way
+  // to clear it would nag for ever. A tick is the honest middle.
+  const ticked = state.dayChecks?.[today] || {};
 
   const items = (slot.items || []).filter((i) => i.kind !== "rest").map((item) => {
     const kind = itemKind(item.kind);
     const want = kind?.countable ? (item.count ?? kind.defaultCount) : 1;
-    const got = Math.min(want, done[item.kind] ?? 0);
-    return { ...item, kind: item.kind, label: kind?.label || item.kind, want, got, met: got >= want };
+    const detectable = CAN_DETECT.has(item.kind);
+    const got = detectable
+      ? Math.min(want, done[item.kind] ?? 0)
+      : (ticked[item.kind] ? want : 0);
+    return {
+      ...item, kind: item.kind, label: kind?.label || item.kind,
+      want, got, met: got >= want, manual: !detectable,
+    };
   });
 
   const rested = isRestDay(slot);
   return {
     slot, items, rested,
-    // Reading and drilling cannot be detected, so a day made only of those is
-    // never reported as unfinished — it would nag forever.
-    complete: rested || items.every((i) => i.met || !CAN_DETECT.has(i.kind)),
-    remaining: items.filter((i) => !i.met && CAN_DETECT.has(i.kind)),
+    complete: rested || items.every((i) => i.met),
+    remaining: items.filter((i) => !i.met),
   };
+}
+
+/** How many days of hand ticks are kept. Only today's are ever read; the rest
+ *  are kept briefly so a tick survives a device that is a day behind. */
+export const DAY_CHECK_DAYS = 14;
+
+/**
+ * Tick, or untick, something the log cannot see.
+ *
+ * Mutates `state`, for use inside store.mutate. Old dates are dropped on the
+ * way through, so a year of ticks never accumulates in the synced file — every
+ * byte of that file is paid for on every save.
+ */
+export function setDayCheck(state, kind, on, today = todayISO()) {
+  const checks = { ...(state.dayChecks || {}) };
+  const day = { ...(checks[today] || {}) };
+  if (on) day[kind] = true; else delete day[kind];
+  if (Object.keys(day).length) checks[today] = day; else delete checks[today];
+  for (const date of Object.keys(checks)) {
+    if (daysBetween(date, today) >= DAY_CHECK_DAYS) delete checks[date];
+  }
+  state.dayChecks = checks;
 }
 
 /** The kinds the log can actually confirm. */

@@ -25,7 +25,7 @@ import {
   recommendSession, computePlantState, streakGraceInfo, refresherStatus, STATUS_ACTIVE,
 } from "./logic.js";
 import { prepPhase } from "./prep.js";
-import { dayProgress, weekProgress, itemKind } from "./week.js";
+import { dayProgress, weekProgress, itemKind, setDayCheck, weekConfigured } from "./week.js";
 
 import { migrateState } from "./seed.js";
 import {
@@ -129,10 +129,12 @@ export function renderDashboard(root, store, actions) {
       </div>
     </div>` : ""}
     ${wantsCodingToday(state) ? `
-    <div class="card session-cta-card">
+    <div class="card session-cta-card${weekConfigured(state) && dayProgress(state).complete ? " optional" : ""}">
       <div class="row space-between session-cta-row">
         <div>
-          <h2>${REC_LABEL[rec.type] || "Today's session"}</h2>
+          <h2>${weekConfigured(state) && dayProgress(state).complete
+            ? "If you want more"
+            : REC_LABEL[rec.type] || "Today's session"}</h2>
           <p class="muted">${esc(rec.message)}</p>
         </div>
         <div class="row gap-sm">
@@ -232,9 +234,19 @@ export function renderDashboard(root, store, actions) {
   }
   root.querySelector("#cta-resume")?.addEventListener("click", () => actions.switchTab("workspace"));
 
-  root.querySelector("#cta-warmup").addEventListener("click", () => {
+  // Optional, because on a rest day neither card offers a warm-up — the week
+  // said stop. Bound without the `?.` this threw every Sunday.
+  root.querySelector("#cta-warmup")?.addEventListener("click", () => {
     resetWarmup();
     actions.switchTab("warmup");
+  });
+
+  root.querySelectorAll("[data-day-check]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const kind = btn.dataset.dayCheck;
+      const on = btn.getAttribute("aria-pressed") !== "true";
+      store.mutate((st) => setDayCheck(st, kind, on), `Ledger: today — ${kind}`);
+    });
   });
 
 }
@@ -259,7 +271,10 @@ function queueItemHtml(state, p) {
 
 function wireTabButtons(root, actions) {
   root.querySelectorAll("[data-tab]").forEach((btn) => {
-    btn.addEventListener("click", () => actions.switchTab(btn.dataset.tab));
+    // A section of the page, not just the page: "set it up" landing at the
+    // top of Settings, above the sync card, would be a link that makes you
+    // hunt for the thing it promised.
+    btn.addEventListener("click", () => actions.switchTab(btn.dataset.tab, { jump: btn.dataset.jump || null }));
   });
 }
 /** Wires every "Start" button rendered by queueItemHtml — the single entry
@@ -1267,6 +1282,17 @@ export function renderLeetCode(root, store, actions) {
  * drift from what actually happened.
  */
 function todayCardHtml(state) {
+  // Unconfigured, it says the setup exists and nothing more. One line, no
+  // dismiss button to manage: it goes away the moment a week is chosen, which
+  // is the only thing it is asking for.
+  if (!weekConfigured(state)) {
+    return `
+      <div class="card setup-nudge">
+        <p class="muted small">Tell Ledger when your interview is and what your week looks like, and it
+        plans each day around it — which problems, which days are for design, which days are off.
+        <button type="button" class="link-button" data-tab="settings" data-jump="set-prep">Set it up</button></p>
+      </div>`;
+  }
   const progress = dayProgress(state);
   const week = weekProgress(state);
   const slot = progress.slot;
@@ -1296,9 +1322,15 @@ function todayCardHtml(state) {
       <ul class="today-items">
         ${progress.items.map((item) => `
           <li class="${item.met ? "met" : ""}">
-            <span class="today-tick" aria-hidden="true">${item.met ? "✓" : "○"}</span>
+            ${item.manual
+              // Only what the log cannot see gets a control. A tick on coding
+              // would be a second source of truth about something already counted.
+              ? `<button type="button" class="today-tick today-check" data-day-check="${esc(item.kind)}"
+                   aria-pressed="${item.met}" aria-label="${item.met ? "Mark not done" : "Mark done"}: ${esc(item.label)}">${item.met ? "✓" : "○"}</button>`
+              : `<span class="today-tick" aria-hidden="true">${item.met ? "✓" : "○"}</span>`}
             <span><strong>${esc(item.label)}</strong>
-              ${item.want > 1 || item.got > 0 ? `<span class="muted small">${item.got} of ${item.want}</span>` : ""}
+              ${!item.manual && (item.want > 1 || item.got > 0) ? `<span class="muted small">${item.got} of ${item.want}</span>` : ""}
+              ${item.manual && !item.met ? `<span class="muted small">tick it when it's done</span>` : ""}
               <br /><span class="muted small">${esc(itemKind(item.kind)?.blurb || "")}</span></span>
           </li>`).join("")}
       </ul>
@@ -1314,6 +1346,7 @@ function todayCardHtml(state) {
  * loses is the plan they wrote.
  */
 function wantsCodingToday(state) {
+  if (!weekConfigured(state)) return true;
   const progress = dayProgress(state);
   if (progress.rested) return false;
   return progress.items.some((i) => i.kind === "coding" || i.kind === "mock");
@@ -1321,6 +1354,7 @@ function wantsCodingToday(state) {
 
 /** What to offer instead, on a day the week has given to something else. */
 function offDutyCardHtml(state) {
+  if (!weekConfigured(state)) return "";
   const progress = dayProgress(state);
   if (progress.rested) return "";      // the Today card has already said it
 

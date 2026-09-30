@@ -6,7 +6,6 @@ import {
 } from "./logic.js";
 import { DEFAULT_DESIGN_MINUTES } from "./design-logic.js";
 import { DEFAULT_PREP } from "./prep.js";
-import { DEFAULT_WEEK } from "./week.js";
 import { DESIGN_PROBLEMS } from "./design-problems.js";
 import { APP_VERSION } from "./version.js";
 
@@ -93,9 +92,10 @@ export function buildSeedState() {
       // What you are preparing for. Every field is optional — with none of
       // them answered the app behaves exactly as it did before this existed.
       prep: { ...DEFAULT_PREP },
-      // Which days, and what each is for. Derived from the template until
-      // somebody edits a day, at which point the whole week is stored.
-      week: { ...DEFAULT_WEEK },
+      // No `week` here on purpose: its absence is how the app knows nobody has
+      // set one up, and until somebody does the dashboard behaves as it always
+      // did. A default week would put rest days on weekends for people who
+      // never chose them, and quietly stop recommending anything on Saturday.
       systemDesignUnlockThreshold: { minMocks: 10, minSolvedCleanRate: 0.7 },
     },
     patterns: PATTERNS,

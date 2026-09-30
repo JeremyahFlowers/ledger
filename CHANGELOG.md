@@ -28,6 +28,73 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 2.3.0 — 2026-09-29
+
+Tell Ledger what you are preparing for, and what your week looks like, once —
+and every day is planned from that. All of it optional: answer none of it and
+the app behaves exactly as it did before.
+
+### What you're preparing for
+
+Four answers under Settings: when the interview is, where you are starting,
+what you are aiming at, and what level. They change what gets recommended.
+
+- **The run-up has a shape.** Patterns one at a time early, interleaved in the
+  middle, randomised under a hard clock at the end — decided by how far
+  *through* the plan you are, not by a fixed number of weeks, because "topic
+  blocks for two months, then mix it up" is advice about proportions. Five
+  weeks and five months both need a foundations stretch and a simulation
+  stretch, at different lengths. The last fortnight is always simulation.
+- **A day is a band, not a number.** A floor below which there was no room for
+  the review, and a ceiling past which deliberate practice stops being
+  deliberate. Five intensities from Light (30–45) to Full time (180–240); past
+  two hours the day is two sittings with a break, and past four the app says
+  plainly what the fourth hour actually is. It suggests one from your date and
+  starting point, never suggests full time, and a chosen one always wins.
+- **What you are aiming at** is weighted by what the loop assumes rather than
+  the company's name: top tier treats fluency and clean code as the floor.
+- A run-up shorter than the ground to cover is said once, plainly. It is your
+  date.
+
+### Your week
+
+Pick a shape and a number of problems, and the seven days fall out of it —
+then change any day by hand. Problems rather than minutes, because eight a
+week is a commitment somebody keeps and "75 minutes a day" is one they break
+on the first Thursday they work late.
+
+"Weekdays, plus a design Saturday" at eight problems with two design days is
+Monday 2, Tuesday 1 + a design topic, Wednesday 2, Thursday 1 + a design
+problem, Friday 2, Saturday the long design session, Sunday off. Design days
+take one problem, not two — otherwise they become the heaviest days of the week
+and design quietly stops happening. An edited week is kept whole, so changing
+the shape later cannot reshape a week you already fixed.
+
+The suggested problems-per-week comes from your band *after* the warm-up and
+review are paid for. An earlier cut costed the whole day against problems and
+told a 90-minute day it could carry eighteen a week.
+
+### The dashboard
+
+Leads with what the week asks for today, counted from the log. What the log
+cannot see — reading a design topic, a drill — is ticked by hand, rather than
+being silently counted as done. A rest day is done on arrival. On a day the
+week gave to design, the coding recommendation gives way to the design one;
+once the day is done, it becomes "If you want more" instead of an ask.
+
+### Fixed along the way
+
+- The dashboard bound its warm-up button without a null check, and on a rest
+  day neither card renders one: it would have thrown every Sunday. The render
+  check now draws the dashboard on all seven days of a week, and its DOM stub
+  answers an id lookup from what was actually rendered — before, it handed back
+  an element for any selector, so a missing button could never be seen.
+- A link to a section of Settings now lands on that section. Navigating is
+  several renders, and each one briefly empties the page and resets the
+  scroll; the jump is re-applied across them instead of fired once.
+
+---
+
 ## 2.2.0 — 2026-09-26
 
 A design session now runs the way a design interview runs: requirements, core

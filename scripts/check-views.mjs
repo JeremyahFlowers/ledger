@@ -48,7 +48,18 @@ function installDomStub() {
       }),
       toDataURL: () => "data:image/png;base64,",
     };
-    el.querySelector = () => make();
+    // An id lookup answers from what was actually written into this element.
+    // It used to hand back a fresh element for every selector, so a view that
+    // binds a button it only renders on some days — the warm-up, bound with no
+    // `?.`, absent on rest days — passed every run while throwing every Sunday.
+    // Anything more complex than an id still gets an element: the stub parses
+    // no HTML, and a false alarm from a selector it cannot evaluate would teach
+    // people to ignore this check.
+    el.querySelector = (sel) => {
+      const id = /^#([\w-]+)$/.exec(String(sel))?.[1];
+      if (id && el.innerHTML && !new RegExp(`id="${id}"`).test(el.innerHTML)) return null;
+      return make();
+    };
     el.querySelectorAll = () => [];
     el.children = [];
     return el;
@@ -190,6 +201,40 @@ for (const file of files) {
       }
     }
   }
+}
+
+// The dashboard again, on every day of one week. What it shows depends on
+// which day the week says today is, and a view that only breaks on a rest day
+// passes every run that happens not to fall on one: the warm-up binding threw
+// every Sunday and this check, run on a Tuesday, said nothing. The clock is
+// moved rather than the state, because "today" is read from the clock.
+{
+  const RealDate = Date;
+  const { renderDashboard } = await import(pathToFileURL(join(JS_DIR, "views.js")));
+  const MONDAY = new RealDate(2026, 8, 28, 12);          // a Monday, at noon
+  for (let d = 0; d < 7; d++) {
+    const at = new RealDate(MONDAY.getTime() + d * 86400000);
+    class FixedDate extends RealDate {
+      constructor(...args) { super(...(args.length ? args : [at.getTime()])); }
+      static now() { return at.getTime(); }
+    }
+    globalThis.Date = FixedDate;
+    const day = at.toDateString().slice(0, 3);
+    for (const [label, build] of [["an empty log", buildSeedState], ["a populated log", populated]]) {
+      const state = build();
+      // The shape with a rest day, a design day and coding days, so each branch
+      // of the day card is reached somewhere in the week.
+      state.settings.week = { template: "weekdaysPlusDesign", problems: 8,
+        design: { perWeek: 2, kind: "designStudy" }, days: null };
+      try {
+        renderDashboard(make(), fakeStore(state), actions);
+        ran += 1;
+      } catch (err) {
+        failures.push(`views.js renderDashboard() threw on a ${day} with ${label}: ${err.message}`);
+      }
+    }
+  }
+  globalThis.Date = RealDate;
 }
 
 if (failures.length) {

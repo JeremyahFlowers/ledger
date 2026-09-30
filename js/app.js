@@ -202,6 +202,23 @@ function announceView() {
  *  * `preventScroll`, because the render has already put the page where it
  *    belongs and focusing must not fight it.
  */
+/**
+ * A section to scroll to once the view it is on has rendered.
+ *
+ * Kept for a moment rather than applied once, because navigating is rarely
+ * one render: the store settles, a sync lands, and each re-render replaces the
+ * page's HTML. For an instant the document is empty and the scroll clamps to
+ * zero, so a jump applied before the last of those renders is undone by it.
+ */
+let pendingJump = null;
+const JUMP_HOLD_MS = 1500;
+
+function applyPendingJump() {
+  if (!pendingJump) return;
+  if (Date.now() > pendingJump.until) { pendingJump = null; return; }
+  document.getElementById(pendingJump.id)?.scrollIntoView({ block: "start" });
+}
+
 function moveFocusToView() {
   if (!viewChanged || !root) return;
   viewChanged = false;
@@ -212,9 +229,10 @@ function moveFocusToView() {
 }
 
 const actions = {
-  switchTab(id) {
+  switchTab(id, { jump = null } = {}) {
     activeTab = id;
     localStorage.setItem(ACTIVE_TAB_KEY, id);
+    pendingJump = jump ? { id: jump, until: Date.now() + JUMP_HOLD_MS } : null;
     renderAll();
   },
   rerender() {
@@ -573,6 +591,7 @@ function renderAll() {
     });
   });
   moveFocusToView();
+  applyPendingJump();
   renderPlantWidget();
   applyGrowthAnimation();
 }
