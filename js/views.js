@@ -24,7 +24,7 @@ import {
   MOCK_CHECKLIST, mockReview,
   recommendSession, computePlantState, streakGraceInfo, refresherStatus, STATUS_ACTIVE,
 } from "./logic.js";
-import { prepPhase } from "./prep.js";
+import { prepPhase, warmupFor } from "./prep.js";
 import { dayProgress, weekProgress, itemKind, setDayCheck, weekConfigured } from "./week.js";
 
 import { migrateState } from "./seed.js";
@@ -39,7 +39,7 @@ import { loadCodeMirror, CODE_MODES } from "./codemirror-loader.js";
 import { createWhiteboard } from "./whiteboard.js";
 
 import { patternIcon } from "./icons.js";
-import { resetWarmup } from "./drill-view.js";
+import { resetWarmup, openFluencyDrill } from "./drill-view.js";
 import { showProblem, showDay } from "./detail-view.js";
 import {
   esc, richText, pct, mins, fmtDate, patternName, toast, topicNav, showTopic, outcomeOptions,
@@ -138,7 +138,7 @@ export function renderDashboard(root, store, actions) {
           <p class="muted">${esc(rec.message)}</p>
         </div>
         <div class="row gap-sm">
-          <button class="btn btn-ghost" id="cta-warmup">5-min warmup</button>
+          <button class="btn btn-ghost" id="cta-warmup">${warmupFor(state).kind === "fluency" ? "Fluency warm-up" : "5-min warmup"}</button>
           ${rec.type === "deep-dive" || rec.type === "stale-nudge" ? `<button class="btn btn-ghost" data-tab="topics">Review pattern</button>` : ""}
           ${rec.type === "stuck" ? `
             <button class="btn btn-primary" data-goto-topic="${esc(rec.patternId)}">Read the pattern</button>
@@ -237,6 +237,13 @@ export function renderDashboard(root, store, actions) {
   // Optional, because on a rest day neither card offers a warm-up — the week
   // said stop. Bound without the `?.` this threw every Sunday.
   root.querySelector("#cta-warmup")?.addEventListener("click", () => {
+    // Where the plan says the warm-up is. For a target that assumes fluency
+    // that is the language drill, not the pattern one.
+    if (warmupFor(state).kind === "fluency") {
+      openFluencyDrill();
+      actions.switchTab("quiz");
+      return;
+    }
     resetWarmup();
     actions.switchTab("warmup");
   });
@@ -1375,7 +1382,7 @@ function offDutyCardHtml(state) {
           ${esc(itemKind(design.kind)?.blurb || "")}</p>
         </div>
         <div class="row gap-sm">
-          <button class="btn btn-ghost" id="cta-warmup">5-min warmup</button>
+          <button class="btn btn-ghost" id="cta-warmup">${warmupFor(state).kind === "fluency" ? "Fluency warm-up" : "5-min warmup"}</button>
           <button class="btn btn-primary" data-tab="${action.tab}">${esc(action.label)}</button>
         </div>
       </div>

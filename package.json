@@ -12,7 +12,8 @@
     "verify": "npm run check && npm test",
     "dev": "python3 scripts/dev-server.py",
     "measure": "node scripts/measure.mjs",
-    "triage": "node scripts/triage-server.mjs"
+    "triage": "node scripts/triage-server.mjs",
+    "check:fluency": "node scripts/check-fluency.mjs"
   },
   "engines": {
     "node": ">=20"

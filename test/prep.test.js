@@ -36,7 +36,14 @@ describe("answering none of it", () => {
   test("test_prep_noAnswers_stillHasADefaultProfile", () => {
     const p = prepOf({});
     assert.equal(p.targetDate, null);
-    assert.ok(p.startingPoint && p.target && p.level);
+    assert.ok(p.startingPoint && p.level);
+  });
+
+  test("test_prep_noAnswers_meansNoTargetAndSoNoEmphasis", () => {
+    // A default target would switch on the clean-code bar and the fluency
+    // warm-up for somebody who never said what they were aiming at.
+    assert.equal(prepOf({}).target, null);
+    assert.deepEqual(prepStatus(makeSubject(), TODAY).emphasis, []);
   });
 
   test("test_prep_noTargetDate_hasNoCountdown", () => {
@@ -320,5 +327,53 @@ describe("the one honest warning", () => {
 
   test("test_prep_noDateIsNotAWarning", () => {
     assert.equal(prepStatus(makeSubject(), TODAY).tight, false);
+  });
+});
+
+describe("what the warm-up is", () => {
+  test("test_prep_aTopTierTargetWarmsUpWithFluency", async () => {
+    // The loop assumes the syntax takes no thought; the warm-up is where
+    // that gets built.
+    const { warmupFor } = await import("../js/prep.js");
+    assert.equal(warmupFor(makeSubject({ prep: { target: "top" } })).kind, "fluency");
+  });
+
+  test("test_prep_otherTargetsKeepTheGeneralWarmUp", async () => {
+    const { warmupFor } = await import("../js/prep.js");
+    assert.equal(warmupFor(makeSubject({ prep: { target: "broad" } })).kind, "recall");
+    assert.equal(warmupFor(makeSubject()).kind, "recall");
+  });
+
+  test("test_prep_theDayPlanCarriesTheWarmUpItWasGiven", () => {
+    const plan = dayPlan(makeSubject({ prep: { target: "top", intensity: "focused" } }), TODAY);
+    const warm = plan.blocks[0].parts.find((p) => p.key === "warmup");
+    assert.equal(warm.warmupKind, "fluency");
+    assert.match(warm.prompt, /fluency/i);
+  });
+});
+
+describe("the clean-code bar", () => {
+  test("test_prep_cleanBar_isAskedForATargetThatWeightsIt", async () => {
+    const { wantsCleanBar } = await import("../js/prep.js");
+    assert.equal(wantsCleanBar(makeSubject({ prep: { target: "top" } })), true);
+    assert.equal(wantsCleanBar(makeSubject({ prep: { target: "strong" } })), true);
+  });
+
+  test("test_prep_cleanBar_isNotAskedOfSomebodyWhoChoseNothing", async () => {
+    const { wantsCleanBar } = await import("../js/prep.js");
+    assert.equal(wantsCleanBar(makeSubject()), false);
+  });
+
+  test("test_prep_cleanBar_isNotAskedForABroadSearch", async () => {
+    // Coverage over polish is the whole trade that target makes.
+    const { wantsCleanBar } = await import("../js/prep.js");
+    assert.equal(wantsCleanBar(makeSubject({ prep: { target: "broad" } })), false);
+  });
+
+  test("test_prep_cleanBar_everyCheckSaysWhyAnInterviewerCares", async () => {
+    const { CLEAN_CODE_BAR } = await import("../js/prep.js");
+    assert.ok(CLEAN_CODE_BAR.length >= 4);
+    for (const c of CLEAN_CODE_BAR) assert.ok(c.key && c.label && c.why.length > 30, c.key);
+    assert.equal(new Set(CLEAN_CODE_BAR.map((c) => c.key)).size, CLEAN_CODE_BAR.length);
   });
 });

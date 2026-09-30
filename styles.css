@@ -2089,3 +2089,26 @@ input[type="checkbox"]:focus-visible {
 .session-cta-card.optional .btn-primary { background: transparent; color: var(--text); border-color: var(--border); }
 .setup-nudge { padding-block: 0.7rem; }
 .setup-nudge p { margin: 0; }
+
+/* ---------- Your language ----------
+
+   Written, not chosen. Recognising the right heap declaration among four is
+   not the skill; producing it on a blank line with a clock running is. */
+.fluency-prompt { font-size: 1.1rem; margin: 0.25rem 0 0.8rem; }
+.fluency-attempt { font-family: var(--font-mono); font-size: 0.85rem; line-height: 1.5; tab-size: 2; }
+.fluency-answer { margin-top: 0.9rem; padding-top: 0.8rem; border-top: 1px solid var(--border); }
+.fluency-code {
+  margin: 0.3rem 0 0.6rem; padding: 0.7rem 0.8rem; overflow-x: auto;
+  background: var(--surface-alt); border: 1px solid var(--border); border-radius: 6px;
+  font-family: var(--font-mono); font-size: 0.82rem; line-height: 1.5;
+}
+.fluency-trap { color: var(--warn); font-size: 0.85rem; }
+.fluency-grades { margin: 0.6rem 0 0.4rem; flex-wrap: wrap; }
+/* The inline-code chip style pads the start of its box, which inside a block
+   only shifts the first line — the answer read as if line one were indented. */
+.fluency-code code { padding: 0; background: none; border: 0; border-radius: 0; font-size: inherit; }
+/* The clean-code bar at reflect. Set apart from the mistake tags because it is
+   a different question: not what went wrong, but what a top-tier interviewer
+   would have noticed about code that went right. */
+.clean-bar { padding: 0.7rem 0.8rem; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-alt); }
+.clean-bar .checklist { margin: 0.4rem 0 0; }

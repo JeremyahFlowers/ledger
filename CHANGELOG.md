@@ -28,6 +28,53 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 2.4.0 — 2026-09-29
+
+Being fluent in your language, and writing code a top-tier interviewer would
+pass — the two things a Meta or Google loop assumes rather than tests.
+
+### Your language
+
+Choose the language you will interview in, under What you're preparing for.
+Sessions now open in it. They used to open in C++ whatever you actually used —
+one more thing to fix at the moment the clock is running. With none chosen,
+they open in whatever you last wrote code in.
+
+### The fluency drill
+
+A third mode under Learn → Quiz: sixteen idioms that come up in nearly every
+problem — a frequency map, a heap, a BFS queue, a grid, a lower bound, the
+backtracking copy — written from memory, then checked against the idiom and
+the specific way your language gets it wrong. The C++ priority queue that is a
+max-heap. The Python grid that is one row repeated. JavaScript's `shift()`
+turning a BFS quadratic. Java's `binarySearch` returning *an* index rather than
+the first. The trap is the point: most people can write these, and the drill is
+for writing them correctly with the clock running.
+
+Written rather than multiple choice, because recognising the right heap
+declaration among four is not the skill. A timer shows how long it took, so
+"had to think" is an honest grade. Progress is per language — fluent in Python
+says nothing about Java — and a card you missed comes back before one you knew.
+
+Every answer in every language is compiled and run by
+`npm run check:fluency`, with assertions on the ones whose failure would be
+subtle rather than loud. A drill that teaches an overflowing comparator is
+worse than none; the check was proven by putting two such bugs back in.
+
+### Shaped by what you are aiming at
+
+- For a top-tier target the warm-up *is* the fluency drill, and the
+  dashboard's warm-up button goes there.
+- A target that weights clean code adds the clean-code bar to the reflect
+  step: ran first time, no debugging left in, names that say what they hold,
+  edge cases handled before being asked, complexity stated. What was true of
+  the code, not what you would have done with more time. Stored only when it
+  was asked, so an absent bar means "not measured", not "met none".
+- There is no default target any more. A default switched on its emphasis for
+  somebody who never said what they were aiming at.
+
+---
+
 ## 2.3.0 — 2026-09-29
 
 Tell Ledger what you are preparing for, and what your week looks like, once —

@@ -20,7 +20,7 @@ import {
   questionPlan, questionPhase, phaseLayout,
   priorAttemptSummary,
 } from "./logic.js";
-import { prepPhase } from "./prep.js";
+import { prepPhase, prepOf, wantsCleanBar, CLEAN_CODE_BAR } from "./prep.js";
 import {
   esc, richText, fmtDate, patternName, toast, showTopic, outcomeOptions,
   confirmLoss, outcomeLabel, outcomePill,
@@ -105,7 +105,7 @@ export function restoreSession(state, now = Date.now()) {
     whiteboardCtl: null,
     whiteboardShown: !!snap.whiteboardShown,
     cm: null,
-    codeLang: snap.codeLang || "cpp",
+    codeLang: snap.codeLang || null,   // resolved on mount, like a new one
     checklist: snap.checklist || {},
     capturedCode: snap.code || "",
     capturedWhiteboardDataUrl: null,
@@ -126,7 +126,7 @@ export function startSession(problem, { isMock = false } = {}) {
     plan: null,
     startedAt: null, insightAt: null, endedAt: null,
     intervalId: null, whiteboardCtl: null, whiteboardShown: false,
-    cm: null, codeLang: "cpp", checklist: {},
+    cm: null, codeLang: null, checklist: {},
     capturedCode: "", capturedWhiteboardDataUrl: null,
     mounted: false, teardownSplitters: null,
   };
@@ -183,6 +183,14 @@ export function hasActiveSession() {
   return session != null;
 }
 
+/** The language a new session opens in. */
+function preferredLanguage(state) {
+  const chosen = prepOf(state).language;
+  if (chosen && CODE_MODES[chosen]) return chosen;
+  const last = allAttempts(state).filter((a) => a.codeLang && CODE_MODES[a.codeLang]).pop();
+  return last?.codeLang || "cpp";
+}
+
 function fmtClock(ms) {
   const total = Math.max(0, Math.round(ms / 1000));
   return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
@@ -204,6 +212,12 @@ export function renderWorkspace(root, store, actions) {
   // whether or not a channel ever connects — the emitter is local, and a
   // channel that cannot reach the repo keeps the log in memory and retries.
   if (!session.sync) startSessionSync(store);
+
+  // The language, decided once, the same way: your chosen one, or failing
+  // that whatever you last wrote code in. Every session used to open in C++
+  // whatever you actually used, which is one more thing to fix before you can
+  // start — and the start is exactly when the clock is running.
+  if (!session.codeLang) session.codeLang = preferredLanguage(store.state);
 
   // The box for this question, from this user's settings, decided once.
   if (!session.plan) {
@@ -1028,6 +1042,19 @@ export function renderReflect(root, store, actions) {
           </div>
         </div>
 
+        ${wantsCleanBar(state) ? `
+        <div class="field clean-bar">
+          <span class="label">The clean-code bar</span>
+          <p class="muted small">Your target grades the code as well as the answer. Tick what was true of
+          what you wrote — not what you would have done with more time.</p>
+          <ul class="checklist">
+            ${CLEAN_CODE_BAR.map((c) => `<li><label>
+              <input type="checkbox" name="cleanBar" value="${c.key}" />
+              <span><strong>${esc(c.label)}</strong> <span class="muted small">— ${esc(c.why)}</span></span>
+            </label></li>`).join("")}
+          </ul>
+        </div>` : ""}
+
         <label class="field"><span class="label">Soul statement <span class="muted small" style="font-weight:400">— optional, but this is the part worth having in six months</span></span>
           <textarea class="textarea" name="soulStatement" rows="4" placeholder="What was your confusion, and what clicked?"></textarea></label>
 
@@ -1140,6 +1167,9 @@ export function renderReflect(root, store, actions) {
           timeToSolveMin: solveMin,
           mistakeTags: f.getAll("mistakeTags"),
           soulStatement: f.get("soulStatement") || "",
+          // Only when it was asked. Absent means "not measured", which is not
+          // the same thing as an empty list meaning "met none of it".
+          ...(wantsCleanBar(state) ? { cleanBar: f.getAll("cleanBar") } : {}),
           isMock,
           // Whether the day clock was running through this session, and so has
           // already counted these minutes. Without it the budget added the

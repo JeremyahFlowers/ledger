@@ -9,8 +9,11 @@
 // weighted pick that avoids repeating what it just asked, and a reveal that
 // shows the real approach rather than only marking you wrong.
 
-import { pickQuizProblem, quizOptions, recommendSession, quizConfusions } from "./logic.js";
-import { prepPhase } from "./prep.js";
+import { pickQuizProblem, quizOptions, recommendSession, quizConfusions, allAttempts } from "./logic.js";
+import { prepPhase, prepOf } from "./prep.js";
+import {
+  LANGUAGES, GRADES, pickFluencyCard, recordFluency, fluencySummary,
+} from "./fluency.js";
 import { patternIcon } from "./icons.js";
 import { esc, pct, patternName } from "./ui.js";
 import { emptyState, ringSvg } from "./chrome.js";
@@ -32,8 +35,16 @@ let quizState = { current: null, options: [], answered: null, recentIds: [] };
  *  two places would be two habits to build; one page with a switch is one. */
 let quizMode = "pattern";
 
+/** Open the quiz page on the fluency drill — the warm-up, for a target that
+ *  assumes fluency. */
+export function openFluencyDrill() {
+  quizMode = "language";
+  fluencyDrill = { ...fluencyDrill, card: null };
+}
+
 export function renderQuiz(root, store, actions) {
   if (quizMode === "component") return renderComponentQuiz(root, store, actions);
+  if (quizMode === "language") return renderFluencyDrill(root, store, actions);
   return renderPatternQuiz(root, store, actions);
 }
 
@@ -112,6 +123,8 @@ function modeSwitchHtml(active) {
           data-quiz-mode="pattern" aria-pressed="${active === "pattern"}">Patterns</button>
         <button type="button" class="btn ${active === "component" ? "btn-primary" : "btn-ghost"} btn-sm"
           data-quiz-mode="component" aria-pressed="${active === "component"}">Components</button>
+        <button type="button" class="btn ${active === "language" ? "btn-primary" : "btn-ghost"} btn-sm"
+          data-quiz-mode="language" aria-pressed="${active === "language"}">Your language</button>
       </div>
     </div>`;
 }
@@ -383,3 +396,143 @@ function nextWarmupQuestion(state) {
   warmupState.options = quizOptions(state, p.patternId);
   warmupState.recentIds = [p.id, ...warmupState.recentIds].slice(0, 5);
 }
+
+// ---------- Your language ----------
+
+/**
+ * The fluency drill: write the idiom from memory, then see it.
+ *
+ * Typed rather than chosen from options, because recognising the right
+ * priority_queue declaration among four is not the skill — producing it on a
+ * blank line with the clock running is. The timer is shown and not scored:
+ * it is there so "had to think" is an honest grade rather than a flattering one.
+ */
+let fluencyDrill = { card: null, attempt: "", revealed: false, startedAt: 0, recent: [], lang: null };
+const FLUENCY_RECENT = 4;
+
+function drillLanguage(state) {
+  const chosen = prepOf(state).language;
+  if (chosen && LANGUAGES[chosen]) return chosen;
+  const last = allAttempts(state).filter((a) => a.codeLang && LANGUAGES[a.codeLang]).pop();
+  return last?.codeLang || null;
+}
+
+function nextFluencyCard(state, lang) {
+  fluencyDrill = {
+    ...fluencyDrill, lang,
+    card: pickFluencyCard(state, lang, fluencyDrill.recent),
+    attempt: "", revealed: false, startedAt: Date.now(),
+  };
+}
+
+function renderFluencyDrill(root, store, actions) {
+  const state = store.state;
+  const lang = drillLanguage(state);
+
+  if (!lang) {
+    root.innerHTML = `
+      ${modeSwitchHtml("language")}
+      <div class="card">
+        <h2>Which language will you interview in?</h2>
+        <p class="muted">This drills the idioms that come up in nearly every problem — a heap, a BFS
+        queue, a grid, a lower bound — until writing them takes no thought. It needs to know which
+        language to drill. You can change it under Settings.</p>
+        <div class="row gap-sm" style="flex-wrap:wrap">
+          ${Object.entries(LANGUAGES).map(([key, l]) => `
+            <button type="button" class="btn btn-ghost" data-pick-lang="${key}">${esc(l.label)}</button>`).join("")}
+        </div>
+      </div>`;
+    wireModeSwitch(root, actions);
+    root.querySelectorAll("[data-pick-lang]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        store.mutate((s) => {
+          s.settings.prep = { ...(s.settings.prep || {}), language: btn.dataset.pickLang };
+        }, "Ledger: prep — language");
+      });
+    });
+    return;
+  }
+
+  if (!fluencyDrill.card || fluencyDrill.lang !== lang) nextFluencyCard(state, lang);
+  const { card, revealed } = fluencyDrill;
+  const summary = fluencySummary(state, lang);
+  const seconds = Math.round(((revealed ? fluencyDrill.revealedAt : Date.now()) - fluencyDrill.startedAt) / 1000);
+  const trap = card.pitfalls?.[lang];
+
+  root.innerHTML = `
+    ${modeSwitchHtml("language")}
+    <div class="card">
+      <div class="row space-between" style="align-items:flex-start;gap:0.75rem;flex-wrap:wrap">
+        <div>
+          <p class="label">${esc(LANGUAGES[lang].label)} · ${esc(card.topic)}</p>
+          <h2 class="fluency-prompt">${esc(card.prompt)}</h2>
+        </div>
+        <span class="muted small">${summary.fluent} of ${summary.total} without thinking</span>
+      </div>
+
+      <textarea class="textarea fluency-attempt" id="fluency-attempt" rows="6" spellcheck="false"
+        autocapitalize="off" autocorrect="off" ${revealed ? "readonly" : ""}
+        placeholder="Write it from memory. Cmd/Ctrl-Enter to check."
+        aria-label="Your ${esc(LANGUAGES[lang].label)}">${esc(fluencyDrill.attempt)}</textarea>
+
+      ${revealed ? `
+        <div class="fluency-answer">
+          <p class="label">The idiom <span class="muted small">· you took ${seconds}s</span></p>
+          <pre class="fluency-code"><code>${esc(card.answers[lang])}</code></pre>
+          ${trap ? `<p class="fluency-trap"><strong>The trap in ${esc(LANGUAGES[lang].label)}.</strong> ${esc(trap)}</p>` : ""}
+        </div>
+        <div class="row gap-sm fluency-grades" role="group" aria-label="How did that go">
+          ${Object.values(GRADES).map((g) => `
+            <button type="button" class="btn ${g.key === "instant" ? "btn-primary" : "btn-ghost"} btn-sm"
+              data-fluency-grade="${g.key}">${esc(g.label)}</button>`).join("")}
+        </div>
+        <p class="muted small">Be honest about "had to think": a few seconds of hesitation on a
+        heap declaration is a few seconds you do not have in a forty-five minute round.</p>`
+      : `<div class="row gap-sm">
+          <button type="button" class="btn btn-primary" id="fluency-reveal">Show the answer</button>
+          <span class="muted small" id="fluency-clock">0s</span>
+        </div>`}
+    </div>`;
+
+  wireModeSwitch(root, actions);
+
+  const box = root.querySelector("#fluency-attempt");
+  box?.addEventListener("input", () => { fluencyDrill.attempt = box.value; });
+  const reveal = () => {
+    fluencyDrill.attempt = box?.value || "";
+    fluencyDrill.revealed = true;
+    fluencyDrill.revealedAt = Date.now();
+    actions.rerender();
+  };
+  if (!revealed) {
+    requestAnimationFrame(() => box?.focus({ preventScroll: true }));
+    box?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); reveal(); }
+      // Tab indents rather than leaving the box: this is code.
+      if (e.key === "Tab" && !e.shiftKey) {
+        e.preventDefault();
+        const at = box.selectionStart;
+        box.setRangeText("  ", at, box.selectionEnd, "end");
+        fluencyDrill.attempt = box.value;
+      }
+    });
+    root.querySelector("#fluency-reveal")?.addEventListener("click", reveal);
+    // A ticking readout, cleared when it leaves the page.
+    const clock = root.querySelector("#fluency-clock");
+    const tick = setInterval(() => {
+      if (!clock.isConnected) { clearInterval(tick); return; }
+      clock.textContent = `${Math.round((Date.now() - fluencyDrill.startedAt) / 1000)}s`;
+    }, 500);
+  }
+
+  root.querySelectorAll("[data-fluency-grade]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const grade = btn.dataset.fluencyGrade;
+      fluencyDrill.recent = [card.id, ...fluencyDrill.recent].slice(0, FLUENCY_RECENT);
+      store.mutate((s) => recordFluency(s, lang, card.id, grade), `Ledger: fluency — ${card.id}`);
+      nextFluencyCard(store.state, lang);
+      actions.rerender();
+    });
+  });
+}
+

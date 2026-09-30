@@ -21,6 +21,7 @@ import {
   STARTING_POINTS, TARGETS, LEVELS, INTENSITIES, DEFAULT_PREP,
   prepOf, prepStatus, dayPlan, intensityByKey, planStart, dailyBand,
 } from "./prep.js";
+import { LANGUAGES, fluencySummary } from "./fluency.js";
 import {
   DAYS, ITEM_KINDS, WEEK_TEMPLATES, weekSettings, weekPlan, itemKind,
   dayMinutes, weeklyMinutes, weeklyProblems, isRestDay, dayKeyOf, problemsForBand, codingDays,
@@ -679,6 +680,19 @@ function prepSectionHtml(state) {
         top-tier loop treats fluency and clean first-draft code as the floor and spends its time on
         ambiguity; elsewhere, a correct answer is the bar.</p>
         ${choice("target", TARGETS, prep.target)}
+        <h4 class="small-heading">Your language</h4>
+        <p class="muted small">The one you will interview in. Sessions open in it, and the
+        fluency drill under Learn → Quiz teaches it until the syntax takes no thought — the half
+        of a top-tier loop that is assumed rather than tested.</p>
+        <div class="choice-row" data-prep-field="language">
+          ${Object.entries(LANGUAGES).map(([key, lang]) => `
+            <label class="field checkbox-field">
+              <input type="radio" name="language" value="${key}" ${prep.language === key ? "checked" : ""} />
+              <span><strong>${esc(lang.label)}</strong><br />
+              <span class="muted small">${esc(fluencyLine(state, key))}</span></span>
+            </label>`).join("")}
+        </div>
+
         <h4 class="small-heading">Level</h4>
         ${choice("level", LEVELS, prep.level, (i) =>
           i.designShare > 0 ? ` <span class="pill pill-muted">${Math.round(i.designShare * 100)}% design</span>` : "")}
@@ -723,6 +737,13 @@ function prepSectionHtml(state) {
         ${plan.blocks.length > 1 ? `<p class="muted small">${esc(plan.splitReason)}</p>` : ""}
       </div>
     </section>`;
+}
+
+/** How far the fluency drill has got in one language, in a line. */
+function fluencyLine(state, lang) {
+  const f = fluencySummary(state, lang);
+  if (!f.seen) return `${f.total} idioms to drill`;
+  return `${f.fluent} of ${f.total} without thinking`;
 }
 
 /** Saved on change: every one of these is a choice, and all of them reverse. */

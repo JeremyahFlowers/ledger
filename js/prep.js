@@ -77,6 +77,32 @@ export const TARGETS = [
   },
 ];
 
+/**
+ * The bar a top-tier interviewer holds first-draft code to, as checks you can
+ * answer honestly about the code you just wrote.
+ *
+ * Each is something an interviewer notices without saying so. None of them is
+ * about whether the answer was right — that is the outcome — and every one of
+ * them costs a pass on a loop that assumes correctness and grades the rest.
+ */
+export const CLEAN_CODE_BAR = [
+  { key: "ranFirst", label: "It ran the first time",
+    why: "No syntax errors, no undefined names. Fixing those live eats the minutes the follow-up needed." },
+  { key: "noDebris", label: "No debugging left in",
+    why: "Stray prints and commented-out attempts read as not knowing which version you meant." },
+  { key: "names", label: "Names say what they hold",
+    why: "left and right, not i and j2. The interviewer is reading it at the speed you talk." },
+  { key: "edgesUnprompted", label: "Edge cases handled before being asked",
+    why: "Empty input, one element, duplicates. Waiting to be asked is the difference between a hire and a lean hire." },
+  { key: "complexity", label: "Stated time and space, correctly",
+    why: "Out loud, before being asked, and right. It is the first follow-up at every top-tier loop." },
+];
+
+/** Whether the target you chose weights clean first-draft code. */
+export function wantsCleanBar(state) {
+  return (targetByKey(prepOf(state).target)?.emphasis || []).includes("clean");
+}
+
 /** What the level changes. Mostly: whether system design is part of the day. */
 export const LEVELS = [
   { key: "newgrad", label: "New grad / junior", designShare: 0,
@@ -129,10 +155,16 @@ export const LONG_DAY_MIN = 120;
 export const DEFAULT_PREP = {
   targetDate: null,
   startingPoint: "rusty",
-  target: "strong",
+  // No target until one is chosen. A default target would switch on its
+  // emphasis — the clean-code bar, the fluency warm-up — for somebody who
+  // never said what they were aiming at.
+  target: null,
   level: "mid",
   intensity: null,      // null means "follow the suggestion"
   startedOn: null,
+  // The language you will interview in. Sessions open in it and the fluency
+  // drill teaches it; null means "whatever you last wrote code in".
+  language: null,
 };
 
 export const intensityByKey = (key) => INTENSITIES.find((i) => i.key === key) || null;
@@ -271,9 +303,30 @@ const BLOCK_SHAPE = [
     prompt: "Why did it go the way it did? Write the sentence you would need in six months, and the complexity you argued for." },
 ];
 
+/**
+ * What the warm-up is, given what you are aiming at.
+ *
+ * For a loop that assumes fluency, the warm-up is where fluency is built: a
+ * few idioms written from memory in your language costs five minutes and
+ * removes the hesitation that a two-mediums-in-forty-five round has no room
+ * for. Elsewhere the general warm-up is the better use of the time.
+ */
+export function warmupFor(state) {
+  const prep = prepOf(state);
+  const emphasis = targetByKey(prep.target)?.emphasis || [];
+  if (emphasis.includes("fluency")) {
+    return {
+      kind: "fluency",
+      prompt: "Three idioms from the fluency drill in your language, from memory, then re-code something from last week. The loop you are aiming at assumes the syntax takes no thought.",
+    };
+  }
+  return { kind: "recall", prompt: BLOCK_SHAPE[0].prompt };
+}
+
 export function dayPlan(state, today = todayISO()) {
   const band = dailyBand(state, today);
   const intensity = currentIntensity(state, today);
+  const warmup = warmupFor(state);
   const target = Math.round((band.min + band.max) / 2);
   const count = band.max > LONG_DAY_MIN ? Math.max(2, intensity.blocks) : 1;
   const per = Math.round(target / count);
@@ -286,7 +339,9 @@ export function dayPlan(state, today = todayISO()) {
         ? per - used
         : Math.max(1, Math.round(per * part.share));
       used += minutes;
-      return { ...part, minutes };
+      return part.key === "warmup"
+        ? { ...part, minutes, prompt: warmup.prompt, warmupKind: warmup.kind }
+        : { ...part, minutes };
     });
     blocks.push({
       index: b,

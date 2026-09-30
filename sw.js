@@ -65,6 +65,7 @@ const SHELL = [
   "./js/plant.js",
   "./js/prep.js",
   "./js/week.js",
+  "./js/fluency.js",
   "./js/topics-content.js",
   "./js/whiteboard.js",
   "./js/codemirror-loader.js",
