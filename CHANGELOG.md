@@ -28,6 +28,37 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 2.8.0 — 2026-09-30
+
+"Up next" stops saying 3Sum every day, and starts following what you are
+working on.
+
+### A focus
+
+Every pattern's topic page has **Make this my focus**. With a focus chosen,
+most of what Home suggests comes from that pattern, a weak spot elsewhere no
+longer pulls you off it, and in the foundations phase it is the block you stay
+on. Without one, the app infers a focus from your recent work — two or more of
+your last four problems in a week on one pattern that is not yet mastered —
+and offers to keep it. Home's card says which, and how to change it.
+
+### Variety, without noise
+
+The pick used to be the head of a sorted list: lowest box, oldest review date,
+the same problem every morning. It is now a weighted draw: the focus counts for
+a lot, a mastered pattern (three or more attempts, 80% clean) for little — still
+reviewed, just rarely — a problem low in the schedule for more than one high in
+it, and the pattern you just did for a little less. The draw is fixed for the
+day, so Home does not reshuffle as you move around, and **Something else** moves
+it on to a different problem. The `s` shortcut and every other screen start the
+same problem Home is showing.
+
+### The card names the problem
+
+The recommendation now says which problem, its difficulty and its pattern. Some
+recommendations ("Staying on Two Pointers…") never named the problem Start
+would open.
+
 ## 2.7.0 — 2026-09-29
 
 The coding session, reworked from the moment you press Start.

@@ -15,12 +15,13 @@
 
 import {
   todayISO, applyOutcome, activateProblem, uid, MISTAKE_TAGS, MOCK_CHECKLIST,
-  quizOptions, updateStreak, computePlantState, recommendSession, allAttempts,
+  quizOptions, updateStreak, computePlantState, allAttempts,
   normalizeStatement, MAX_STATEMENT_CHARS, lastAttemptWithCode, mockPhase, MOCK_MINUTES,
   questionPlan, questionPhase, phaseLayout,
   priorAttemptSummary, dayTimerRunning, claimDayTimer, stopDayTimer, adjustDayTimer,
 } from "./logic.js";
-import { prepPhase, prepOf, wantsCleanBar, CLEAN_CODE_BAR } from "./prep.js";
+import { prepOf, wantsCleanBar, CLEAN_CODE_BAR } from "./prep.js";
+import { todaysRecommendation } from "./recommendation.js";
 import {
   esc, richText, fmtDate, patternName, toast, showTopic, outcomeOptions,
   confirmLoss, outcomeLabel, outcomePill,
@@ -1298,7 +1299,7 @@ export function renderSessionSummary(root, store, actions) {
   const today = todayISO();
   const todaysAttempts = allAttempts(state).filter((a) => a.date === today);
   const totalMin = todaysAttempts.reduce((sum, a) => sum + (a.timeToSolveMin || 0), 0);
-  const rec = recommendSession(state, prepPhase(state).key);
+  const rec = todaysRecommendation(state);
   const plant = computePlantState(state);
   const budgetMin = state.settings.dailyBudgetMin;
   const overBudget = totalMin >= budgetMin;

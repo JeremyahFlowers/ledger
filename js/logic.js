@@ -1158,14 +1158,17 @@ export const BLOCK_MIN_ATTEMPTS = 3;
  * got right often enough to be worth leaving. Moving on the moment a pattern
  * is merely finished is what turns block practice back into interleaving.
  */
-function blockPattern(state, due) {
+function blockPattern(state, due, picker) {
   const attempts = allAttempts(state);
-  const last = attempts[attempts.length - 1];
+  // A chosen focus is the block; otherwise whatever was worked last.
+  const last = picker.focus?.source === "chosen"
+    ? { patternId: picker.focus.patternId }
+    : attempts[attempts.length - 1];
   const stats = Object.fromEntries(patternStats(state).map((s) => [s.pattern.id, s]));
 
-  const material = (patternId) => due.find((p) => p.patternId === patternId)
-    || backlogProblems(state, patternId)[0]
-    || state.problems.find((p) => p.patternId === patternId);
+  const material = (patternId) => picker.pick(due.filter((p) => p.patternId === patternId))
+    || picker.pick(backlogProblems(state, patternId))
+    || picker.pick(state.problems.filter((p) => p.patternId === patternId));
 
   const mastered = (patternId) => {
     const st = stats[patternId];
@@ -1200,6 +1203,123 @@ function blockPattern(state, due) {
   };
 }
 
+// ---------- Focus and variety ----------
+//
+// The recommendation used to be the head of a sorted list: lowest box first,
+// then oldest review date. On a real account that is the same problem every
+// morning — "Up next: 3Sum", for days — and it takes no notice of what you are
+// actually working on. Someone deep in dynamic programming with two pointers
+// long since solid was being sent back to Container With Most Water.
+//
+// So the pick is now a weighted draw. The weights say what matters: the pattern
+// you are focused on counts for a lot, a pattern you have mastered for little,
+// a problem low in the schedule for more than one high in it. The draw is
+// seeded by the day, so the dashboard does not reshuffle every time it renders,
+// and "something else" moves the seed on.
+
+/** Clean-solve rate and attempts past which a pattern counts as mastered, and
+ *  is suggested rarely rather than never — spaced review still needs it. */
+export const MASTERED_CLEAN_RATE = 0.8;
+export const MASTERED_MIN_ATTEMPTS = 3;
+
+/** How much more likely a problem in the focus pattern is to be drawn. */
+export const FOCUS_WEIGHT = 6;
+/** How much less likely a problem in a mastered pattern is. */
+export const MASTERED_WEIGHT = 0.2;
+/** Discount for repeating the pattern just worked, outside a focus. Mixing is
+ *  the point of the interleaved phase. */
+const REPEAT_WEIGHT = 0.5;
+
+/** Inferring a focus: of the last few attempts inside a week, how many have to
+ *  share a pattern before it counts as the thing being worked on. */
+const FOCUS_RECENT = 4;
+const FOCUS_RECENT_DAYS = 7;
+const FOCUS_MIN_SHARE = 2;
+
+/** Whether a pattern's record says it is solid. */
+export function isMastered(stat) {
+  return !!stat && stat.attempts >= MASTERED_MIN_ATTEMPTS
+    && (stat.solvedCleanRate ?? 0) >= MASTERED_CLEAN_RATE;
+}
+
+/**
+ * The pattern being worked on, or null.
+ *
+ * Chosen outright (from a topic page) wins. Otherwise it is inferred from the
+ * last few attempts: two or more of the last four in a week on one pattern
+ * that is not yet mastered. A chosen focus that has since been mastered still
+ * stands — you picked it, and taking it away silently would be the app
+ * overruling you; the topic page says it is mastered instead.
+ */
+export function currentFocus(state, today = todayISO()) {
+  const chosen = state.settings?.prep?.focusPatternId;
+  if (chosen && state.patterns.some((p) => p.id === chosen)) {
+    return { patternId: chosen, source: "chosen" };
+  }
+  const recent = allAttempts(state)
+    .filter((a) => daysBetween(a.date, today) <= FOCUS_RECENT_DAYS)
+    .slice(-FOCUS_RECENT);
+  const counts = new Map();
+  for (const a of recent) counts.set(a.patternId, (counts.get(a.patternId) || 0) + 1);
+  const stats = Object.fromEntries(patternStats(state).map((st) => [st.pattern.id, st]));
+  const [patternId, n] = [...counts].sort((a, b) => b[1] - a[1])[0] || [];
+  if (!patternId || n < FOCUS_MIN_SHARE || isMastered(stats[patternId])) return null;
+  return { patternId, source: "recent" };
+}
+
+/** Choose a focus pattern, or clear it with null. */
+export function setFocus(state, patternId) {
+  state.settings.prep = { ...(state.settings.prep || {}), focusPatternId: patternId || null };
+}
+
+/** A deterministic random source from a string, so a seed gives the same draw
+ *  on every render and every device. (mulberry32 over an FNV-1a hash.) */
+export function seededRandom(seed) {
+  let h = 2166136261;
+  for (const ch of String(seed)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  let t = h >>> 0;
+  return () => {
+    t = (t + 0x6D2B79F5) >>> 0;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** One item, drawn with probability proportional to its weight. */
+export function weightedPick(items, weightOf, rand) {
+  if (!items.length) return null;
+  const weights = items.map((x) => Math.max(0, weightOf(x)));
+  const total = weights.reduce((a, b) => a + b, 0);
+  if (total <= 0) return items[Math.floor(rand() * items.length)];
+  let roll = rand() * total;
+  for (let i = 0; i < items.length; i++) {
+    roll -= weights[i];
+    if (roll < 0) return items[i];
+  }
+  return items[items.length - 1];
+}
+
+/** How strongly one problem should be suggested, all else equal. */
+function problemWeight(problem, { focus, stats, lastPatternId }) {
+  let w = 1 + 1 / (1 + (problem.box || 0));
+  if (focus && problem.patternId === focus.patternId) return w * FOCUS_WEIGHT;
+  if (isMastered(stats[problem.patternId])) w *= MASTERED_WEIGHT;
+  if (problem.patternId === lastPatternId) w *= REPEAT_WEIGHT;
+  return w;
+}
+
+/** A picker over problems for this state and seed, shared by every branch. */
+function makePicker(state, seed, today) {
+  const rand = seededRandom(seed);
+  const focus = currentFocus(state, today);
+  const stats = Object.fromEntries(patternStats(state).map((st) => [st.pattern.id, st]));
+  const attempts = allAttempts(state);
+  const lastPatternId = attempts[attempts.length - 1]?.patternId || null;
+  const ctx = { focus, stats, lastPatternId };
+  return { focus, rand, pick: (list) => weightedPick(list, (p) => problemWeight(p, ctx), rand) };
+}
+
 /** How long without a mock before simulation asks for one. */
 export const MOCK_GAP_DAYS = 4;
 
@@ -1211,21 +1331,21 @@ export const MOCK_GAP_DAYS = 4;
  * date so the choice is stable through the day. A recommendation that changed
  * every time the dashboard re-rendered would be noise.
  */
-function simulationPick(state, due, today) {
+function simulationPick(state, due, today, rand) {
   const mocks = state.mocks || [];
   const lastMock = mocks.length ? mocks[mocks.length - 1].date : null;
-  if (due.length && (!lastMock || daysBetween(lastMock, today) >= MOCK_GAP_DAYS)) {
-    const offset = Number(today.replaceAll("-", "")) % due.length;
+  // Uniform, not weighted: this close in, what the pattern is must not matter.
+  const drawn = due.length ? due[Math.floor(rand() * due.length)] : null;
+  if (drawn && (!lastMock || daysBetween(lastMock, today) >= MOCK_GAP_DAYS)) {
     return {
-      type: "simulate", problem: due[offset], patternId: due[offset].patternId, mock: true,
-      message: `${due[offset].name}, as a mock — clock running, talking out loud, no hints. `
+      type: "simulate", problem: drawn, patternId: drawn.patternId, mock: true,
+      message: `${drawn.name}, as a mock — clock running, talking out loud, no hints. `
         + `${lastMock ? `Your last one was ${daysBetween(lastMock, today)} days ago. ` : ""}`
         + `This close in, what is still missing is performing it rather than knowing it.`,
     };
   }
-  if (!due.length) return null;
-  const offset = Number(today.replaceAll("-", "")) % due.length;
-  const problem = due[offset];
+  if (!drawn) return null;
+  const problem = drawn;
   return {
     type: "simulate", problem, patternId: problem.patternId,
     message: `${problem.name}, picked without regard to pattern. Not knowing what is coming is the `
@@ -1233,9 +1353,19 @@ function simulationPick(state, due, today) {
   };
 }
 
-function freshFromBank(state) {
+function freshFromBank(state, picker) {
   const bank = backlogProblems(state);
   if (!bank.length) return null;
+
+  const focused = picker.focus && bank.filter((p) => p.patternId === picker.focus.patternId);
+  if (focused?.length) {
+    const problem = picker.pick(focused);
+    return {
+      type: "fresh-volume", problem, patternId: problem.patternId, focus: picker.focus,
+      message: `Nothing needs a refresher, so something new in ${state.patterns.find((x) => x.id === problem.patternId)?.name || "this pattern"}, `
+        + `which is what you are working on. ${problem.name} is in your bank.`,
+    };
+  }
 
   const bankPatterns = new Set(bank.map((p) => p.patternId));
   const weakest = patternStats(state)
@@ -1248,7 +1378,7 @@ function freshFromBank(state) {
     })[0];
 
   const patternId = weakest ? weakest.pattern.id : bank[0].patternId;
-  const problem = bank.find((p) => p.patternId === patternId) || bank[0];
+  const problem = picker.pick(bank.filter((p) => p.patternId === patternId)) || bank[0];
   const reason = weakest && weakest.attempts
     ? `${weakest.pattern.name} is your weakest at ${Math.round((weakest.solvedCleanRate ?? 0) * 100)}% clean-solve`
     : `you haven't attempted ${weakest ? weakest.pattern.name : "this pattern"} yet`;
@@ -1276,8 +1406,11 @@ function freshFromBank(state) {
  *    gap being closed is performance rather than knowledge, so the point is
  *    not knowing what is coming.
  */
-export function recommendSession(state, phase = "mixed") {
+export function recommendSession(state, phase = "mixed", { seed = todayISO() } = {}) {
   const today = todayISO();
+  const picker = makePicker(state, seed, today);
+  const withFocus = (rec) => (rec && picker.focus && rec.patternId === picker.focus.patternId
+    ? { ...rec, focus: picker.focus } : rec);
   const todaysAttempts = allAttempts(state).filter((a) => a.date === today);
   const due = dueProblems(state);
   const duePatternIds = new Set(due.map((p) => p.patternId));
@@ -1297,26 +1430,30 @@ export function recommendSession(state, phase = "mixed") {
   // being built, staying on a pattern matters more than what the queue thinks
   // is overdue.
   if (phase === "foundations") {
-    const block = blockPattern(state, due);
-    if (block) return block;
+    const block = blockPattern(state, due, picker);
+    if (block) return withFocus(block);
   }
 
   // Two weeks out, a mock is worth more than another rep — the thing that is
   // still missing is performing it, not knowing it.
   if (phase === "simulation") {
-    const sim = simulationPick(state, due, today);
+    const sim = simulationPick(state, due, today, picker.rand);
     if (sim) return sim;
   }
 
   if (todaysAttempts.length === 0) {
     if (due.length) {
-      return { type: "first-rep", problem: due[0], patternId: due[0].patternId, message: `Haven't practiced yet today — let's do one. ${due[0].name} is a good place to start.` };
+      const problem = picker.pick(due);
+      return withFocus({
+        type: "first-rep", problem, patternId: problem.patternId,
+        message: `Haven't practiced yet today — let's do one. ${problem.name} is a good place to start.`,
+      });
     }
     if (stale) {
-      const problem = state.problems.find((p) => p.patternId === stale.pattern.id);
+      const problem = picker.pick(state.problems.filter((p) => p.patternId === stale.pattern.id));
       return { type: "stale-nudge", problem, patternId: stale.pattern.id, message: `Nothing is pressing, but ${stale.pattern.name} hasn't come up in ${stale.daysSince} days — worth a refresher before it fades.` };
     }
-    const fresh = freshFromBank(state);
+    const fresh = freshFromBank(state, picker);
     if (fresh) return fresh;
     return { type: "none", problem: null, patternId: null, message: "Nothing has gone stale. Free day — browse Topics, or take it." };
   }
@@ -1334,24 +1471,31 @@ export function recommendSession(state, phase = "mixed") {
     };
   }
 
+  // With a focus you chose, only a weak spot in that pattern pulls you off it.
+  // Being sent to review a different pattern's technique is exactly the
+  // "why am I being given two pointers?" this is here to stop.
+  const chosenFocus = picker.focus?.source === "chosen" ? picker.focus.patternId : null;
   const weak = patternStats(state)
+    .filter((s) => !chosenFocus || s.pattern.id === chosenFocus)
     .filter((s) => s.attempts >= WEAK_MIN_ATTEMPTS && s.solvedCleanRate != null && s.solvedCleanRate < WEAK_CLEAN_RATE)
     .sort((a, b) => a.solvedCleanRate - b.solvedCleanRate)[0];
   if (weak) {
-    const problem = due.find((p) => p.patternId === weak.pattern.id) || state.problems.find((p) => p.patternId === weak.pattern.id);
-    return {
+    const problem = picker.pick(due.filter((p) => p.patternId === weak.pattern.id))
+      || picker.pick(state.problems.filter((p) => p.patternId === weak.pattern.id));
+    return withFocus({
       type: "deep-dive", problem, patternId: weak.pattern.id,
       message: `${weak.pattern.name} is at ${Math.round(weak.solvedCleanRate * 100)}% clean-solve across ${weak.attempts} attempts — that's a repeated pattern, not a one-off. Worth reviewing the technique before drilling another rep.`,
-    };
+    });
   }
 
   if (stale) {
-    const problem = state.problems.find((p) => p.patternId === stale.pattern.id);
+    const problem = picker.pick(state.problems.filter((p) => p.patternId === stale.pattern.id));
     return { type: "stale-nudge", problem, patternId: stale.pattern.id, message: `It's been ${stale.daysSince} days since ${stale.pattern.name} came up — a quick review would help it stick.` };
   }
 
   if (due.length) {
-    return { type: "due", problem: due[0], patternId: due[0].patternId, message: `${due[0].name} is next in the queue.` };
+    const problem = picker.pick(due);
+    return withFocus({ type: "due", problem, patternId: problem.patternId, message: `${problem.name} is next in the queue.` });
   }
 
   return { type: "none", problem: null, patternId: null, message: "You've covered today's queue. That's a real stopping point." };

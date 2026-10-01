@@ -9,8 +9,9 @@
 // weighted pick that avoids repeating what it just asked, and a reveal that
 // shows the real approach rather than only marking you wrong.
 
-import { pickQuizProblem, quizOptions, recommendSession, quizConfusions, allAttempts } from "./logic.js";
-import { prepPhase, prepOf } from "./prep.js";
+import { pickQuizProblem, quizOptions, quizConfusions, allAttempts } from "./logic.js";
+import { todaysRecommendation } from "./recommendation.js";
+import { prepOf } from "./prep.js";
 import {
   LANGUAGES, GRADES, pickFluencyCard, recordFluency, fluencySummary,
 } from "./fluency.js";
@@ -314,7 +315,7 @@ export function renderWarmup(root, store, actions) {
   if (warmupState.count === 0 && !warmupState.current) nextWarmupQuestion(state);
 
   if (warmupState.count >= WARMUP_LENGTH || (!warmupState.current && warmupState.count > 0)) {
-    const rec = recommendSession(state, prepPhase(state).key);
+    const rec = todaysRecommendation(state);
     root.innerHTML = `
       <div class="card">
         <h2>Warmed up</h2>

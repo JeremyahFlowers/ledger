@@ -22,9 +22,10 @@ import {
   difficultyRank, isCleanSolve,
   refresherBands,
   MOCK_CHECKLIST, mockReview,
-  recommendSession, computePlantState, streakGraceInfo, refresherStatus, STATUS_ACTIVE,
+  computePlantState, streakGraceInfo, refresherStatus, STATUS_ACTIVE, currentFocus, setFocus,
 } from "./logic.js";
-import { prepPhase, warmupFor, prepStatus } from "./prep.js";
+import { todaysRecommendation, skipRecommendation } from "./recommendation.js";
+import { warmupFor, prepStatus } from "./prep.js";
 import { dayProgress, weekProgress, itemKind, setDayCheck, weekConfigured } from "./week.js";
 
 import { migrateState } from "./seed.js";
@@ -94,9 +95,55 @@ function designCardHtml(state) {
     </div>`;
 }
 
+/**
+ * What the recommendation is leaning towards, and the way to change it.
+ *
+ * Said on the card because a weighting nobody can see is a recommender that
+ * seems arbitrary: "why DP again?" is answered here, and so is "not DP".
+ */
+function focusLineHtml(state) {
+  const focus = currentFocus(state);
+  if (!focus) {
+    return `<p class="muted small rec-focus">No focus — suggestions are spread across your patterns.
+      <button type="button" class="link-button" data-tab="topics">Pick one to work on</button></p>`;
+  }
+  const name = esc(patternName(state, focus.patternId));
+  return focus.source === "chosen"
+    ? `<p class="muted small rec-focus">Focus: <strong>${name}</strong>, which you chose — most suggestions come from it.
+        <button type="button" class="link-button" data-focus-clear>Stop focusing</button></p>`
+    : `<p class="muted small rec-focus">Focus: <strong>${name}</strong>, from your last few problems.
+        <button type="button" class="link-button" data-focus-set="${esc(focus.patternId)}">Keep it</button></p>`;
+}
+
+/** Set or clear the focus pattern, wherever the buttons for it are. */
+function wireFocusButtons(root, store) {
+  root.querySelectorAll("[data-focus-set]").forEach((b) => b.addEventListener("click", () => {
+    store.mutate((s) => setFocus(s, b.dataset.focusSet), "Ledger: focus");
+  }));
+  root.querySelectorAll("[data-focus-clear]").forEach((b) => b.addEventListener("click", () => {
+    store.mutate((s) => setFocus(s, null), "Ledger: focus");
+  }));
+}
+
+/** The focus control on a pattern's page: what it is now, and the one change
+ *  that makes sense from here. */
+function topicFocusHtml(state, patternId) {
+  const focus = currentFocus(state);
+  const mine = focus?.patternId === patternId;
+  if (mine && focus.source === "chosen") {
+    return `<div class="topic-focus"><span class="pill pill-good">Your focus</span>
+      <button type="button" class="btn btn-ghost btn-sm" data-focus-clear>Stop focusing</button></div>`;
+  }
+  return `<div class="topic-focus">
+    ${mine ? `<span class="pill pill-muted">Your recent focus</span>` : ""}
+    <button type="button" class="btn btn-ghost btn-sm" data-focus-set="${esc(patternId)}"
+      title="Most of what Home suggests will come from this pattern until you change it">Make this my focus</button>
+  </div>`;
+}
+
 export function renderDashboard(root, store, actions) {
   const state = store.state;
-  const rec = recommendSession(state, prepPhase(state).key);
+  const rec = todaysRecommendation(state);
   const plant = computePlantState(state);
   const { plan, overflow, usedMin, budgetMin } = planToday(state);
   const stats = patternStats(state).filter((s) => s.attempts > 0).sort((a, b) => a.solvedCleanRate - b.solvedCleanRate);
@@ -136,9 +183,15 @@ export function renderDashboard(root, store, actions) {
           <h2>${weekConfigured(state) && dayProgress(state).complete
             ? "If you want more"
             : REC_LABEL[rec.type] || "Today's session"}</h2>
+          ${rec.problem && rec.type !== "stuck" ? `<p class="rec-problem"><strong>${esc(rec.problem.name)}</strong>
+            <span class="pill pill-muted">${esc(rec.problem.difficulty)}</span>
+            <span class="pill pill-muted">${esc(patternName(state, rec.problem.patternId))}</span></p>` : ""}
           <p class="muted">${esc(rec.message)}</p>
+          ${focusLineHtml(state)}
         </div>
         <div class="row gap-sm">
+          ${rec.problem && rec.type !== "stuck" ? `<button class="btn btn-ghost" id="cta-skip"
+            title="A different problem, weighted the same way">Something else</button>` : ""}
           <button class="btn btn-ghost" id="cta-warmup">${warmupFor(state).kind === "fluency" ? "Fluency warm-up" : "5-min warmup"}</button>
           ${emphasisButtons(state)}
           ${rec.type === "deep-dive" || rec.type === "stale-nudge" ? `<button class="btn btn-ghost" data-tab="topics">Review pattern</button>` : ""}
@@ -229,6 +282,11 @@ export function renderDashboard(root, store, actions) {
     });
   }
   root.querySelector("#cta-resume")?.addEventListener("click", () => actions.switchTab("workspace"));
+  root.querySelector("#cta-skip")?.addEventListener("click", () => {
+    skipRecommendation(state);
+    actions.rerender();
+  });
+  wireFocusButtons(root, store);
 
   // Optional, because on a rest day neither card offers a warm-up — the week
   // said stop. Bound without the `?.` this threw every Sunday.
@@ -1008,6 +1066,7 @@ export function renderTopicDetail(root, store, actions) {
         </div>
       </div>
       ${topicRecordHtml(state, pat.id)}
+      ${topicFocusHtml(state, pat.id)}
     </div>
     ${t ? `
     <div class="card">
@@ -1076,6 +1135,7 @@ export function renderTopicDetail(root, store, actions) {
   }
 
   wireStartButtons(root, store, actions);
+  wireFocusButtons(root, store);
   root.querySelectorAll("[data-add-resource]").forEach((form) => {
     form.addEventListener("submit", (e) => {
       e.preventDefault();

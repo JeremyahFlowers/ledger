@@ -31,7 +31,6 @@ import {
   computePlantState, dueProblems, allAttempts, patternStats, systemDesignUnlock,
   backlogProblems, progressSummary, startDayTimer, stopDayTimer,
 } from "./logic.js";
-import { prepPhase } from "./prep.js";
 
 import { navIcon } from "./icons.js";
 import { renderAnalyze } from "./analyze-view.js";
@@ -39,7 +38,7 @@ import { renderBank } from "./bank-view.js";
 import { installShortcuts, toggleHelp } from "./shortcuts.js";
 import { renderProgress } from "./progress-view.js";
 import { installSearch, openSearch, closeSearch, isSearchOpen } from "./search.js";
-import { recommendSession } from "./logic.js";
+import { todaysRecommendation } from "./recommendation.js";
 import { APP_VERSION } from "./version.js";
 import { installErrorHandling, report, guard } from "./errors.js";
 import { hasSeenWelcome, markWelcomeSeen, renderWelcome } from "./welcome.js";
@@ -664,7 +663,7 @@ function renderViewInner() {
  * keypress falls through instead of appearing to do nothing. */
 function startRecommendedSession() {
   if (!store.state || hasActiveSession()) return false;
-  const rec = recommendSession(store.state, prepPhase(store.state).key);
+  const rec = todaysRecommendation(store.state);
   if (!rec || !rec.problem) return false;
   startSession(rec.problem);
   actions.switchTab("workspace");

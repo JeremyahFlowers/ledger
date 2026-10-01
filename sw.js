@@ -64,6 +64,7 @@ const SHELL = [
   "./js/icons.js",
   "./js/plant.js",
   "./js/prep.js",
+  "./js/recommendation.js",
   "./js/week.js",
   "./js/fluency.js",
   "./js/clarify.js",

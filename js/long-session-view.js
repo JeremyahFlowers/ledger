@@ -10,8 +10,8 @@
 // for one day on one device, and a log that carried it would pay for it on
 // every save for the rest of its life.
 
-import { todayISO, recommendSession } from "./logic.js";
-import { prepPhase } from "./prep.js";
+import { todayISO } from "./logic.js";
+import { todaysRecommendation } from "./recommendation.js";
 import {
   longSessionFor, totalMinutes, startRun, runIsCurrent, advanceRun, runFinished, stepRemaining,
 } from "./long-session.js";
@@ -158,7 +158,7 @@ function go(step, state, actions) {
   const action = step.action || {};
   if (action.start === "recommended") {
     if (hasActiveSession()) { actions.switchTab("workspace"); return; }
-    const rec = recommendSession(state, prepPhase(state).key);
+    const rec = todaysRecommendation(state);
     if (rec.problem) {
       startSession(rec.problem);
       actions.switchTab("workspace");

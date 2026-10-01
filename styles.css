@@ -1121,6 +1121,10 @@ ol.setup-steps { padding-left: 1.2rem; display: flex; flex-direction: column; ga
 .budget-warn { color: var(--warn); font-weight: 600; }
 .budget-over { color: var(--bad); font-weight: 700; }
 .day-ring { flex-wrap: nowrap; }
+.rec-focus { margin: 0.4rem 0 0; }
+.rec-problem { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin: 0.2rem 0 0.35rem; }
+.rec-focus .link-button { margin-left: 0.25rem; }
+.topic-focus { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.7rem; }
 .day-ring-left { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
 .day-ring.budget-warn .day-ring-left { color: var(--warn); }
 .day-ring.budget-over .day-ring-left { color: var(--bad); }
