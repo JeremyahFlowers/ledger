@@ -34,6 +34,7 @@ import {
 } from "./design-logic.js";
 
 import { patternProgressHtml } from "./progress-view.js";
+import { renderCatalogLadder } from "./topic-practice.js";
 
 import { TOPICS } from "./topics-content.js";
 import { loadCodeMirror, CODE_MODES } from "./codemirror-loader.js";
@@ -1083,11 +1084,12 @@ export function renderTopicDetail(root, store, actions) {
     </div>
     <div class="card">
       <h2>Practice ladder</h2>
-      <p class="muted small">Your own logged problems, easiest first.</p>
-      ${problems.length === 0 ? emptyState("log", "Nothing logged yet",
-        "Solved something elsewhere — on paper, in a real interview, straight on LeetCode? Record it here and it joins the same review schedule.",
-        { tab: "bank", label: "Find one for this pattern" }) : `
+      ${problems.length === 0
+        ? `<p class="muted small">None of yours yet — start with one from the catalog below.</p>`
+        : `<p class="muted small">Yours, easiest first.</p>
       <ul class="queue-list">${problems.map((p) => queueItemHtml(state, p)).join("")}</ul>`}
+      <h3 class="ladder-subhead">From the catalog</h3>
+      <div id="topic-catalog"><div class="skeleton skeleton-line" style="width:60%"></div></div>
     </div>
     <div class="card">
       <h2>Resources</h2>
@@ -1131,6 +1133,14 @@ export function renderTopicDetail(root, store, actions) {
       if (renderToken !== topicRenderToken) return;
       diagramHost.innerHTML = `<div class="card"><p class="muted small">The worked examples couldn't
         be loaded. Everything above is unaffected.</p></div>`;
+    });
+  }
+
+  const catalogHost = root.querySelector("#topic-catalog");
+  if (catalogHost) {
+    const renderToken = topicRenderToken;
+    renderCatalogLadder(catalogHost, store, actions, pat.id, {
+      isCurrent: () => renderToken === topicRenderToken && document.contains(catalogHost),
     });
   }
 

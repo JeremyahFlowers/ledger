@@ -72,6 +72,7 @@ const SHELL = [
   "./js/pair-mock-view.js",
   "./js/long-session.js",
   "./js/long-session-view.js",
+  "./js/topic-practice.js",
   "./js/topics-content.js",
   "./js/whiteboard.js",
   "./js/codemirror-loader.js",

@@ -53,6 +53,49 @@ export function savedSlugs(problems) {
 // a hint, not a claim, and shouldn't be presented as "this is that pattern".
 export const PATTERN_CONFIDENCE = 0.5;
 
+/**
+ * Problems that teach a pattern LeetCode has no tag for, by slug.
+ *
+ * The weights above come from LeetCode's own topic tags, and three of the
+ * patterns this app teaches are not tags there: knapsack is filed under
+ * "Dynamic Programming", minimum spanning trees mostly under "Union Find", and
+ * partition-based sorting under "Sorting". So the catalog had one knapsack
+ * problem, two MST problems and eight for quicksort — a topic page you could
+ * read with almost nothing on it to practise. These are the standard problems
+ * for each, chosen by hand and counted as full-strength matches.
+ */
+const CURATED = {
+  knapsack: [
+    // 0/1: each item once.
+    "partition-equal-subset-sum", "target-sum", "last-stone-weight-ii", "ones-and-zeroes",
+    "profitable-schemes", "tallest-billboard", "number-of-ways-to-earn-points",
+    // Unbounded: each item as often as you like.
+    "coin-change", "coin-change-ii", "combination-sum-iv", "perfect-squares",
+  ],
+  mst: [
+    "min-cost-to-connect-all-points",
+    "find-critical-and-pseudo-critical-edges-in-minimum-spanning-tree",
+    // A spanning tree for two travellers at once.
+    "remove-max-number-of-edges-to-keep-graph-fully-traversable",
+    // Edges taken in weight order with a union-find: Kruskal's loop.
+    "number-of-good-paths", "minimize-the-maximum-edge-weight-of-graph",
+    // Minimax paths: Kruskal's order — cheapest edge first until connected —
+    // is the whole solution, which is the MST idea used rather than recited.
+    "checking-existence-of-edge-length-limited-paths", "path-with-minimum-effort", "swim-in-rising-water",
+  ],
+  quick_sort: [
+    // Partitioning itself: the pivot step, and its three-way form.
+    "sort-an-array", "sort-colors",
+  ],
+};
+const CURATED_SETS = Object.fromEntries(Object.entries(CURATED).map(([k, v]) => [k, new Set(v)]));
+
+/** How strongly a catalog entry exercises a pattern, counting the curated lists. */
+export function patternWeight(entry, patternId) {
+  const tagged = entry.patterns?.[patternId] || 0;
+  return CURATED_SETS[patternId]?.has(entry.slug) ? Math.max(tagged, 1) : tagged;
+}
+
 let catalogPromise = null;
 
 /**
@@ -92,10 +135,10 @@ export async function problemsForPattern(patternId, {
 } = {}) {
   const catalog = await loadCatalog();
   return catalog.problems
-    .filter((p) => (p.patterns[patternId] || 0) >= PATTERN_CONFIDENCE)
+    .filter((p) => patternWeight(p, patternId) >= PATTERN_CONFIDENCE)
     .filter((p) => !difficulty || p.difficulty === difficulty)
     .filter((p) => !exclude.has(p.slug))
-    .sort((a, b) => (b.patterns[patternId] - a.patterns[patternId])
+    .sort((a, b) => (patternWeight(b, patternId) - patternWeight(a, patternId))
       || (a.number ?? 1e9) - (b.number ?? 1e9))
     .slice(0, limit);
 }
@@ -164,8 +207,10 @@ export async function countsByPattern() {
   const catalog = await loadCatalog();
   const counts = {};
   for (const problem of catalog.problems) {
-    for (const [pattern, weight] of Object.entries(problem.patterns)) {
-      if (weight >= PATTERN_CONFIDENCE) counts[pattern] = (counts[pattern] || 0) + 1;
+    const patterns = new Set([...Object.keys(problem.patterns),
+      ...Object.keys(CURATED).filter((k) => CURATED_SETS[k].has(problem.slug))]);
+    for (const pattern of patterns) {
+      if (patternWeight(problem, pattern) >= PATTERN_CONFIDENCE) counts[pattern] = (counts[pattern] || 0) + 1;
     }
   }
   return counts;

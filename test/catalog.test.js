@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 
 import {
   slugify, savedSlugs, problemUrl, problemFromCatalog, loadCatalog,
-  problemsForPattern, countsByPattern,
+  problemsForPattern, countsByPattern, patternWeight,
   PATTERN_CONFIDENCE, MAX_BANK_SIZE,
 } from "../js/catalog.js";
 import { STATUS_BACKLOG, STATUS_ACTIVE } from "../js/logic.js";
@@ -225,5 +225,42 @@ describe("shared constants", () => {
     // scripts/taxonomy.py POSITIVE_THRESHOLD. If these drift, the catalog and
     // the training labels disagree about what counts as "this pattern".
     assert.equal(PATTERN_CONFIDENCE, 0.5);
+  });
+});
+
+describe("patterns LeetCode has no tag for", () => {
+  test("test_patternWeight_curatedKnapsackProblem_countsInFull", () => {
+    // Partition Equal Subset Sum is the textbook 0/1 knapsack and LeetCode
+    // files it under Dynamic Programming only.
+    const entry = makeEntry({ slug: "coin-change", patterns: { "recursion-dp": 0.8 } });
+    assert.equal(patternWeight(entry, "knapsack"), 1);
+  });
+
+  test("test_patternWeight_curatedButAlsoTagged_keepsTheTaggedStrengthForOtherPatterns", () => {
+    const entry = makeEntry({ slug: "coin-change", patterns: { "recursion-dp": 0.8 } });
+    assert.equal(patternWeight(entry, "recursion-dp"), 0.8);
+  });
+
+  test("test_patternWeight_notCurated_isTheTaggedWeight", () => {
+    assert.equal(patternWeight(makeEntry(), "intervals"), 0.6);
+    assert.equal(patternWeight(makeEntry(), "knapsack"), 0);
+  });
+
+  test("test_problemsForPattern_curatedProblem_isOffered", async () => {
+    stubFetch({ count: 2, problems: [
+      makeEntry({ slug: "target-sum", title: "Target Sum", patterns: { backtracking: 1 } }),
+      makeEntry({ slug: "unrelated", title: "U", patterns: { backtracking: 1 } }),
+    ] });
+    await loadCatalog({ refresh: true });
+    const found = await problemsForPattern("knapsack");
+    assert.deepEqual(found.map((p) => p.slug), ["target-sum"]);
+  });
+
+  test("test_countsByPattern_includesCuratedMatches", async () => {
+    stubFetch({ count: 1, problems: [makeEntry({ slug: "sort-colors", patterns: { "two-pointers": 1 } })] });
+    await loadCatalog({ refresh: true });
+    const counts = await countsByPattern();
+    assert.equal(counts.quick_sort, 1);
+    assert.equal(counts["two-pointers"], 1);
   });
 });

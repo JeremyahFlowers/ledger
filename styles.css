@@ -2178,3 +2178,8 @@ input[type="checkbox"]:focus-visible {
 /* The round's two results, one line each: what it was, how long, how it went. */
 .pair-results { margin: 0.6rem 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.35rem; }
 .pair-results li span { margin-left: 0.4rem; }
+
+/* A pattern's catalog ladder (js/topic-practice.js). */
+.ladder-subhead { margin: 1.1rem 0 0.3rem; font-size: 0.95rem; }
+.catalog-rung { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.catalog-rung-name { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; min-width: 0; }
