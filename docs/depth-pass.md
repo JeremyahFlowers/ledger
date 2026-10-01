@@ -57,3 +57,21 @@ Ordered by how directly each touches the daily loop.
 
 - [ ] Walk a full configured week, day by day, as the owner. Fix every place
       where one feature does not lead to the next.
+
+---
+
+## Status — 2026-09-30
+
+| Phase | Shipped in | Notes |
+|---|---|---|
+| 1. The coding session | 2.7.0 | One screen from Start; sticky tools, multi-select, shortcuts, `?` sheet; sessions run the day clock; Home shows time used, live. |
+| 2. Recommendations | 2.8.0 | Focus (chosen or inferred), mastery down-weighting, day-seeded weighted draw, "Something else", one source for every screen. |
+| 3. Practise everything | 2.9.0 | Catalog ladder on every topic page; curated knapsack/MST/partition matches; four new design problems so all 34 components are used. Tests guard both. |
+| 4. The whiteboard | 2.10.0, 2.11.0 | Named shapes, attached arrows, design stencil; an answer for every component follow-up, and numbers. |
+| 5. Walk a week | 2.12.0 | Rendered Home for each day of the owner's week; the design card now follows the week and the focus line agrees with block practice. |
+
+Left for later, deliberately:
+- A stencil in the coding board (arrays and pointers are already one drag; nothing asked for it).
+- Arrow labels are edited by double-click only; no inline label tool.
+- The week walk is a scratch harness, not a check. If Home's per-day text keeps
+  regressing, promote it into `scripts/check-views.mjs` with assertions.
