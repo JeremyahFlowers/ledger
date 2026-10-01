@@ -28,6 +28,29 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 2.12.0 — 2026-09-30
+
+Home says one consistent thing about today.
+
+A walk through a whole configured week — five coding days, a design topic day,
+a design problem day, a long Saturday and a rest day — found Home contradicting
+itself:
+
+- **The design card follows your week.** It offered the same full design problem
+  every day: under "your week puts a day off here", under the long Saturday
+  session, and on a day whose plan was one component read properly. Now it is
+  absent on rest days, long-session days and days with no design in them; on a
+  design topic day it names one component to read — a blind spot first, then one
+  you have not used in a design, then one you have not met in a while — and a
+  problem that uses it; on a design problem day it offers the problem. On a day
+  with no coding, the day's own card names the component or problem instead of
+  sending you to a list to choose from.
+- **Unattempted design problems vary** by day instead of always being the URL
+  shortener.
+- **Block practice is said once.** Under "Staying on Two Pointers", the card no
+  longer adds "no focus — suggestions are spread across your patterns". It
+  offers the way out instead: choose a pattern to focus on.
+
 ## 2.11.0 — 2026-09-30
 
 Component pages you can practise from, not only read.

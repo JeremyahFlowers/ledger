@@ -11,7 +11,7 @@
 // day rather than something you do instead. For anyone aiming past junior, the
 // two are assessed in the same loop and should be prepared in the same loop.
 
-import { todayISO, addDaysISO, daysBetween, isCleanSolve } from "./logic.js";
+import { todayISO, addDaysISO, daysBetween, isCleanSolve, seededRandom } from "./logic.js";
 import { COMPONENTS } from "./design-components.js";
 import { DESIGN_PROBLEMS } from "./design-problems.js";
 
@@ -338,12 +338,49 @@ export function recommendDesign(state, today = todayISO()) {
     return { type: "due", problemId: due.id, componentId: null,
       message: `${due.name} is ready for another pass.` };
   }
-  const fresh = (state?.designProblems || []).find((p) => !(p.attempts || []).length);
-  if (fresh) {
-    return { type: "first", problemId: fresh.id, componentId: null,
-      message: `${fresh.name} — you haven't worked this one yet.` };
+  // Drawn from the unattempted ones, stable for the day, rather than always
+  // the first in the bank — which made it the URL shortener every morning.
+  const fresh = (state?.designProblems || []).filter((p) => !(p.attempts || []).length);
+  if (fresh.length) {
+    const pick = fresh[Math.floor(seededRandom(`${today}#design`)() * fresh.length)];
+    return { type: "first", problemId: pick.id, componentId: null,
+      message: `${pick.name} — you haven't worked this one yet.` };
   }
   return null;
+}
+
+/**
+ * One component to read properly today — what a week's "design topic" day is
+ * for — and a problem that uses it, to try straight after.
+ *
+ * A blind spot first: something the reference answers keep using that you did
+ * not reach for. Otherwise one you have not met in any design yet, then the
+ * one met longest ago. Stable for the day, so the card does not change its
+ * mind between visits.
+ */
+/** How many of the longest-unmet components a topic day chooses among, and how
+ *  long ago counts as "a while" — the same fortnight the coding side uses. */
+const STUDY_POOL = 5;
+const STUDY_STALE_DAYS = 14;
+
+export function studyPick(state, today = todayISO()) {
+  const spot = blindSpots(state)[0];
+  if (spot) {
+    return {
+      component: spot.component, problem: problemsUsing(spot.component.id)[0] || null,
+      reason: `it was in ${spot.times} reference answers you didn't reach for it in`,
+    };
+  }
+  const withAge = COMPONENTS.map((c) => ({ c, days: componentRecency(state, c.id, today).daysSince }));
+  const unmet = withAge.filter((x) => x.days == null);
+  const oldest = [...withAge].sort((a, b) => b.days - a.days).slice(0, STUDY_POOL);
+  const stale = oldest.filter((x) => x.days >= STUDY_STALE_DAYS);
+  const pool = unmet.length ? unmet : stale.length ? stale : oldest;
+  const { c, days } = pool[Math.floor(seededRandom(`${today}#study`)() * pool.length)];
+  return {
+    component: c, problem: problemsUsing(c.id)[0] || null,
+    reason: days == null ? "you haven't used it in a design yet" : `you last met it ${days} days ago`,
+  };
 }
 
 /** How long since a component last appeared in anything you attempted. Feeds

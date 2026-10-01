@@ -20,7 +20,7 @@ import {
   designPlan, stageClock, nextStage, keyFor, designMinutes, splitBudget, designShare,
   componentById, componentsFor, problemsUsing, designProblemById,
   componentStats, blindSpots, designAttempts, dueDesignProblems,
-  planDesignToday, recommendDesign, componentRecency, BLIND_SPOT_MIN,
+  planDesignToday, recommendDesign, componentRecency, BLIND_SPOT_MIN, studyPick,
 } from "../js/design-logic.js";
 import { COMPONENTS, CATEGORIES } from "../js/design-components.js";
 import { DESIGN_PROBLEMS } from "../js/design-problems.js";
@@ -549,6 +549,61 @@ describe("what to do next", () => {
 
   test("test_design_anEmptyBankRecommendsNothingRatherThanThrowing", () => {
     assert.equal(recommendDesign(st()), null);
+  });
+
+  test("test_design_untouchedProblems_areNotAlwaysTheFirstInTheBank", () => {
+    // It was the URL shortener every morning.
+    const bank = DESIGN_PROBLEMS.map((p) => problem(p.id));
+    const picked = new Set();
+    for (let d = 0; d < 30; d++) {
+      picked.add(recommendDesign(st({ designProblems: bank }), addDaysISO(todayISO(), d)).problemId);
+    }
+    assert.ok(picked.size >= 4, `only ${picked.size} different problems over a month`);
+  });
+
+  test("test_design_untouchedPick_isStableWithinADay", () => {
+    const bank = DESIGN_PROBLEMS.map((p) => problem(p.id));
+    assert.equal(recommendDesign(st({ designProblems: bank })).problemId,
+      recommendDesign(st({ designProblems: bank })).problemId);
+  });
+});
+
+describe("a design topic day", () => {
+  test("test_studyPick_blindSpot_isWhatYouRead", () => {
+    const state = st({ designProblems: [problem("url-shortener", { attempts: [
+      attempt({ id: "1", date: addDaysISO(todayISO(), -9), missed: ["cdn"] }),
+      attempt({ id: "2", date: addDaysISO(todayISO(), -8), missed: ["cdn"] }),
+    ] })] });
+    const pick = studyPick(state);
+    assert.equal(pick.component.id, "cdn");
+    assert.ok(pick.problem, "no problem to try it on");
+    assert.match(pick.reason, /didn't reach for/);
+  });
+
+  test("test_studyPick_nothingAttempted_picksOneNotYetMet", () => {
+    const pick = studyPick(st());
+    assert.ok(COMPONENTS.some((c) => c.id === pick.component.id));
+    assert.match(pick.reason, /haven't used it/);
+  });
+
+  test("test_studyPick_offersAProblemThatUsesIt", () => {
+    const pick = studyPick(st());
+    if (pick.problem) assert.ok(problemsUsing(pick.component.id).some((p) => p.id === pick.problem.id));
+  });
+
+  test("test_studyPick_isStableWithinADay", () => {
+    assert.equal(studyPick(st()).component.id, studyPick(st()).component.id);
+  });
+
+  test("test_studyPick_everythingMet_picksAmongTheLongestAgo", () => {
+    const old = addDaysISO(todayISO(), -60);
+    const recent = addDaysISO(todayISO(), -1);
+    const ids = COMPONENTS.map((c) => c.id);
+    const state = st({ designProblems: [problem("url-shortener", { attempts: [
+      attempt({ id: "old", date: old, covered: ids.slice(0, 3) }),
+      attempt({ id: "new", date: recent, covered: ids.slice(3) }),
+    ] })] });
+    assert.ok(ids.slice(0, 3).includes(studyPick(state).component.id));
   });
 });
 

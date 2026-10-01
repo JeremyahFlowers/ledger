@@ -30,7 +30,7 @@ import { dayProgress, weekProgress, itemKind, setDayCheck, weekConfigured } from
 
 import { migrateState } from "./seed.js";
 import {
-  splitBudget, recommendDesign, planDesignToday, designAttempts,
+  splitBudget, recommendDesign, planDesignToday, designAttempts, studyPick,
 } from "./design-logic.js";
 
 import { patternProgressHtml } from "./progress-view.js";
@@ -66,9 +66,25 @@ import {
  * next is two people talking over each other, and the point of comingling the
  * two halves is that the day has one shape, not two.
  */
+/**
+ * Today's design work, as the week sees it.
+ *
+ * It used to offer the same full problem every day — on the rest day, under
+ * the long session, and on a day whose plan was one component read properly.
+ * With a week set up, the week decides: nothing on a day without design, the
+ * long session's own card on a long-session day, a component on a topic day,
+ * and a problem on a problem day. On a day with no coding, the off-duty card
+ * already speaks for the design item, so this stays out of its way.
+ */
 function designCardHtml(state) {
   const split = splitBudget(state);
   if (!split.enabled) return "";
+  if (weekConfigured(state)) {
+    const progress = dayProgress(state);
+    const design = progress.items.find((i) => i.kind.startsWith("design"));
+    if (progress.rested || !design || design.kind === "designMock" || !wantsCodingToday(state)) return "";
+    if (design.kind === "designStudy") return studyCardHtml(state, design.met);
+  }
   const rec = recommendDesign(state);
   const today = planDesignToday(state);
   const doneToday = designAttempts(state).filter((a) => a.date === todayISO()).length;
@@ -96,14 +112,41 @@ function designCardHtml(state) {
     </div>`;
 }
 
+/** A week's "design topic": one named component, read properly, and a problem
+ *  that uses it to try straight after. */
+function studyCardHtml(state, met) {
+  const pick = studyPick(state);
+  return `
+    <div class="card design-card">
+      <div class="row space-between session-cta-row">
+        <div>
+          <h2>Design topic${met ? " — done for today" : ""}</h2>
+          <p class="muted">${met ? "Ticked off. " : ""}<strong>${esc(pick.component.name)}</strong> — ${esc(pick.reason)}.
+          Read its page, answer its follow-ups out loud, then see it used.</p>
+        </div>
+        <div class="row gap-sm">
+          <button class="btn ${met ? "btn-ghost" : "btn-primary"}" data-open-component="${esc(pick.component.id)}">Read ${esc(pick.component.name)}</button>
+          ${pick.problem ? `<button class="btn btn-ghost" data-start-design="${esc(pick.problem.id)}">Then: ${esc(pick.problem.name.replace(/^Design (a |an )?/i, ""))}</button>` : ""}
+        </div>
+      </div>
+    </div>`;
+}
+
 /**
  * What the recommendation is leaning towards, and the way to change it.
  *
  * Said on the card because a weighting nobody can see is a recommender that
  * seems arbitrary: "why DP again?" is answered here, and so is "not DP".
  */
-function focusLineHtml(state) {
+function focusLineHtml(state, rec) {
   const focus = currentFocus(state);
+  // Block practice is a focus too, chosen by the phase rather than by you.
+  // Saying "spread across your patterns" under "Staying on Two Pointers" was
+  // the card contradicting itself.
+  if (!focus && rec?.type === "block") {
+    return `<p class="muted small rec-focus">Want a different pattern?
+      <button type="button" class="link-button" data-tab="topics">Choose one to focus on</button></p>`;
+  }
   if (!focus) {
     return `<p class="muted small rec-focus">No focus — suggestions are spread across your patterns.
       <button type="button" class="link-button" data-tab="topics">Pick one to work on</button></p>`;
@@ -188,7 +231,7 @@ export function renderDashboard(root, store, actions) {
             <span class="pill pill-muted">${esc(rec.problem.difficulty)}</span>
             <span class="pill pill-muted">${esc(patternName(state, rec.problem.patternId))}</span></p>` : ""}
           <p class="muted">${esc(rec.message)}</p>
-          ${focusLineHtml(state)}
+          ${focusLineHtml(state, rec)}
         </div>
         <div class="row gap-sm">
           ${rec.problem && rec.type !== "stuck" ? `<button class="btn btn-ghost" id="cta-skip"
@@ -1488,17 +1531,28 @@ function offDutyCardHtml(state) {
     designStudy: { tab: "components", label: "Open the components" },
   };
   const action = ACTION[design.kind] || ACTION.designStudy;
+  // The specific thing, where there is one, rather than a page to go and choose from.
+  const pick = design.kind === "designStudy" ? studyPick(state) : null;
+  const problemRec = design.kind === "designProblem" ? recommendDesign(state) : null;
+  const button = pick
+    ? `<button class="btn btn-primary" data-open-component="${esc(pick.component.id)}">Read ${esc(pick.component.name)}</button>`
+    : problemRec
+      ? `<button class="btn btn-primary" data-start-design="${esc(problemRec.problemId)}">Work it</button>`
+      : `<button class="btn btn-primary" data-tab="${action.tab}">${esc(action.label)}</button>`;
+  const detail = pick
+    ? ` Today: <strong>${esc(pick.component.name)}</strong> — ${esc(pick.reason)}.`
+    : problemRec ? ` ${esc(problemRec.message)}` : "";
   return `
     <div class="card session-cta-card">
       <div class="row space-between session-cta-row">
         <div>
           <h2>${esc(itemKind(design.kind)?.label || "Design")}</h2>
           <p class="muted">Today is a design day in your week — no coding problem is scheduled.
-          ${esc(itemKind(design.kind)?.blurb || "")}</p>
+          ${esc(itemKind(design.kind)?.blurb || "")}${detail}</p>
         </div>
         <div class="row gap-sm">
           <button class="btn btn-ghost" id="cta-warmup">${warmupFor(state).kind === "fluency" ? "Fluency warm-up" : "5-min warmup"}</button>
-          <button class="btn btn-primary" data-tab="${action.tab}">${esc(action.label)}</button>
+          ${button}
         </div>
       </div>
     </div>`;
