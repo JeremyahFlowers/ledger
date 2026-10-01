@@ -20,9 +20,9 @@
 // because reading it first turns an exercise into a lecture.
 
 import {
-  DESIGN_STAGES, designPlan, stageClock, keyFor, designProblemById, componentsFor,
+  DESIGN_STAGES, designPlan, stageClock, keyFor, designProblemById, componentsFor, componentById,
 } from "./design-logic.js";
-import { componentById } from "./design-logic.js";
+import { COMPONENTS } from "./design-components.js";
 import { updateDayBudget } from "./chrome.js";
 import { createWhiteboard } from "./whiteboard.js";
 import { createRepoChannel, createEmitter } from "./session-sync.js";
@@ -225,6 +225,7 @@ function workHtml(stage) {
           ${briefHtml()}
         </section>
         <section class="ws-pane ds-board-pane">
+          ${stencilHtml()}
           <div class="ws-pane-body ws-pane-body-flush"><div id="ds-board" class="board-host"></div></div>
         </section>
       </div>`;
@@ -498,6 +499,46 @@ function wireStage(root, store, actions, stage) {
   });
 }
 
+/**
+ * The stencil: name a component and it is on the board, as a labelled box.
+ *
+ * A design answer is a dozen named boxes joined by arrows. Drawing each box,
+ * then fetching the text tool, then typing the name over it, is three gestures
+ * per component on a clock — and the name did not even move with the box.
+ * Every component the app teaches autocompletes here, and anything else typed
+ * ("Payment service") is placed just the same. Storage is drawn as a circle so
+ * the data and the services are told apart at a glance.
+ *
+ * Deliberately not the problem's own components: offering those would hand you
+ * the reference answer while you are meant to be producing your own.
+ */
+function stencilHtml() {
+  return `
+    <form class="ds-stencil" id="ds-stencil" autocomplete="off">
+      <input class="input" id="ds-stencil-name" list="ds-stencil-list"
+        placeholder="Add a component — type a name, press Enter" aria-label="Add a component to the board" />
+      <datalist id="ds-stencil-list">
+        ${COMPONENTS.map((c) => `<option value="${esc(c.name)}"></option>`).join("")}
+      </datalist>
+      <button type="submit" class="btn btn-ghost btn-sm">Add</button>
+    </form>`;
+}
+
+const STORAGE_NAMES = new Set(COMPONENTS.filter((c) => c.category === "storage").map((c) => c.name.toLowerCase()));
+
+function wireStencil(root) {
+  const form = root.querySelector("#ds-stencil");
+  const input = root.querySelector("#ds-stencil-name");
+  form?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const name = input.value.trim();
+    if (!name) return;
+    const kind = STORAGE_NAMES.has(name.toLowerCase()) ? "ellipse" : "rect";
+    session.whiteboardCtl?.placeLabeled(name, { kind });
+    input.value = "";
+  });
+}
+
 function mountBoard(root, store) {
   const host = root.querySelector("#ds-board");
   if (!host) return;
@@ -511,6 +552,7 @@ function mountBoard(root, store) {
   // Coming back to the drawing stage — from a compare, or after a reload —
   // must not come back to an empty board.
   if (session.board?.length) session.whiteboardCtl.restore(session.board);
+  wireStencil(root);
 }
 
 /** One ticking clock for the stage in hand, recreated with each render and

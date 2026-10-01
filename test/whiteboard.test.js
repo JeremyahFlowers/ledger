@@ -728,3 +728,165 @@ describe("the coordinate space it stores in", () => {
     assert.equal(s.board.toJSON()[0].points[1].x, BOARD_WIDTH);
   });
 });
+
+describe("named boxes and attached arrows", () => {
+  const key = (s, k, mods = {}) =>
+    s.canvas.dispatch("keydown", { key: k, metaKey: false, ctrlKey: false, shiftKey: false, ...mods });
+
+  /** Boxes A at (100,100)-(200,180) and B at (500,100)-(600,180), an arrow drawn
+   *  from inside A to inside B, and the select tool in hand. */
+  function withConnectedBoxes() {
+    const s = makeSubject();
+    setTool(s.canvas, "r");
+    drag(s.canvas, { x: 100, y: 100 }, { x: 200, y: 180 });
+    drag(s.canvas, { x: 500, y: 100 }, { x: 600, y: 180 });
+    setTool(s.canvas, "a");
+    drag(s.canvas, { x: 150, y: 140 }, { x: 550, y: 140 });
+    setTool(s.canvas, "v");
+    const [a, b, arrow] = s.board.toJSON();
+    return { ...s, a, b, arrow };
+  }
+  const arrowOf = (s) => s.board.toJSON().find((el) => el.kind === "arrow");
+
+  test("test_whiteboard_anArrowDrawnBoxToBox_isAttachedToBoth", () => {
+    const s = withConnectedBoxes();
+    assert.deepEqual(s.arrow.start, { id: s.a.id });
+    assert.deepEqual(s.arrow.end, { id: s.b.id });
+    assert.ok(s.arrow.points[0].x > 200 && s.arrow.points[1].x < 500, "the ends are not on the box edges");
+  });
+
+  test("test_whiteboard_movingABox_carriesItsArrowWithIt", () => {
+    const s = withConnectedBoxes();
+    drag(s.canvas, { x: 550, y: 100 }, { x: 550, y: 400 });   // B's top edge, down 300
+    const arrow = arrowOf(s);
+    assert.ok(arrow.points[1].y > 300, `the arrow still ends at y=${arrow.points[1].y}`);
+  });
+
+  test("test_whiteboard_movingABox_reportsTheArrowToo", () => {
+    // The other device has to hear about the arrow, or it keeps the old one.
+    const s = withConnectedBoxes();
+    s.events.updated.length = 0;
+    drag(s.canvas, { x: 550, y: 100 }, { x: 550, y: 400 });
+    assert.ok(s.events.updated.some((el) => el.kind === "arrow"), "the arrow's new position was not reported");
+  });
+
+  test("test_whiteboard_undoingAMove_putsTheArrowBackToo", () => {
+    const s = withConnectedBoxes();
+    const before = arrowOf(s).points;
+    drag(s.canvas, { x: 550, y: 100 }, { x: 550, y: 400 });
+    key(s, "z", { metaKey: true });
+    assert.deepEqual(arrowOf(s).points, before);
+  });
+
+  test("test_whiteboard_doubleClickInsideABox_namesIt", () => {
+    const s = withConnectedBoxes();
+    s.canvas.dispatch("dblclick", { clientX: 150, clientY: 140 });
+    const editor = editorOf();
+    assert.equal(editor.hidden, false, "no editor opened");
+    editor.value = "Cache";
+    editor.dispatch("input");
+    editor.dispatch("keydown", { key: "Escape" });
+    assert.equal(s.board.toJSON().find((el) => el.id === s.a.id).label, "Cache");
+    assert.equal(s.board.toJSON().filter((el) => el.kind === "text").length, 0, "loose text was added instead");
+  });
+
+  test("test_whiteboard_aNamedBox_canBeGrabbedByItsMiddle", () => {
+    const s = withConnectedBoxes();
+    s.canvas.dispatch("dblclick", { clientX: 150, clientY: 140 });
+    editorOf().value = "Cache";
+    editorOf().dispatch("keydown", { key: "Escape" });
+    drag(s.canvas, { x: 150, y: 140 }, { x: 150, y: 340 });
+    assert.equal(s.board.toJSON().find((el) => el.id === s.a.id).points[0].y, 300);
+  });
+
+  test("test_whiteboard_clearingAName_keepsTheBox", () => {
+    const s = withConnectedBoxes();
+    s.canvas.dispatch("dblclick", { clientX: 150, clientY: 140 });
+    editorOf().value = "Cache";
+    editorOf().dispatch("keydown", { key: "Escape" });
+    s.canvas.dispatch("dblclick", { clientX: 150, clientY: 140 });
+    editorOf().value = "   ";
+    editorOf().dispatch("keydown", { key: "Escape" });
+    const a = s.board.toJSON().find((el) => el.id === s.a.id);
+    assert.ok(a, "the box went with its name");
+    assert.equal(a.label, undefined);
+  });
+
+  test("test_whiteboard_enterOnASelectedBox_opensItsName", () => {
+    const s = withConnectedBoxes();
+    drag(s.canvas, { x: 150, y: 100 }, { x: 150, y: 100 });   // select A by its edge
+    key(s, "Enter");
+    assert.equal(editorOf().hidden, false);
+  });
+
+  test("test_whiteboard_theTextToolInsideABox_namesTheBox", () => {
+    const s = withConnectedBoxes();
+    setTool(s.canvas, "t");
+    drag(s.canvas, { x: 150, y: 140 }, { x: 150, y: 140 });
+    editorOf().value = "API";
+    editorOf().dispatch("keydown", { key: "Escape" });
+    assert.equal(s.board.toJSON().find((el) => el.id === s.a.id).label, "API");
+  });
+
+  test("test_whiteboard_doubleClickOnAnArrow_namesTheArrow", () => {
+    const s = withConnectedBoxes();
+    s.canvas.dispatch("dblclick", { clientX: 350, clientY: 140 });
+    editorOf().value = "HTTPS";
+    editorOf().dispatch("keydown", { key: "Escape" });
+    assert.equal(arrowOf(s).label, "HTTPS");
+  });
+
+  test("test_whiteboard_copyingBoxesAndArrow_keepsTheCopyAttachedToTheCopies", () => {
+    const s = withConnectedBoxes();
+    key(s, "a", { metaKey: true });
+    key(s, "c", { metaKey: true });
+    key(s, "v", { metaKey: true });
+    const arrows = s.board.toJSON().filter((el) => el.kind === "arrow");
+    const copy = arrows[1];
+    assert.notEqual(copy.start.id, s.a.id, "the copy points back at the original box");
+    assert.ok(s.board.toJSON().some((el) => el.id === copy.start.id && el.kind === "rect"));
+  });
+
+  test("test_whiteboard_copyingAnArrowAlone_comesFree", () => {
+    const s = withConnectedBoxes();
+    drag(s.canvas, { x: 350, y: 140 }, { x: 350, y: 140 });   // select the arrow
+    key(s, "c", { metaKey: true });
+    key(s, "v", { metaKey: true });
+    const copy = s.board.toJSON().filter((el) => el.kind === "arrow")[1];
+    assert.equal(copy.start, undefined);
+    assert.equal(copy.end, undefined);
+  });
+});
+
+describe("the stencil", () => {
+  test("test_placeLabeled_addsANamedBoxSelectedAndReported", () => {
+    const s = makeSubject();
+    const id = s.board.placeLabeled("Load balancer");
+    const el = s.board.toJSON().find((x) => x.id === id);
+    assert.equal(el.kind, "rect");
+    assert.equal(el.label, "Load balancer");
+    assert.equal(s.events.added.length, 1);
+    s.canvas.dispatch("keydown", { key: "Backspace" });
+    assert.equal(s.board.toJSON().length, 0, "it was not left selected");
+  });
+
+  test("test_placeLabeled_aRun_fansOutRatherThanStacking", () => {
+    const s = makeSubject();
+    s.board.placeLabeled("A");
+    s.board.placeLabeled("B");
+    const [a, b] = s.board.toJSON();
+    assert.notDeepEqual(a.points[0], b.points[0]);
+  });
+
+  test("test_placeLabeled_asACircle_forStorage", () => {
+    const s = makeSubject();
+    const id = s.board.placeLabeled("Relational database", { kind: "ellipse" });
+    assert.equal(s.board.toJSON().find((x) => x.id === id).kind, "ellipse");
+  });
+
+  test("test_placeLabeled_blankName_placesNothing", () => {
+    const s = makeSubject();
+    assert.equal(s.board.placeLabeled("  "), null);
+    assert.equal(s.board.toJSON().length, 0);
+  });
+});

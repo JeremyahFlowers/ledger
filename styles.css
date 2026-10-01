@@ -2183,3 +2183,7 @@ input[type="checkbox"]:focus-visible {
 .ladder-subhead { margin: 1.1rem 0 0.3rem; font-size: 0.95rem; }
 .catalog-rung { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
 .catalog-rung-name { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; min-width: 0; }
+
+/* The design board's stencil (js/design-session.js). */
+.ds-stencil { display: flex; gap: 0.4rem; align-items: center; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border); }
+.ds-stencil .input { flex: 1; min-width: 0; }

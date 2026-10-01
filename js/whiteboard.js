@@ -39,6 +39,8 @@ import {
   handlePositions, handleAt, resizeBounds, scaleElement,
   snapToAngle, cellLines, cellLabels, createHistory,
   wrapText, fitTextBox, migrateBoard, migrateElement,
+  CONNECTOR_KINDS, LABEL_KINDS, LABEL_FONT_SIZE, bindConnector, followersOf,
+  labelAnchor, labelWidth, containerAt,
 } from "./board.js";
 
 const COLORS = ["#e7efeb", "#4fc3b8", "#e0a257", "#e2827c", "#7ed9cf"];
@@ -75,6 +77,11 @@ const TOOLS = [
 /** Where a paste lands relative to what was copied, per paste, so repeated
  *  pastes fan out instead of stacking invisibly on top of each other. */
 const PASTE_OFFSET = 16;
+
+/** A stencil box's size in board units, and how a run of them fans out. */
+const STENCIL_SIZE = [150, 60];
+const STENCIL_STEP = 24;
+const STENCIL_FAN = 6;
 
 /** Arrows are straightened by default. The reason to reach for an arrow tool
  *  rather than freehand is that it comes out straight; a wobbly one between two
@@ -118,7 +125,8 @@ const SHORTCUTS = [
     ["⌘/Ctrl + D", "Duplicate"],
     ["Delete", "Delete the selection"],
     ["Arrows  (Shift = 10)", "Nudge"],
-    ["Enter  or  double-click", "Edit text"],
+    ["Enter  or  double-click", "Edit text, or name a box or arrow"],
+    ["Arrow from box to box", "Stays attached when either moves"],
     ["Shift while drawing", "Square, circle, free angle"],
     ["Shift on a corner grip", "Keep the proportions"],
     ["⌘/Ctrl + Z,  ⌘/Ctrl + Shift + Z", "Undo, redo"],
@@ -224,7 +232,8 @@ export function createWhiteboard(root, hooks = {}) {
   let clipboard = [];
   let pasteCount = 0;
   let action = null;        // { type: "move" | "resize" | "pan" | "erase", ... }
-  let editing = null;       // { id, before, created }
+  let editing = null;       // { id, before, created, field: "text" | "label" }
+  let placeCount = 0;       // stencil placements, so a run of them fans out
   let hoverHandle = null;
   let spaceHeld = false;
   let localSeq = 0;
@@ -317,9 +326,11 @@ export function createWhiteboard(root, hooks = {}) {
 
     const erasing = action?.type === "erase" ? action.marked : null;
     for (const el of elements) {
-      if (editing && el.id === editing.id) continue;   // the editor is showing it
+      const typingInto = editing && el.id === editing.id;
+      // The editor is showing it: all of a paragraph, or only a shape's name.
+      if (typingInto && editing.field !== "label") continue;
       ctx.globalAlpha = erasing?.has(el.id) ? 0.25 : 1;
-      draw(el);
+      draw(typingInto ? { ...el, label: "" } : el);
       ctx.globalAlpha = 1;
     }
     if (drafting) draw(drafting);
@@ -464,6 +475,30 @@ export function createWhiteboard(root, hooks = {}) {
         break;
       }
     }
+    if (LABEL_KINDS.has(el.kind) && el.label?.trim()) drawLabel(el);
+  }
+
+  /** A shape's name, centred in it — or, on a connector, centred on its
+   *  midpoint over a patch of background so the line does not strike through
+   *  the words. */
+  function drawLabel(el) {
+    const size = el.fontSize || LABEL_FONT_SIZE;
+    const measure = measurerFor(size);
+    const lines = wrapText(el.label, labelWidth(el), measure);
+    const c = labelAnchor(el);
+    const lineH = size * LINE_HEIGHT;
+    const top = c.y - (lines.length * lineH) / 2;
+    if (CONNECTOR_KINDS.has(el.kind)) {
+      const w = Math.max(...lines.map(measure)) + 10;
+      ctx.fillStyle = cssVar(root, "--surface-alt", "#1c2723");
+      ctx.fillRect(c.x - w / 2, top - 3, w, lines.length * lineH + 6);
+    }
+    ctx.fillStyle = el.color;
+    ctx.font = `${size}px ${FONT_STACK}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    lines.forEach((line, i) => ctx.fillText(line, c.x, top + i * lineH + size * (LINE_HEIGHT - 1) / 2));
+    ctx.textAlign = "start";
   }
 
   function drawHead(from, to, el) {
@@ -556,23 +591,32 @@ export function createWhiteboard(root, hooks = {}) {
   }
 
   function replace(el) {
-    const i = elements.findIndex((e) => e.id === el.id);
-    if (i < 0) return;
-    const before = elements[i];
-    elements[i] = el;
-    history.record({ undo: () => replace(before), redo: () => replace(el) });
-    redraw();
-    onUpdate?.(el);
+    replaceMany([el]);
   }
 
-  /** Several at once, as one step — a group moved, recoloured or nudged. */
+  /**
+   * Several at once, as one step — a group moved, recoloured or nudged.
+   *
+   * Arrows attached to anything that changed are re-routed here, every time,
+   * including on undo and redo. They are not part of the recorded step: where
+   * an attached end goes is a function of where its shape is, so replaying the
+   * shapes replays the arrows.
+   */
   function replaceMany(next) {
     const before = next.map((el) => elements.find((e) => e.id === el.id)).filter(Boolean);
     if (!before.length) return;
     for (const el of next) put(el);
+    const followers = followersOf(elements, new Set(next.map((el) => el.id)), { onlyMoved: false });
+    for (const f of followers) put(f);
     history.record({ undo: () => replaceMany(before), redo: () => replaceMany(next) });
     redraw();
-    next.forEach((el) => onUpdate?.(el));
+    const changed = new Set([...next, ...followers].map((el) => el.id));
+    elements.filter((el) => changed.has(el.id)).forEach((el) => onUpdate?.(el));
+  }
+
+  /** Move attached arrows along with shapes mid-drag, without recording. */
+  function followLive(ids) {
+    for (const f of followersOf(elements, ids)) put(f);
   }
 
   /** Several added as one step — a paste or a duplicate. */
@@ -608,12 +652,12 @@ export function createWhiteboard(root, hooks = {}) {
    * is a modal dialog between you and the drawing and cannot be re-opened to
    * fix a typo.
    */
-  function openEditor(el, { created = false } = {}) {
+  function openEditor(el, { created = false, field = "text" } = {}) {
     if (readOnly) return;
     commitEditor();
-    editing = { id: el.id, before: el, created };
+    editing = { id: el.id, before: el, created, field };
     selectOnly(el.id);
-    editor.value = el.text || "";
+    editor.value = (field === "label" ? el.label : el.text) || "";
     editor.hidden = false;
     positionEditor();
     redraw();
@@ -632,8 +676,23 @@ export function createWhiteboard(root, hooks = {}) {
     if (!editing || editor.hidden) return;
     const el = elements.find((e) => e.id === editing.id);
     if (!el) return;
-    const b = elementBounds(el);
     const k = pxPerUnit();
+    if (editing.field === "label") {
+      // Centred where the name is drawn, as wide as it may wrap, as tall as
+      // what has been typed so far.
+      const fontPx = el.fontSize || LABEL_FONT_SIZE;
+      const lines = wrapText(editor.value, labelWidth(el), measurerFor(fontPx)).length;
+      const w = labelWidth(el) * k;
+      const h = Math.max(1, lines) * fontPx * LINE_HEIGHT * k;
+      const c = toScreen(labelAnchor(el), rectWidth(), view);
+      Object.assign(editor.style, {
+        left: `${c.x - w / 2}px`, top: `${c.y - h / 2}px`, width: `${w}px`, height: `${h}px`,
+        font: `${fontPx * k}px ${FONT_STACK}`, lineHeight: String(LINE_HEIGHT),
+        color: el.color, caretColor: el.color, textAlign: "center",
+      });
+      return;
+    }
+    const b = elementBounds(el);
     const tl = toScreen({ x: b.x, y: b.y }, rectWidth(), view);
     const size = (el.fontSize || DEFAULT_FONT_SIZE) * k;
     Object.assign(editor.style, {
@@ -645,6 +704,7 @@ export function createWhiteboard(root, hooks = {}) {
       lineHeight: String(LINE_HEIGHT),
       color: el.color,
       caretColor: el.color,
+      textAlign: "left",
     });
   }
 
@@ -654,18 +714,29 @@ export function createWhiteboard(root, hooks = {}) {
     if (!editing) return;
     const el = elements.find((e) => e.id === editing.id);
     if (!el) return;
-    put(refit({ ...el, text: editor.value }));
+    put(editing.field === "label" ? { ...el, label: editor.value } : refit({ ...el, text: editor.value }));
     positionEditor();
     redraw();
   }
 
   function commitEditor() {
     if (!editing) return;
-    const { id, before, created } = editing;
+    const { id, before, created, field } = editing;
     editing = null;
     editor.hidden = true;
     const el = elements.find((e) => e.id === id);
     if (!el) { redraw(); return; }
+
+    // A name is part of its shape: clearing it leaves the shape, unnamed.
+    if (field === "label") {
+      const label = editor.value.trim() ? editor.value.trim() : "";
+      const { label: _old, ...rest } = el;
+      put(before);
+      if ((before.label || "") !== label) replace(label ? { ...rest, label } : rest);
+      if (tool === "select") selectOnly(id);
+      redraw();
+      return;
+    }
 
     const text = editor.value;
     // An empty box is invisible and unclickable, so there would be no way to
@@ -856,6 +927,11 @@ export function createWhiteboard(root, hooks = {}) {
       // new, empty box on top.
       const hit = elementAt(elements, at, slopFor(e));
       if (hit?.kind === "text") { openEditor(hit); return; }
+      // Inside a box, or on an arrow, the text tool names it rather than
+      // dropping loose words on top that would stay behind when it moved.
+      if (hit && CONNECTOR_KINDS.has(hit.kind)) { openEditor(hit, { field: "label" }); return; }
+      const box = containerAt(elements, at);
+      if (box) { openEditor(box, { field: "label" }); return; }
       startTextAt(at);
       return;
     }
@@ -910,6 +986,7 @@ export function createWhiteboard(root, hooks = {}) {
       if (!action.moved && Math.hypot(dx, dy) * pxPerUnit() < TAP_PX) return;
       action.moved = true;
       for (const origin of action.origins) put(movedBy(origin, dx, dy));
+      followLive(new Set(action.origins.map((o) => o.id)));
       redraw();
       return;
     }
@@ -931,6 +1008,7 @@ export function createWhiteboard(root, hooks = {}) {
       let next = scaleElement(action.origin, action.start, box);
       if (next.kind === "text") next = refit(next);
       put(next);
+      followLive(new Set([next.id]));
       positionEditor();
       redraw();
       return;
@@ -987,15 +1065,19 @@ export function createWhiteboard(root, hooks = {}) {
         const moved = action.moved;
         action = null;
         if (moved) {
-          const finals = origins.map((o) => elements.find((x) => x.id === o.id)).filter(Boolean);
+          // An arrow dragged on its own attaches to whatever its ends were
+          // dropped on, and comes free of whatever they were pulled off.
+          const finals = origins.map((o) => elements.find((x) => x.id === o.id)).filter(Boolean)
+            .map((f) => (CONNECTOR_KINDS.has(f.kind) ? bindConnector(f, elements) : f));
           for (const o of origins) put(o);      // back, so replaceMany records a real step
           replaceMany(finals);
         }
       } else if (type === "resize") {
-        const final = elements.find((x) => x.id === action.id);
+        let final = elements.find((x) => x.id === action.id);
         const origin = action.origin;
         action = null;
         if (final) {
+          if (CONNECTOR_KINDS.has(final.kind)) final = bindConnector(final, elements);
           put(origin);
           replace(final);
         }
@@ -1019,7 +1101,8 @@ export function createWhiteboard(root, hooks = {}) {
     const b = elementBounds(el);
     const tiny = b && b.w * pxPerUnit() < TAP_PX && b.h * pxPerUnit() < TAP_PX;
     if (el.kind !== "pen" && tiny) { redraw(); return; }
-    add(el);
+    // An arrow drawn from one box to another is attached to both.
+    add(CONNECTOR_KINDS.has(el.kind) ? bindConnector(el, elements) : el);
     redraw();
   }
 
@@ -1028,6 +1111,10 @@ export function createWhiteboard(root, hooks = {}) {
     const at = pointFromEvent(e);
     const hit = elementAt(elements, at, slopFor(e));
     if (hit?.kind === "text") { openEditor(hit); return; }
+    // On a box, a circle or an arrow: name it.
+    if (hit && LABEL_KINDS.has(hit.kind)) { openEditor(hit, { field: "label" }); return; }
+    const box = containerAt(elements, at);
+    if (box) { openEditor(box, { field: "label" }); return; }
     // Double-click on empty board starts a label, which is how every diagram
     // tool does it and is faster than going to get the text tool.
     if (!hit && tool === "select") startTextAt(at);
@@ -1070,9 +1157,17 @@ export function createWhiteboard(root, hooks = {}) {
     if (!clipboard.length) return;
     pasteCount += 1;
     const d = PASTE_OFFSET * pasteCount;
-    const copies = clipboard.map((el) => ({
-      ...el, id: nextId(), points: el.points.map((pt) => ({ x: pt.x + d, y: pt.y + d })),
-    }));
+    const newId = new Map(clipboard.map((el) => [el.id, nextId()]));
+    // An arrow copied with both its boxes stays attached to the copies; one
+    // copied without them comes free rather than pointing back at the originals.
+    const remap = (end) => (end && newId.has(end.id) ? { id: newId.get(end.id) } : undefined);
+    const copies = clipboard.map((el) => {
+      const { start, end, ...rest } = el;
+      const copy = { ...rest, id: newId.get(el.id), points: el.points.map((pt) => ({ x: pt.x + d, y: pt.y + d })) };
+      if (remap(start)) copy.start = remap(start);
+      if (remap(end)) copy.end = remap(end);
+      return copy;
+    });
     addMany(copies);
     setTool("select");
     selection = new Set(copies.map((c) => c.id));
@@ -1152,6 +1247,11 @@ export function createWhiteboard(root, hooks = {}) {
     if (e.key === "Enter" && selected()?.kind === "text") {
       e.preventDefault();
       openEditor(selected());
+      return;
+    }
+    if (e.key === "Enter" && LABEL_KINDS.has(selected()?.kind)) {
+      e.preventDefault();
+      openEditor(selected(), { field: "label" });
       return;
     }
 
@@ -1395,6 +1495,38 @@ export function createWhiteboard(root, hooks = {}) {
     isEmpty: () => elements.length === 0,
     resize,
     zoomToFit,
+
+    /**
+     * Put a named box in the middle of what is in view, selected, ready to be
+     * dragged into place — the stencil's one action. A run of them fans out
+     * rather than stacking, so placing four components gives four boxes.
+     * Returns the new element's id.
+     */
+    placeLabeled(label, { kind = "rect" } = {}) {
+      if (readOnly || !String(label || "").trim()) return null;
+      commitEditor();
+      const rect = canvas.getBoundingClientRect();
+      const visibleW = BOARD_WIDTH / view.scale;
+      const visibleH = (rect.width ? rect.height / rect.width : 0.6) * visibleW;
+      const offset = (placeCount++ % STENCIL_FAN) * STENCIL_STEP;
+      const cx = view.x + visibleW / 2 + offset;
+      const cy = view.y + visibleH / 2 + offset;
+      const [w, h] = STENCIL_SIZE;
+      const el = {
+        ...makeElement(kind, {
+          id: nextId(), color, width,
+          points: [{ x: cx - w / 2, y: cy - h / 2 }, { x: cx + w / 2, y: cy + h / 2 }],
+        }),
+        label: String(label).trim(),
+      };
+      add(el);
+      setTool("select");
+      selectOnly(el.id);
+      syncProps();
+      redraw();
+      canvas.focus?.({ preventScroll: true });
+      return el.id;
+    },
 
     /**
      * A picture of the whole drawing, not of the current view.

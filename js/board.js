@@ -373,6 +373,181 @@ export function migrateBoard(saved) {
   return saved.map(migrateElement).filter(Boolean);
 }
 
+// ---------- labels and connectors ----------
+//
+// A design diagram is boxes with names joined by arrows that mean something.
+// Before this, a name was a separate text element laid over a box, and an
+// arrow was two loose points: move the box and its name stayed behind, and its
+// arrows pointed at where it used to be. Redrawing every arrow after every
+// rearrangement is most of why the board was slower than a sheet of paper.
+//
+// So a box, a circle, an arrow or a line can carry a `label`, drawn inside it
+// (or on the arrow's midpoint), and an arrow or line can be attached by either
+// end to a shape: `start: { id }`, `end: { id }`. An attached end is not stored
+// so much as derived — routeConnector() puts it on the shape's edge, aimed at
+// the other end — so moving, resizing, undoing and syncing a shape all carry
+// its arrows with it without the arrows needing their own history.
+
+/** Kinds that can be joined by an arrow or line. */
+export const CONNECTOR_KINDS = new Set(["arrow", "line"]);
+/** Kinds an arrow can be attached to. */
+export const BINDABLE_KINDS = new Set(["rect", "ellipse", "text", "cells"]);
+/** Kinds that can carry a label of their own. */
+export const LABEL_KINDS = new Set(["rect", "ellipse", "arrow", "line"]);
+/** A label's type size, in board units, unless the element sets its own. */
+export const LABEL_FONT_SIZE = 18;
+/** How near a shape an arrow's end has to land to attach to it, in board units. */
+export const BIND_SLOP = 16;
+/** Space between an attached arrowhead and the shape's outline, so the head
+ *  reads as pointing at the box rather than being swallowed by its stroke. */
+export const CONNECTOR_GAP = 6;
+
+const hasLabel = (el) => typeof el.label === "string" && el.label.trim() !== "";
+
+/** The centre of an element's box. */
+export function centerOf(el) {
+  const b = elementBounds(el);
+  return b ? { x: b.x + b.w / 2, y: b.y + b.h / 2 } : null;
+}
+
+/**
+ * Where a line from a shape's centre towards a point leaves the shape, pushed
+ * out by `gap`. Ellipses use the ellipse; everything else its box.
+ */
+export function edgePoint(shape, toward, gap = CONNECTOR_GAP) {
+  const b = elementBounds(shape);
+  const c = { x: b.x + b.w / 2, y: b.y + b.h / 2 };
+  const dx = toward.x - c.x;
+  const dy = toward.y - c.y;
+  if (!dx && !dy) return c;
+  let t;
+  if (shape.kind === "ellipse") {
+    const rx = b.w / 2 + gap;
+    const ry = b.h / 2 + gap;
+    t = 1 / Math.hypot(dx / rx, dy / ry);
+  } else {
+    const hw = b.w / 2 + gap;
+    const hh = b.h / 2 + gap;
+    t = Math.min(dx ? hw / Math.abs(dx) : Infinity, dy ? hh / Math.abs(dy) : Infinity);
+  }
+  return { x: c.x + dx * t, y: c.y + dy * t };
+}
+
+/** The topmost shape an arrow end at this point would attach to, or null. */
+export function bindableAt(elements, point, { excludeId = null, slop = BIND_SLOP } = {}) {
+  for (let i = elements.length - 1; i >= 0; i--) {
+    const el = elements[i];
+    if (el.id === excludeId || !BINDABLE_KINDS.has(el.kind)) continue;
+    const b = elementBounds(el);
+    if (b && point.x >= b.x - slop && point.x <= b.x + b.w + slop
+      && point.y >= b.y - slop && point.y <= b.y + b.h + slop) return el;
+  }
+  return null;
+}
+
+/**
+ * A connector with its attached ends put back on their shapes.
+ *
+ * Each attached end sits on its shape's edge, aimed at the other end's shape
+ * centre (or at the other end itself, when that one is free). An attachment to
+ * a shape that no longer exists is ignored, and the stored point stands — so an
+ * arrow whose box was deleted stays where it was rather than vanishing, and
+ * re-attaches if the deletion is undone.
+ */
+export function routeConnector(conn, byId) {
+  if (!CONNECTOR_KINDS.has(conn.kind) || (conn.points || []).length < 2) return conn;
+  const s = conn.start ? byId.get(conn.start.id) : null;
+  const e = conn.end ? byId.get(conn.end.id) : null;
+  if (!s && !e) return conn;
+  if (s && e && s.id === e.id) return conn;     // a loop onto itself has no direction
+  let [a, b] = [conn.points[0], conn.points[conn.points.length - 1]];
+  const aimA = e ? centerOf(e) : b;
+  const aimB = s ? centerOf(s) : a;
+  if (s) a = edgePoint(s, aimA);
+  if (e) b = edgePoint(e, aimB);
+  return { ...conn, points: [a, b] };
+}
+
+/**
+ * Attach a connector's ends to whatever shapes they now touch, and route it.
+ *
+ * Called when an arrow is drawn, and again when one is dragged or reshaped on
+ * its own: an end dropped on a box attaches to it, an end pulled off a box
+ * comes free. Ends are judged by the stored points, which is why a free end is
+ * never stolen by a shape it merely passes near on the way.
+ */
+export function bindConnector(conn, elements, slop = BIND_SLOP) {
+  if (!CONNECTOR_KINDS.has(conn.kind) || (conn.points || []).length < 2) return conn;
+  const a = conn.points[0];
+  const b = conn.points[conn.points.length - 1];
+  const s = bindableAt(elements, a, { excludeId: conn.id, slop });
+  const e = bindableAt(elements, b, { excludeId: conn.id, slop });
+  const { start: _s, end: _e, ...rest } = conn;
+  const next = {
+    ...rest,
+    ...(s ? { start: { id: s.id } } : {}),
+    ...(e && (!s || e.id !== s.id) ? { end: { id: e.id } } : {}),
+  };
+  return routeConnector(next, new Map(elements.map((el) => [el.id, el])));
+}
+
+/**
+ * The connectors attached to any of `ids`, re-routed against `elements` —
+ * by default only those whose position actually changed.
+ *
+ * The one place "a shape moved, so its arrows follow" is decided — after a
+ * drag, a resize, an undo, a nudge or a change that arrived from another device.
+ * `onlyMoved: false` returns every attached connector: a drag has already
+ * moved its arrows live, so at the end nothing looks changed, and yet the
+ * other device has still to be told where they went.
+ */
+export function followersOf(elements, ids, { onlyMoved = true } = {}) {
+  const byId = new Map(elements.map((el) => [el.id, el]));
+  const out = [];
+  for (const el of elements) {
+    if (!CONNECTOR_KINDS.has(el.kind)) continue;
+    if (!ids.has(el.start?.id) && !ids.has(el.end?.id)) continue;
+    const routed = routeConnector(el, byId);
+    if (!onlyMoved || !samePoints(routed.points, el.points)) out.push(routed);
+  }
+  return out;
+}
+
+const samePoints = (a, b) => a.length === b.length
+  && a.every((p, i) => Math.abs(p.x - b[i].x) < 1e-6 && Math.abs(p.y - b[i].y) < 1e-6);
+
+/** Where a label is centred: in the middle of a shape, halfway along a connector. */
+export function labelAnchor(el) {
+  const pts = el.points || [];
+  if (CONNECTOR_KINDS.has(el.kind) && pts.length >= 2) {
+    const a = pts[0];
+    const b = pts[pts.length - 1];
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  }
+  return centerOf(el);
+}
+
+/** The width a label may wrap to: the shape less some padding, or a fixed
+ *  measure along a connector, which has no width of its own. */
+export function labelWidth(el) {
+  if (CONNECTOR_KINDS.has(el.kind)) return 160;
+  const b = elementBounds(el);
+  return Math.max(MIN_SIZE, (b ? b.w : 0) - 16);
+}
+
+/** The topmost box or circle whose inside contains a point — for double-click
+ *  and the text tool, which name the shape you click in rather than stacking a
+ *  loose label over it. */
+export function containerAt(elements, point) {
+  for (let i = elements.length - 1; i >= 0; i--) {
+    const el = elements[i];
+    if (el.kind !== "rect" && el.kind !== "ellipse") continue;
+    const b = elementBounds(el);
+    if (b && point.x >= b.x && point.x <= b.x + b.w && point.y >= b.y && point.y <= b.y + b.h) return el;
+  }
+  return null;
+}
+
 // ---------- hit-testing ----------
 
 const near = (a, b, slop) => Math.abs(a - b) <= slop;
@@ -421,10 +596,13 @@ export function hitsElement(el, point, slop = HIT_SLOP) {
       const insideX = point.x >= b.x - slop && point.x <= b.x + b.w + slop;
       const insideY = point.y >= b.y - slop && point.y <= b.y + b.h + slop;
       if (!insideX || !insideY) return false;
-      // On the edge, not in the middle.
+      // On the edge, not in the middle — unless it has a name. A named box is a
+      // thing in the diagram, grabbed anywhere; an unnamed one is usually a
+      // frame drawn round other things, which its middle must not swallow.
       return near(point.x, b.x, slop) || near(point.x, b.x + b.w, slop)
         || near(point.y, b.y, slop) || near(point.y, b.y + b.h, slop)
-        || el.kind === "cells";   // a grid's interior lines make it all edge
+        || el.kind === "cells"    // a grid's interior lines make it all edge
+        || hasLabel(el);
     }
     case "ellipse": {
       const b = elementBounds(el);
@@ -435,7 +613,7 @@ export function hitsElement(el, point, slop = HIT_SLOP) {
       const ny = (point.y - (b.y + ry)) / ry;
       const d = Math.hypot(nx, ny);
       const edge = slop / Math.min(rx, ry);
-      return Math.abs(d - 1) <= edge;
+      return Math.abs(d - 1) <= edge || (hasLabel(el) && d <= 1);
     }
     default:
       return false;

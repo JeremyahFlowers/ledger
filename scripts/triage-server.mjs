@@ -54,6 +54,8 @@ function seed() {
 const stub = (state) => `<script>
 (() => {
   const files = { "prep-data/state.dev.json": ${JSON.stringify(state)} };
+  // Readable from the console, so a check can see exactly what the app wrote.
+  window.__triageFiles = files;
   let n = 0;
   const b64 = (s) => btoa(String.fromCharCode(...new TextEncoder().encode(s)));
   const ok = (body) => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });

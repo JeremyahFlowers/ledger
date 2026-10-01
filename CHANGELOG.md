@@ -28,6 +28,37 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 2.10.0 — 2026-09-30
+
+A whiteboard you can think on, for system design especially.
+
+### Boxes have names
+
+Double-click a box, a circle or an arrow — or select it and press Return, or
+click inside it with the text tool — and type its name. The name lives inside
+the shape, centred and wrapped, and goes wherever the shape goes. Before, a name
+was loose text laid over a box, left behind the first time the box moved. A
+named box can be grabbed anywhere inside it; an unnamed one is still grabbed by
+its edge, so a frame drawn round other things does not swallow clicks meant for
+them. Clearing a name keeps the box.
+
+### Arrows stay attached
+
+An arrow or line drawn from one shape to another is attached at both ends. Move
+either shape — drag, nudge, resize, undo — and the arrow follows, meeting each
+outline rather than overlapping it. Drag an arrow on its own and it re-attaches
+to whatever its ends land on. Copy a group and the copied arrows join the copied
+boxes, not the originals. Attached arrows sync to the other device along with
+the shapes that moved them.
+
+### A stencil on the design board
+
+The drawing stage of a design session has a field above the board: type a
+component's name — every one of the thirty-four autocompletes, and anything else
+works too — press Return, and it is on the board as a named box, ready to drag.
+Storage is drawn as a circle, so data and services read differently at a glance.
+It offers every component, not the problem's own: those would be the answer.
+
 ## 2.9.0 — 2026-09-30
 
 Everything you can learn, you can now practise.
