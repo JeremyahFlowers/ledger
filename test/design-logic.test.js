@@ -24,6 +24,7 @@ import {
 } from "../js/design-logic.js";
 import { COMPONENTS, CATEGORIES } from "../js/design-components.js";
 import { DESIGN_PROBLEMS } from "../js/design-problems.js";
+import { COMPONENT_DEPTH } from "../js/design-answers.js";
 import { todayISO, addDaysISO } from "../js/logic.js";
 
 const attempt = (over = {}) => ({
@@ -134,6 +135,22 @@ describe("the problem bank", () => {
       assert.ok(p.rubric?.length >= 5, `${p.id} has a thin rubric`);
       assert.ok(p.deepDives?.length, `${p.id} has nothing to stress-test it with`);
     }
+  });
+
+  test("test_design_everyFollowUpHasAnAnswer", () => {
+    // A question you cannot check yourself against is something to feel
+    // uneasy about, not something to practise.
+    for (const c of COMPONENTS) {
+      const depth = COMPONENT_DEPTH[c.id];
+      assert.ok(depth, `${c.id} has no answers at all`);
+      assert.equal(depth.answers.length, c.followUps.length, `${c.id}: answers and questions out of step`);
+      for (const a of depth.answers) assert.ok(a.length > 80, `${c.id}: a thin answer — "${a}"`);
+    }
+  });
+
+  test("test_design_answersAreOnlyForComponentsThatExist", () => {
+    const ids = new Set(COMPONENTS.map((c) => c.id));
+    for (const id of Object.keys(COMPONENT_DEPTH)) assert.ok(ids.has(id), `answers for unknown component ${id}`);
   });
 
   test("test_design_everyComponentIsUsedBySomeProblem", () => {

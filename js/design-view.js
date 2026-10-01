@@ -16,6 +16,7 @@ import {
   COMPONENTS, CATEGORIES,
 } from "./design-components.js";
 import { DESIGN_PROBLEMS } from "./design-problems.js";
+import { COMPONENT_DEPTH } from "./design-answers.js";
 import {
   componentById, componentsFor, problemsUsing, designProblemById,
   componentStats, blindSpots, designAttempts, componentRecency,
@@ -35,6 +36,15 @@ export function showDesignProblem(id) { designNav.problemId = id; }
  *  opens, so a stage index never leaks between two of them. */
 let walkStage = 0;
 let walkProblemId = null;
+
+/** Each follow-up with its answer folded beneath it, so the page can be used
+ *  to practise rather than only to read. */
+function followUpsHtml(component) {
+  const answers = COMPONENT_DEPTH[component.id]?.answers || [];
+  return `<div class="followup-list">${component.followUps.map((q, i) => answers[i]
+    ? `<details class="followup"><summary>${esc(q)}</summary><p>${esc(answers[i])}</p></details>`
+    : `<p class="followup-plain">${esc(q)}</p>`).join("")}</div>`;
+}
 
 const list = (items, cls = "tight-list") =>
   `<ul class="${cls}">${items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>`;
@@ -184,8 +194,20 @@ export function renderComponentDetail(root, store, actions) {
 
     <div class="card">
       <h2>What they ask next</h2>
-      ${list(component.followUps)}
+      <p class="muted small">Answer each one out loud before you open it.</p>
+      ${followUpsHtml(component)}
     </div>
+
+    ${COMPONENT_DEPTH[component.id]?.numbers?.length ? `
+    <div class="card">
+      <h2>Numbers worth knowing</h2>
+      <p class="muted small">Orders of magnitude for an estimate, not benchmarks — real figures
+      depend on hardware and payload, and saying so is part of using them.</p>
+      <dl class="numbers-list">
+        ${COMPONENT_DEPTH[component.id].numbers.map(([figure, means]) =>
+          `<dt>${esc(figure)}</dt><dd>${esc(means)}</dd>`).join("")}
+      </dl>
+    </div>` : ""}
 
     ${component.depth?.length ? `
     <div class="card">

@@ -2187,3 +2187,15 @@ input[type="checkbox"]:focus-visible {
 /* The design board's stencil (js/design-session.js). */
 .ds-stencil { display: flex; gap: 0.4rem; align-items: center; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border); }
 .ds-stencil .input { flex: 1; min-width: 0; }
+
+/* A component's follow-ups and numbers (js/design-view.js). */
+.followup-list { display: flex; flex-direction: column; gap: 0.35rem; }
+.followup { border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.75rem; }
+.followup summary { cursor: pointer; font-weight: 600; }
+.followup[open] summary { margin-bottom: 0.4rem; }
+.followup p { margin: 0; color: var(--text-muted); line-height: 1.55; }
+.followup-plain { margin: 0; }
+.numbers-list { display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 1rem; margin: 0; align-items: baseline; }
+.numbers-list dt { margin: 0; font-family: var(--font-mono); font-weight: 700; white-space: nowrap; }
+.numbers-list dd { margin: 0; color: var(--text-muted); }
+@media (max-width: 520px) { .numbers-list { grid-template-columns: 1fr; } .numbers-list dt { white-space: normal; } }

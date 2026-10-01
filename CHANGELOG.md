@@ -28,6 +28,23 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 2.11.0 — 2026-09-30
+
+Component pages you can practise from, not only read.
+
+- **Every follow-up has an answer.** Each component page ended with "what they
+  ask next" — 105 questions across 34 components, and not one answer. Each is
+  now answered, folded under its question so you say yours first and then
+  check: layer 4 or 7, cache-aside or write-through, fail open or closed, token
+  bucket or sliding window, what a fencing token is for, why percentiles do not
+  average.
+- **Numbers worth knowing.** Each component carries the orders of magnitude an
+  estimate needs — what a Redis node does a second, how big a Cassandra
+  partition should get, what replication lag looks like, how many idle sockets
+  a node holds — labelled as orders of magnitude, because that is what they are.
+- A test keeps every question answered: add one without an answer and the
+  build fails.
+
 ## 2.10.0 — 2026-09-30
 
 A whiteboard you can think on, for system design especially.
