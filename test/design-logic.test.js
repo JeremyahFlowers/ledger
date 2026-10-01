@@ -136,6 +136,15 @@ describe("the problem bank", () => {
     }
   });
 
+  test("test_design_everyComponentIsUsedBySomeProblem", () => {
+    // "If you show me a component but don't use it at all then how am I
+    // supposed to learn this?" Twelve of the thirty-four were taught on their
+    // own page and appeared in no answer anywhere.
+    const used = new Set(DESIGN_PROBLEMS.flatMap((p) => p.walkthrough.flatMap((s) => s.components || [])));
+    const unused = COMPONENTS.filter((c) => !used.has(c.id)).map((c) => c.id);
+    assert.deepEqual(unused, [], `taught but never used: ${unused.join(", ")}`);
+  });
+
   test("test_design_componentsForListsThemInOrderWithoutRepeats", () => {
     const p = designProblemById("url-shortener");
     const list = componentsFor(p);

@@ -28,6 +28,47 @@ Steps 1–2 are the only manual ones; everything downstream derives.
 
 ---
 
+## 2.9.0 — 2026-09-30
+
+Everything you can learn, you can now practise.
+
+### Every pattern has problems to start
+
+A pattern's topic page used to list only problems you had already logged, so
+nine of the twenty-three patterns were pages you could read with nothing on them
+to do. Each now offers problems from the catalog that you don't track yet —
+three easy, four medium, two hard — with **Start** going straight into a timed
+session and **Save for later** putting it in your bank. Starting one files it
+under the pattern whose page you started it from.
+
+Knapsack, minimum spanning trees and partition-based sorting are not tags on
+LeetCode, so the catalog had one, two and eight problems for them. Each now has
+a hand-picked set of the standard problems for it: 0/1 and unbounded knapsack;
+spanning trees and the minimax-path problems Kruskal's loop solves; partitioning
+and three-way partitioning. A test against the real catalog now requires at
+least eight problems for every pattern.
+
+### Every component appears in a design
+
+Twelve of the thirty-four components were taught on their own page and used in
+no problem anywhere. Four new problems, written the same way as the first five —
+requirements both ways, an estimate, entities, API, a staged walkthrough that
+says why each box arrives, deep dives with answers, and a rubric:
+
+- **Payments service** (Hard) — idempotency keys, distributed locks with fencing
+  tokens, read replicas, change data capture, a service mesh. What to do when
+  the processor never answers.
+- **Metrics and alerting** (Hard) — metrics, structured logs, distributed
+  tracing, serverless notification. Cardinality, flapping alerts, who monitors
+  the monitor, and why percentiles do not average.
+- **Live sports scores** (Medium) — server-sent events and a relay tree for ten
+  million viewers of one game, with resume after a dropped connection.
+- **People you may know** (Hard) — a graph database and a document store,
+  precomputation, and supernodes.
+
+Each component page lists these alongside the problems it already did. A test
+now fails if any component is taught and used nowhere.
+
 ## 2.8.0 — 2026-09-30
 
 "Up next" stops saying 3Sum every day, and starts following what you are
